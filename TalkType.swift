@@ -260,7 +260,7 @@ struct Palette {
         border:   rgb(30, 23, 20).opacity(0.22),
         shadow:   rgb(30, 23, 20).opacity(0.10),
         ghostLift: rgb(30, 23, 20).opacity(0.22),
-        ghostLiftRadius: 10, ghostLiftY: 5)
+        ghostLiftRadius: 8, ghostLiftY: 4)
 
     /// Night. Same warmth, inverted — the ink becomes the paper.
     static let dark = Palette(
@@ -272,8 +272,8 @@ struct Palette {
         card:     rgb(43, 34, 29),
         border:   rgb(255, 246, 230).opacity(0.16),
         shadow:   rgb(12, 9, 8).opacity(0.55),
-        ghostLift: rgb(255, 130, 202).opacity(0.34),
-        ghostLiftRadius: 22, ghostLiftY: 0)
+        ghostLift: rgb(255, 130, 202).opacity(0.28),
+        ghostLiftRadius: 9, ghostLiftY: 1)
 
     var shell: RadialGradient {
         RadialGradient(
@@ -303,14 +303,35 @@ enum TT {
                                     startPoint: .topLeading, endPoint: .bottomTrailing)
 }
 
-/// The ghost: gradient-filled body with linework and eyes on top — the same two-layer
-/// construction Ghost.svelte uses (shape = url(#gradient), eyes = ink).
+/// The ghost, alive. Three layers — gradient body, ink linework, ink eyes — so the
+/// eyes can blink independently. Timings are lifted from the web app's
+/// ghost/animationConfig.js and ghost-animations-optimized.css, not invented:
+///   blink gap 4–9s · single blink 180ms · 25% chance of a double (80ms apart)
+///   idle float 5.8s · recording float 3.4s · recording breathe 2.6s
 struct GhostMark: View {
+    var isRecording = false
+
+    @State private var eyeScale: CGFloat = 1
+    @State private var floatY: CGFloat = 0
+    @State private var tilt: Double = 0
+    @State private var blinkTimer: Timer?
+
+    // Eyes sit at y=464 of the 1024 canvas; blink squashes about their own centre,
+    // not the canvas centre, or they slide down the face.
+    private let eyeAnchor = UnitPoint(x: 0.5, y: 464.0 / 1024.0)
+
     var body: some View {
         ZStack {
             layer("ghost-fill").foregroundStyle(TT.peachGhost)
-            layer("ghost").foregroundStyle(TT.ghostInk)
+            layer("ghost-line").foregroundStyle(TT.ghostInk)
+            layer("ghost-eyes").foregroundStyle(TT.ghostInk)
+                .scaleEffect(x: 1, y: eyeScale, anchor: eyeAnchor)
         }
+        .offset(y: floatY)
+        .rotationEffect(.degrees(tilt))
+        .onAppear { startFloating(); scheduleBlink() }
+        .onDisappear { blinkTimer?.invalidate(); blinkTimer = nil }
+        .onChange(of: isRecording) { _ in startFloating() }
     }
 
     private func layer(_ name: String) -> some View {
@@ -320,6 +341,39 @@ struct GhostMark: View {
             } else {
                 Color.clear
             }
+        }
+    }
+
+    private func startFloating() {
+        let duration = isRecording ? 3.4 : 5.8
+        floatY = 0; tilt = 0
+        withAnimation(.easeInOut(duration: duration).repeatForever(autoreverses: true)) {
+            floatY = isRecording ? -4 : -3
+            tilt   = isRecording ? 0.25 : 0.35
+        }
+    }
+
+    private func scheduleBlink() {
+        blinkTimer?.invalidate()
+        let gap = Double.random(in: 4.0...9.0)          // BLINK_CONFIG MIN_GAP / MAX_GAP
+        blinkTimer = Timer.scheduledTimer(withTimeInterval: gap, repeats: false) { _ in
+            blink(double: Double.random(in: 0...1) < 0.25)   // DOUBLE_CHANCE
+            scheduleBlink()
+        }
+    }
+
+    private func blink(double: Bool) {
+        shut()
+        if double {
+            // 180ms blink, 80ms pause, then the second one.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.18 + 0.08) { shut() }
+        }
+    }
+
+    private func shut() {
+        withAnimation(.timingCurve(0.4, 0, 0.2, 1, duration: 0.075)) { eyeScale = 0.05 }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.105) {
+            withAnimation(.timingCurve(0.4, 0, 0.2, 1, duration: 0.075)) { eyeScale = 1 }
         }
     }
 }
@@ -379,12 +433,12 @@ struct ContentView: View {
 
     private var ghostButton: some View {
         Button(action: toggle) {
-            GhostMark()
+            GhostMark(isRecording: isRec)
                 .frame(width: 118, height: 118)
                 .saturation(isRec ? 1.0 : 0.92)
                 .scaleEffect(breathing && isRec ? 1.06 : 1.0)
                 .shadow(color: isRec ? TT.pink.opacity(0.55) : p.ghostLift,
-                        radius: isRec ? 24 : p.ghostLiftRadius,
+                        radius: isRec ? 15 : p.ghostLiftRadius,
                         x: 0, y: isRec ? 0 : p.ghostLiftY)
         }
         .buttonStyle(.plain)
