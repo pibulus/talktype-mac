@@ -239,6 +239,11 @@ struct Palette {
     let card: Color         // transcript surface
     let border: Color       // warm sepia rule
     let shadow: Color
+    /// What lifts the ghost off the page. On cream that is a shadow; on a dark
+    /// ground a shadow is invisible, so it becomes a soft peach glow instead.
+    let ghostLift: Color
+    let ghostLiftRadius: CGFloat
+    let ghostLiftY: CGFloat
 
     static func rgb(_ r: Int, _ g: Int, _ b: Int) -> Color {
         Color(red: Double(r)/255, green: Double(g)/255, blue: Double(b)/255)
@@ -253,7 +258,9 @@ struct Palette {
         paperDim: rgb(255, 239, 218),   // #ffefda
         card:     rgb(253, 242, 224),   // deeper cream so the card reads as paper, not glare
         border:   rgb(30, 23, 20).opacity(0.22),
-        shadow:   rgb(30, 23, 20).opacity(0.10))
+        shadow:   rgb(30, 23, 20).opacity(0.10),
+        ghostLift: rgb(30, 23, 20).opacity(0.22),
+        ghostLiftRadius: 10, ghostLiftY: 5)
 
     /// Night. Same warmth, inverted — the ink becomes the paper.
     static let dark = Palette(
@@ -264,7 +271,9 @@ struct Palette {
         paperDim: rgb(22, 17, 15),
         card:     rgb(43, 34, 29),
         border:   rgb(255, 246, 230).opacity(0.16),
-        shadow:   Color.black.opacity(0.35))
+        shadow:   rgb(12, 9, 8).opacity(0.55),
+        ghostLift: rgb(255, 130, 202).opacity(0.34),
+        ghostLiftRadius: 22, ghostLiftY: 0)
 
     var shell: RadialGradient {
         RadialGradient(
@@ -276,6 +285,8 @@ struct Palette {
 }
 
 enum TT {
+    /// The ghost's own ink. Fixed, never themed — see GhostMark.
+    static let ghostInk  = Palette.rgb(30, 23, 20)     // #1e1714
     static let pink      = Palette.rgb(255, 130, 202)  // #ff82ca
     static let tangerine = Palette.rgb(255, 176,  96)  // #ffb060
 
@@ -295,12 +306,10 @@ enum TT {
 /// The ghost: gradient-filled body with linework and eyes on top — the same two-layer
 /// construction Ghost.svelte uses (shape = url(#gradient), eyes = ink).
 struct GhostMark: View {
-    let lineColor: Color
-
     var body: some View {
         ZStack {
             layer("ghost-fill").foregroundStyle(TT.peachGhost)
-            layer("ghost").foregroundStyle(lineColor)
+            layer("ghost").foregroundStyle(TT.ghostInk)
         }
     }
 
@@ -370,12 +379,13 @@ struct ContentView: View {
 
     private var ghostButton: some View {
         Button(action: toggle) {
-            GhostMark(lineColor: p.ink)
+            GhostMark()
                 .frame(width: 118, height: 118)
                 .saturation(isRec ? 1.0 : 0.92)
                 .scaleEffect(breathing && isRec ? 1.06 : 1.0)
-                .shadow(color: (isRec ? TT.pink : p.shadow).opacity(isRec ? 0.50 : 1.0),
-                        radius: isRec ? 20 : 9, x: 0, y: 5)
+                .shadow(color: isRec ? TT.pink.opacity(0.55) : p.ghostLift,
+                        radius: isRec ? 24 : p.ghostLiftRadius,
+                        x: 0, y: isRec ? 0 : p.ghostLiftY)
         }
         .buttonStyle(.plain)
         .onChange(of: isRec) { rec in
