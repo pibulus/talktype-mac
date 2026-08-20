@@ -1,0 +1,8 @@
+build/
+*.dSYM/
+.DS_Store
+
+# One-shot patch scripts and scratch binaries from the scaffolding session
+test_app
+test_app.swift
+fix_*.py
