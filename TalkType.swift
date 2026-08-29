@@ -95,6 +95,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var pttMonitors: [Any] = []
     private var pttHeld = false
     private var pendingPaste = false
+    
+    private var menubarBounceTimer: Timer?
+    private var isGhostBounceDown = false
 
     static func main() {
         let app = NSApplication.shared
@@ -105,18 +108,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
-        SFSpeechRecognizer.requestAuthorization { authStatus in
-            print("Speech auth status: \(authStatus.rawValue)")
-        }
-        
-        AVCaptureDevice.requestAccess(for: .audio) { granted in
-            print("Mic access granted: \(granted)")
-        }
+        SFSpeechRecognizer.requestAuthorization { _ in }
+        AVCaptureDevice.requestAccess(for: .audio) { _ in }
 
         // Setup Menu Bar Item
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
-            updateMenuBarIcon(isRecording: false)
+            resetMenuBarIcon()
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
             button.action = #selector(statusItemClicked(_:))
             button.target = self
@@ -146,18 +144,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             guard self.pendingPaste else { return }
             self.pendingPaste = false
             self.liveHUDController?.hide()
-            self.updateMenuBarIcon(isRecording: false)
+            self.stopMenubarBounce()
             guard !text.isEmpty else { return }
             self.pasteToActiveApp(text: text)
         }
         
         engine.onStateChange = { [weak self] isRecording in
             DispatchQueue.main.async {
-                self?.updateMenuBarIcon(isRecording: isRecording)
                 if isRecording {
+                    self?.startMenubarBounce()
                     self?.liveHUDController?.show()
-                } else if !(self?.pendingPaste ?? false) {
-                    self?.liveHUDController?.hide()
+                } else {
+                    self?.stopMenubarBounce()
+                    if !(self?.pendingPaste ?? false) {
+                        self?.liveHUDController?.hide()
+                    }
                 }
             }
         }
@@ -166,70 +167,47 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         checkAccessibilityPermissions()
     }
     
-    // Generates sleek native vector icons: open eyes when idle, smiling listening slits (^ ^) when recording
-    func updateMenuBarIcon(isRecording: Bool) {
+    // MARK: - Menu Bar Icon (Original TalkType Ghost with Bouncy Animation)
+    func resetMenuBarIcon() {
         guard let button = statusItem.button else { return }
-        
-        let size = NSSize(width: 18, height: 18)
-        let icon = NSImage(size: size)
-        icon.lockFocus()
-        
-        // Base ghost silhouette
-        let path = NSBezierPath()
-        // Head curve
-        path.move(to: NSPoint(x: 9, y: 16))
-        path.curve(to: NSPoint(x: 16, y: 9.5), controlPoint1: NSPoint(x: 14.5, y: 16), controlPoint2: NSPoint(x: 16, y: 13.5))
-        // Right side
-        path.line(to: NSPoint(x: 16, y: 4))
-        // Bottom ruffles / skirt
-        path.curve(to: NSPoint(x: 12.5, y: 5), controlPoint1: NSPoint(x: 15, y: 4.5), controlPoint2: NSPoint(x: 14, y: 5.5))
-        path.curve(to: NSPoint(x: 9, y: 3.5), controlPoint1: NSPoint(x: 11, y: 4.5), controlPoint2: NSPoint(x: 10, y: 3.5))
-        path.curve(to: NSPoint(x: 5.5, y: 5), controlPoint1: NSPoint(x: 8, y: 3.5), controlPoint2: NSPoint(x: 7, y: 4.5))
-        path.curve(to: NSPoint(x: 2, y: 4), controlPoint1: NSPoint(x: 4, y: 5.5), controlPoint2: NSPoint(x: 3, y: 4.5))
-        // Left side
-        path.line(to: NSPoint(x: 2, y: 9.5))
-        path.curve(to: NSPoint(x: 9, y: 16), controlPoint1: NSPoint(x: 2, y: 13.5), controlPoint2: NSPoint(x: 3.5, y: 16))
-        path.close()
-        
-        NSColor.black.setFill()
-        path.fill()
-        
-        // Eyes (cut out from the silhouette)
-        
-        if isRecording {
-            // Cute listening slits / smiling squint (^ ^)
-            let leftEye = NSBezierPath()
-            leftEye.move(to: NSPoint(x: 5.0, y: 10.0))
-            leftEye.line(to: NSPoint(x: 6.5, y: 11.5))
-            leftEye.line(to: NSPoint(x: 8.0, y: 10.0))
-            leftEye.lineWidth = 1.3
-            leftEye.lineCapStyle = .round
-            
-            let rightEye = NSBezierPath()
-            rightEye.move(to: NSPoint(x: 10.0, y: 10.0))
-            rightEye.line(to: NSPoint(x: 11.5, y: 11.5))
-            rightEye.line(to: NSPoint(x: 13.0, y: 10.0))
-            rightEye.lineWidth = 1.3
-            rightEye.lineCapStyle = .round
-            
-            NSGraphicsContext.current?.compositingOperation = .clear
-            leftEye.stroke()
-            rightEye.stroke()
-            NSGraphicsContext.current?.compositingOperation = .sourceOver
+        if let originalGhost = NSImage(named: "ghost-menubar") {
+            let icon = originalGhost.copy() as! NSImage
+            icon.size = NSSize(width: 18, height: 18)
+            icon.isTemplate = true
+            button.image = icon
         } else {
-            // Open dot eyes
-            let leftEye = NSRect(x: 5.5, y: 9.5, width: 2.2, height: 2.5)
-            let rightEye = NSRect(x: 10.3, y: 9.5, width: 2.2, height: 2.5)
-            
-            NSGraphicsContext.current?.compositingOperation = .clear
-            NSBezierPath(ovalIn: leftEye).fill()
-            NSBezierPath(ovalIn: rightEye).fill()
-            NSGraphicsContext.current?.compositingOperation = .sourceOver
+            button.title = "👻"
         }
+    }
+    
+    func startMenubarBounce() {
+        stopMenubarBounce()
+        guard let originalGhost = NSImage(named: "ghost-menubar") else { return }
         
-        icon.unlockFocus()
-        icon.isTemplate = true
-        button.image = icon
+        menubarBounceTimer = Timer.scheduledTimer(withTimeInterval: 0.28, repeats: true) { [weak self] _ in
+            guard let self = self, let button = self.statusItem.button else { return }
+            self.isGhostBounceDown.toggle()
+            
+            let size = NSSize(width: 18, height: 18)
+            let bounced = NSImage(size: size)
+            bounced.lockFocus()
+            
+            let yOffset: CGFloat = self.isGhostBounceDown ? -1.5 : 1.5
+            originalGhost.draw(in: NSRect(x: 0, y: yOffset, width: 18, height: 18),
+                               from: .zero,
+                               operation: .sourceOver,
+                               fraction: 1.0)
+            
+            bounced.unlockFocus()
+            bounced.isTemplate = true
+            button.image = bounced
+        }
+    }
+    
+    func stopMenubarBounce() {
+        menubarBounceTimer?.invalidate()
+        menubarBounceTimer = nil
+        resetMenuBarIcon()
     }
 
     /// Hold Right Option anywhere to dictate; release to paste into whatever has focus.
@@ -263,8 +241,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func checkAccessibilityPermissions() {
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-        let isTrusted = AXIsProcessTrustedWithOptions(options)
-        print("Accessibility Trusted: \(isTrusted)")
+        let _ = AXIsProcessTrustedWithOptions(options)
     }
 
     @objc func statusItemClicked(_ sender: NSStatusBarButton) {
@@ -386,7 +363,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let pasteboard = NSPasteboard.general
             pasteboard.clearContents()
             pasteboard.setString(last.text, forType: .string)
-            print("Copied last transcript to clipboard: \(last.text)")
         }
     }
 
@@ -395,7 +371,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let pasteboard = NSPasteboard.general
             pasteboard.clearContents()
             pasteboard.setString(text, forType: .string)
-            print("Copied transcript to clipboard: \(text)")
         }
     }
 
@@ -478,14 +453,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             
             keyDown.post(tap: .cghidEventTap)
             keyUp.post(tap: .cghidEventTap)
-            print("Pasted: \(text)")
         }
     }
 }
 
 // MARK: - Live Transcript Floating HUD Window Controller
 final class LiveHUDWindowController: NSWindowController {
-    let size = NSSize(width: 640, height: 110)
+    let size = NSSize(width: 580, height: 76)
     
     init(speechEngine: SpeechEngine) {
         let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1280, height: 800)
@@ -530,7 +504,7 @@ final class LiveHUDWindowController: NSWindowController {
         window.alphaValue = 0
         window.orderFrontRegardless()
         NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.18
+            context.duration = 0.16
             window.animator().alphaValue = 1.0
         }
     }
@@ -538,7 +512,7 @@ final class LiveHUDWindowController: NSWindowController {
     func hide() {
         guard let window = self.window else { return }
         NSAnimationContext.runAnimationGroup({ context in
-            context.duration = 0.22
+            context.duration = 0.20
             window.animator().alphaValue = 0
         }, completionHandler: {
             window.orderOut(nil)
@@ -546,7 +520,7 @@ final class LiveHUDWindowController: NSWindowController {
     }
 }
 
-// MARK: - Live Transcript HUD View (Lush, Floating, Liquid Color Flow)
+// MARK: - Live Transcript HUD View (Pure Crisp Rounded Capsule, Zero Square Background Box)
 struct LiveTranscriptHUDView: View {
     @ObservedObject var speechEngine: SpeechEngine
     @State private var wavePhase: Double = 0
@@ -558,132 +532,125 @@ struct LiveTranscriptHUDView: View {
     }
     
     var body: some View {
-        // Container with generous internal padding so soft shadows and glowing corners never clip
-        ZStack {
-            HStack(spacing: 16) {
-                // Animated Peach Ghost with bouncy reaction
-                ZStack {
-                    Circle()
-                        .fill(
-                            RadialGradient(
-                                colors: [TT.pink.opacity(0.32), TT.tangerine.opacity(0.12)],
-                                center: .center,
-                                startRadius: 0,
-                                endRadius: 28
-                            )
-                        )
-                        .frame(width: 48, height: 48)
-                    
-                    GhostMark(isRecording: speechEngine.isRecording)
-                        .frame(width: 36, height: 36)
-                        .scaleEffect(ghostBounce)
-                }
-                .shadow(color: TT.pink.opacity(0.35), radius: 8, x: 0, y: 2)
-                
-                // Auto-scrolling Live Text Container (never cuts off)
-                ScrollViewReader { proxy in
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 0) {
-                            Text(displayedText)
-                                .font(.system(size: 17, weight: .semibold, design: .rounded))
-                                .lineLimit(1)
-                                .foregroundStyle(
-                                    speechEngine.transcript.isEmpty
-                                        ? Color(red: 0.35, green: 0.28, blue: 0.24).opacity(0.55)
-                                        : Color(red: 0.12, green: 0.09, blue: 0.08)
-                                )
-                                .id("liveStreamText")
-                            
-                            // Trailing anchor for auto-scroll
-                            Color.clear
-                                .frame(width: 2, height: 2)
-                                .id("trailingAnchor")
-                        }
-                        .padding(.vertical, 4)
-                    }
-                    .mask(
-                        LinearGradient(
-                            stops: [
-                                .init(color: .clear, location: 0),
-                                .init(color: .black, location: speechEngine.transcript.count > 25 ? 0.07 : 0),
-                                .init(color: .black, location: 1.0)
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
+        HStack(spacing: 14) {
+            // Animated Peach Ghost Mark
+            ZStack {
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [TT.pink.opacity(0.35), TT.tangerine.opacity(0.12)],
+                            center: .center,
+                            startRadius: 0,
+                            endRadius: 26
                         )
                     )
-                    .onChange(of: speechEngine.transcript) { _ in
-                        withAnimation(.easeOut(duration: 0.12)) {
-                            proxy.scrollTo("trailingAnchor", anchor: .trailing)
-                        }
-                        // Cute subtle bounce when words stream in
-                        withAnimation(.spring(response: 0.2, dampingFraction: 0.5)) {
-                            ghostBounce = 1.12
-                        }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-                            withAnimation(.easeOut(duration: 0.15)) {
-                                ghostBounce = 1.0
-                            }
+                    .frame(width: 44, height: 44)
+                
+                GhostMark(isRecording: speechEngine.isRecording)
+                    .frame(width: 32, height: 32)
+                    .scaleEffect(ghostBounce)
+            }
+            .shadow(color: TT.pink.opacity(0.35), radius: 6, x: 0, y: 2)
+            
+            // Auto-scrolling Live Text Container (never cuts off)
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 0) {
+                        Text(displayedText)
+                            .font(.system(size: 16, weight: .semibold, design: .rounded))
+                            .lineLimit(1)
+                            .foregroundStyle(
+                                speechEngine.transcript.isEmpty
+                                    ? Color(red: 0.35, green: 0.28, blue: 0.24).opacity(0.55)
+                                    : Color(red: 0.12, green: 0.09, blue: 0.08)
+                            )
+                            .id("liveStreamText")
+                        
+                        // Trailing anchor for auto-scroll
+                        Color.clear
+                            .frame(width: 2, height: 2)
+                            .id("trailingAnchor")
+                    }
+                    .padding(.vertical, 2)
+                }
+                .mask(
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear, location: 0),
+                            .init(color: .black, location: speechEngine.transcript.count > 25 ? 0.07 : 0),
+                            .init(color: .black, location: 1.0)
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .onChange(of: speechEngine.transcript) { _ in
+                    withAnimation(.easeOut(duration: 0.12)) {
+                        proxy.scrollTo("trailingAnchor", anchor: .trailing)
+                    }
+                    withAnimation(.spring(response: 0.2, dampingFraction: 0.5)) {
+                        ghostBounce = 1.12
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            ghostBounce = 1.0
                         }
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                
-                // Live pulsing soundwave radar dot
-                ZStack {
-                    // Expanding outer aura ring
-                    Circle()
-                        .stroke(TT.pink.opacity(0.45), lineWidth: 1.5)
-                        .scaleEffect(1.0 + CGFloat(sin(wavePhase)) * 0.45)
-                        .opacity(0.85 - sin(wavePhase) * 0.35)
-                        .frame(width: 26, height: 26)
-                    
-                    // Soft glow halo
-                    Circle()
-                        .fill(TT.hot)
-                        .frame(width: 12, height: 12)
-                        .shadow(color: TT.pink.opacity(0.85), radius: 8)
-                }
-                .frame(width: 32, height: 32)
             }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 16)
-            .background(
-                ZStack {
-                    // Warm creamy paper grounding
-                    RoundedRectangle(cornerRadius: 32, style: .continuous)
-                        .fill(Color(red: 0.992, green: 0.965, blue: 0.932).opacity(0.95))
-                    
-                    // Liquid gradient color flow on outline
-                    RoundedRectangle(cornerRadius: 32, style: .continuous)
-                        .strokeBorder(
-                            AngularGradient(
-                                gradient: Gradient(colors: [
-                                    TT.pink,
-                                    TT.tangerine,
-                                    Color(red: 1.0, green: 0.82, blue: 0.35),
-                                    TT.pink.opacity(0.9),
-                                    TT.tangerine,
-                                    TT.pink
-                                ]),
-                                center: .center,
-                                startAngle: .degrees(borderAngle),
-                                endAngle: .degrees(borderAngle + 360)
-                            ),
-                            lineWidth: 2.5
-                        )
-                    
-                    // Inner hairline highlight
-                    RoundedRectangle(cornerRadius: 31, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.5), lineWidth: 1)
-                        .padding(1)
-                }
-            )
-            // Multi-stage drop shadows
-            .shadow(color: TT.pink.opacity(0.32), radius: 22, x: 0, y: 8)
-            .shadow(color: Color(red: 0.12, green: 0.09, blue: 0.08).opacity(0.12), radius: 10, x: 0, y: 3)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            
+            // Live pulsing soundwave radar dot
+            ZStack {
+                Circle()
+                    .stroke(TT.pink.opacity(0.45), lineWidth: 1.5)
+                    .scaleEffect(1.0 + CGFloat(sin(wavePhase)) * 0.45)
+                    .opacity(0.85 - sin(wavePhase) * 0.35)
+                    .frame(width: 24, height: 24)
+                
+                Circle()
+                    .fill(TT.hot)
+                    .frame(width: 11, height: 11)
+                    .shadow(color: TT.pink.opacity(0.85), radius: 6)
+            }
+            .frame(width: 28, height: 28)
         }
-        .padding(8) // Prevents window boundary clip
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+        .background(
+            ZStack {
+                // Crisp creamy paper base (zero rectangular backdrop blur layer)
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(Color(red: 0.992, green: 0.965, blue: 0.932).opacity(0.97))
+                
+                // Liquid flowing color border
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .strokeBorder(
+                        AngularGradient(
+                            gradient: Gradient(colors: [
+                                TT.pink,
+                                TT.tangerine,
+                                Color(red: 1.0, green: 0.82, blue: 0.35),
+                                TT.pink.opacity(0.9),
+                                TT.tangerine,
+                                TT.pink
+                            ]),
+                            center: .center,
+                            startAngle: .degrees(borderAngle),
+                            endAngle: .degrees(borderAngle + 360)
+                        ),
+                        lineWidth: 2.5
+                    )
+                
+                // Inner hairline highlight
+                RoundedRectangle(cornerRadius: 23, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.55), lineWidth: 1)
+                    .padding(1)
+            }
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .shadow(color: TT.pink.opacity(0.35), radius: 16, x: 0, y: 6)
+        .shadow(color: Color(red: 0.12, green: 0.09, blue: 0.08).opacity(0.12), radius: 8, x: 0, y: 3)
         .onAppear {
             withAnimation(.easeInOut(duration: 0.75).repeatForever(autoreverses: true)) {
                 wavePhase = .pi * 2
@@ -769,7 +736,6 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
         }
         
         guard let converter = AVAudioConverter(from: nativeFormat, to: targetFormat) else {
-            print("Could not create audio converter")
             startAppleSpeechRecognition()
             return
         }
@@ -795,11 +761,7 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
             if let channelData = convertedBuffer.int16ChannelData {
                 let channelDataPointer = channelData.pointee
                 let data = Data(bytes: channelDataPointer, count: Int(convertedBuffer.frameLength) * 2)
-                self.webSocketTask?.send(.data(data)) { sendError in
-                    if let sendError = sendError {
-                        print("WebSocket send error: \(sendError)")
-                    }
-                }
+                self.webSocketTask?.send(.data(data)) { _ in }
             }
         }
         
@@ -811,7 +773,6 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
                 self.onStateChange?(true)
             }
         } catch {
-            print("Audio engine start failed: \(error)")
             stopRecording()
         }
     }
@@ -834,8 +795,8 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
                 }
                 self.listenWebSocket()
                 
-            case .failure(let error):
-                print("WebSocket receive error: \(error)")
+            case .failure:
+                break
             }
         }
     }
@@ -872,7 +833,6 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
         audioEngine.stop()
         audioEngine.inputNode.removeTap(onBus: 0)
         
-        // Send close frame
         let closeData = Data()
         webSocketTask?.send(.data(closeData)) { _ in }
         
