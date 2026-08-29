@@ -4,6 +4,57 @@ import Speech
 import AVFoundation
 import ApplicationServices
 
+// MARK: - PTT Shortcut Trigger Options (Full Keyboard & Mobility Accessibility)
+enum PTTTrigger: String, CaseIterable, Identifiable {
+    case rightOption = "rightOption"
+    case leftOption = "leftOption"
+    case eitherOption = "eitherOption"
+    case function = "function"
+    case rightCommand = "rightCommand"
+    
+    var id: String { rawValue }
+    
+    var title: String {
+        switch self {
+        case .rightOption: return "Right ⌥ Option (Default)"
+        case .leftOption: return "Left ⌥ Option"
+        case .eitherOption: return "Either ⌥ Option"
+        case .function: return "Globe / Function (fn) 🌐"
+        case .rightCommand: return "Right ⌘ Command"
+        }
+    }
+    
+    var shortTitle: String {
+        switch self {
+        case .rightOption: return "Right ⌥ Option"
+        case .leftOption: return "Left ⌥ Option"
+        case .eitherOption: return "Either ⌥ Option"
+        case .function: return "Globe / fn 🌐"
+        case .rightCommand: return "Right ⌘ Command"
+        }
+    }
+    
+    func matches(event: NSEvent) -> Bool? {
+        switch self {
+        case .rightOption:
+            guard event.keyCode == 61 else { return nil }
+            return event.modifierFlags.contains(.option)
+        case .leftOption:
+            guard event.keyCode == 58 else { return nil }
+            return event.modifierFlags.contains(.option)
+        case .eitherOption:
+            guard event.keyCode == 61 || event.keyCode == 58 else { return nil }
+            return event.modifierFlags.contains(.option)
+        case .function:
+            guard event.keyCode == 63 else { return nil }
+            return event.modifierFlags.contains(.function)
+        case .rightCommand:
+            guard event.keyCode == 54 else { return nil }
+            return event.modifierFlags.contains(.command)
+        }
+    }
+}
+
 // MARK: - Constants & Config
 enum TalkTypeConfig {
     static let defaultDeepgramKey = "REDACTED_ROTATE_ME"
@@ -11,6 +62,7 @@ enum TalkTypeConfig {
     static let engineStorageKey = "talktypeEngine" // "deepgram" or "apple"
     static let hudPositionStorageKey = "hudPosition" // "bottom" or "top"
     static let historyStorageKey = "talktypeHistory"
+    static let pttTriggerStorageKey = "talktypePttTrigger"
     
     static var deepgramApiKey: String {
         let custom = UserDefaults.standard.string(forKey: deepgramKeyStorageKey)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -23,6 +75,11 @@ enum TalkTypeConfig {
     
     static var hudPosition: String {
         return UserDefaults.standard.string(forKey: hudPositionStorageKey) ?? "bottom"
+    }
+    
+    static var pttTrigger: PTTTrigger {
+        let raw = UserDefaults.standard.string(forKey: pttTriggerStorageKey) ?? PTTTrigger.rightOption.rawValue
+        return PTTTrigger(rawValue: raw) ?? .rightOption
     }
 }
 
@@ -212,7 +269,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         resetMenuBarIcon()
     }
 
-    /// Hold Right Option anywhere to dictate; release to paste into whatever has focus.
+    /// Hold designated shortcut anywhere to dictate; release to paste into whatever has focus.
     func setupPushToTalk() {
         let handler: (NSEvent) -> Void = { [weak self] event in self?.handleFlags(event) }
         if let g = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged, handler: handler) {
@@ -224,8 +281,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handleFlags(_ event: NSEvent) {
-        guard event.keyCode == 61 else { return } // 61 = Right Option
-        let down = event.modifierFlags.contains(.option)
+        let trigger = TalkTypeConfig.pttTrigger
+        guard let down = trigger.matches(event: event) else { return }
+        
         if down, !pttHeld {
             pttHeld = true
             engine.startRecording()
@@ -300,6 +358,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         menu.addItem(NSMenuItem.separator())
         
+        // Push-to-Talk Shortcut Submenu (Accessibility)
+        let shortcutMenu = NSMenu(title: "Shortcut")
+        let activeTrigger = TalkTypeConfig.pttTrigger
+        
+        for trigger in PTTTrigger.allCases {
+            let item = NSMenuItem(title: trigger.title, action: #selector(selectShortcutTrigger(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = trigger.rawValue
+            item.state = (trigger == activeTrigger) ? .on : .off
+            shortcutMenu.addItem(item)
+        }
+        
+        let shortcutParent = NSMenuItem(title: "Push to Talk Key", action: nil, keyEquivalent: "")
+        shortcutParent.submenu = shortcutMenu
+        menu.addItem(shortcutParent)
+        
         // Model Selection Submenu
         let modelMenu = NSMenu(title: "Model")
         let isDeepgram = TalkTypeConfig.isUsingDeepgram
@@ -345,12 +419,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         menu.addItem(NSMenuItem.separator())
         
-        let pttInfo = NSMenuItem(title: "Shortcut: Hold Right ⌥ Option", action: nil, keyEquivalent: "")
-        pttInfo.isEnabled = false
-        menu.addItem(pttInfo)
-        
-        menu.addItem(NSMenuItem.separator())
-        
         let quitItem = NSMenuItem(title: "Quit TalkType", action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
@@ -358,6 +426,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.menu = menu
         statusItem.button?.performClick(nil)
         statusItem.menu = nil
+    }
+
+    @objc func selectShortcutTrigger(_ sender: NSMenuItem) {
+        if let raw = sender.representedObject as? String {
+            UserDefaults.standard.set(raw, forKey: TalkTypeConfig.pttTriggerStorageKey)
+        }
     }
 
     @objc func copyLastTranscript() {
@@ -522,7 +596,7 @@ final class LiveHUDWindowController: NSWindowController {
     }
 }
 
-// MARK: - Live Transcript HUD View (Pure Crisp Rounded Capsule, Zero Square Background Box)
+// MARK: - Live Transcript HUD View (Pure Crisp Rounded Capsule, 4.5px Chunky Neon Glow Border)
 struct LiveTranscriptHUDView: View {
     @ObservedObject var speechEngine: SpeechEngine
     @State private var wavePhase: Double = 0
@@ -625,7 +699,7 @@ struct LiveTranscriptHUDView: View {
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
                     .fill(Color(red: 0.992, green: 0.965, blue: 0.932).opacity(0.88))
                 
-                // Liquid flowing color border (chunkier neon glow)
+                // Liquid flowing color border (chunkier 4.5px glowing neon stroke)
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
                     .strokeBorder(
                         AngularGradient(
@@ -641,7 +715,7 @@ struct LiveTranscriptHUDView: View {
                             startAngle: .degrees(borderAngle),
                             endAngle: .degrees(borderAngle + 360)
                         ),
-                        lineWidth: 3.5
+                        lineWidth: 4.5
                     )
                 
                 // Inner hairline highlight
@@ -653,6 +727,8 @@ struct LiveTranscriptHUDView: View {
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .shadow(color: TT.pink.opacity(0.35), radius: 16, x: 0, y: 6)
         .shadow(color: Color(red: 0.12, green: 0.09, blue: 0.08).opacity(0.12), radius: 8, x: 0, y: 3)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("TalkType live speech: \(displayedText)")
         .onAppear {
             withAnimation(.easeInOut(duration: 0.75).repeatForever(autoreverses: true)) {
                 wavePhase = .pi * 2
@@ -738,6 +814,7 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
         }
         
         guard let converter = AVAudioConverter(from: nativeFormat, to: targetFormat) else {
+            print("Could not create audio converter")
             startAppleSpeechRecognition()
             return
         }
@@ -1052,6 +1129,7 @@ struct ContentView: View {
     private var p: Palette { scheme == .dark ? .dark : .light }
     private var isRec: Bool { speechEngine.isRecording }
     private var isDeepgram: Bool { TalkTypeConfig.isUsingDeepgram }
+    private var pttKeyName: String { TalkTypeConfig.pttTrigger.shortTitle }
 
     var body: some View {
         VStack(spacing: 12) {
@@ -1162,7 +1240,7 @@ struct ContentView: View {
 
     private var statusLine: some View {
         VStack(spacing: 4) {
-            Text(isRec ? "Listening (\(isDeepgram ? "Deepgram Nova-3" : "Apple Speech"))…" : "Click ghost or hold ⌥ Right Option")
+            Text(isRec ? "Listening (\(isDeepgram ? "Deepgram Nova-3" : "Apple Speech"))…" : "Click ghost or hold \(pttKeyName)")
                 .font(.system(size: 12, weight: .semibold, design: .rounded))
                 .foregroundStyle(isRec ? AnyShapeStyle(TT.hot) : AnyShapeStyle(p.inkSoft.opacity(0.8)))
             
