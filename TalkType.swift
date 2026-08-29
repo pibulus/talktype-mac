@@ -97,7 +97,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var pendingPaste = false
     
     private var menubarBounceTimer: Timer?
-    private var isGhostBounceDown = false
+    private var bouncePhase: Double = 0
 
     static func main() {
         let app = NSApplication.shared
@@ -167,7 +167,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         checkAccessibilityPermissions()
     }
     
-    // MARK: - Menu Bar Icon (Original TalkType Ghost with Bouncy Animation)
+    // MARK: - Menu Bar Icon (Original TalkType Ghost with Smooth Floating Animation)
     func resetMenuBarIcon() {
         guard let button = statusItem.button else { return }
         if let originalGhost = NSImage(named: "ghost-menubar") {
@@ -183,16 +183,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func startMenubarBounce() {
         stopMenubarBounce()
         guard let originalGhost = NSImage(named: "ghost-menubar") else { return }
+        bouncePhase = 0
         
-        menubarBounceTimer = Timer.scheduledTimer(withTimeInterval: 0.28, repeats: true) { [weak self] _ in
+        // Silky 30fps harmonic floating sine wave
+        menubarBounceTimer = Timer.scheduledTimer(withTimeInterval: 0.033, repeats: true) { [weak self] _ in
             guard let self = self, let button = self.statusItem.button else { return }
-            self.isGhostBounceDown.toggle()
+            self.bouncePhase += 0.16
+            let yOffset = sin(self.bouncePhase) * 1.8
             
             let size = NSSize(width: 18, height: 18)
             let bounced = NSImage(size: size)
             bounced.lockFocus()
             
-            let yOffset: CGFloat = self.isGhostBounceDown ? -1.5 : 1.5
             originalGhost.draw(in: NSRect(x: 0, y: yOffset, width: 18, height: 18),
                                from: .zero,
                                operation: .sourceOver,
@@ -619,11 +621,11 @@ struct LiveTranscriptHUDView: View {
         .padding(.vertical, 12)
         .background(
             ZStack {
-                // Crisp creamy paper base (zero rectangular backdrop blur layer)
+                // Mild creamy translucent paper base (zero rectangular backdrop blur layer)
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(Color(red: 0.992, green: 0.965, blue: 0.932).opacity(0.97))
+                    .fill(Color(red: 0.992, green: 0.965, blue: 0.932).opacity(0.88))
                 
-                // Liquid flowing color border
+                // Liquid flowing color border (chunkier neon glow)
                 RoundedRectangle(cornerRadius: 24, style: .continuous)
                     .strokeBorder(
                         AngularGradient(
@@ -639,7 +641,7 @@ struct LiveTranscriptHUDView: View {
                             startAngle: .degrees(borderAngle),
                             endAngle: .degrees(borderAngle + 360)
                         ),
-                        lineWidth: 2.5
+                        lineWidth: 3.5
                     )
                 
                 // Inner hairline highlight
