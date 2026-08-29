@@ -1128,12 +1128,11 @@ struct ContentView: View {
 
     private var p: Palette { scheme == .dark ? .dark : .light }
     private var isRec: Bool { speechEngine.isRecording }
-    private var isDeepgram: Bool { TalkTypeConfig.isUsingDeepgram }
     private var pttKeyName: String { TalkTypeConfig.pttTrigger.shortTitle }
 
     var body: some View {
-        VStack(spacing: 12) {
-            // Header with Wordmark + Tab Picker
+        VStack(spacing: 14) {
+            // Header with Wordmark + Tab Picker (Rock-Solid Top Locked)
             HStack {
                 HStack(spacing: 0) {
                     Text("Talk").foregroundStyle(p.ink)
@@ -1194,7 +1193,7 @@ struct ContentView: View {
             }
         }
         .padding(18)
-        .frame(width: 330, height: 440)
+        .frame(width: 330, height: 440, alignment: .top)
         .background(p.shell)
     }
 
@@ -1239,15 +1238,10 @@ struct ContentView: View {
     }
 
     private var statusLine: some View {
-        VStack(spacing: 4) {
-            Text(isRec ? "Listening (\(isDeepgram ? "Deepgram Nova-3" : "Apple Speech"))…" : "Click ghost or hold \(pttKeyName)")
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
-                .foregroundStyle(isRec ? AnyShapeStyle(TT.hot) : AnyShapeStyle(p.inkSoft.opacity(0.8)))
-            
-            Text(isDeepgram ? "⚡ Live streaming with Nova-3" : "🔒 Offline Apple Speech")
-                .font(.system(size: 10.5, weight: .medium, design: .rounded))
-                .foregroundStyle(p.inkSoft.opacity(0.5))
-        }
+        Text(isRec ? "Listening…" : "Click ghost or hold \(pttKeyName)")
+            .font(.system(size: 12, weight: .semibold, design: .rounded))
+            .foregroundStyle(isRec ? AnyShapeStyle(TT.hot) : AnyShapeStyle(p.inkSoft.opacity(0.75)))
+            .frame(height: 20)
     }
 
     private var historyCard: some View {
@@ -1316,7 +1310,7 @@ struct ContentView: View {
                     }
                     .padding(4)
                 }
-                .frame(maxHeight: 330)
+                .frame(height: 330)
                 
                 HStack {
                     Button("Clear History") {
