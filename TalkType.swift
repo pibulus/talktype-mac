@@ -9,6 +9,8 @@ enum TalkTypeConfig {
     static let defaultDeepgramKey = "REDACTED_ROTATE_ME"
     static let deepgramKeyStorageKey = "deepgramApiKey"
     static let engineStorageKey = "talktypeEngine" // "deepgram" or "apple"
+    static let hudPositionStorageKey = "hudPosition" // "bottom" or "top"
+    static let historyStorageKey = "talktypeHistory"
     
     static var deepgramApiKey: String {
         let custom = UserDefaults.standard.string(forKey: deepgramKeyStorageKey)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -18,6 +20,67 @@ enum TalkTypeConfig {
     static var isUsingDeepgram: Bool {
         return (UserDefaults.standard.string(forKey: engineStorageKey) ?? "deepgram") == "deepgram"
     }
+    
+    static var hudPosition: String {
+        return UserDefaults.standard.string(forKey: hudPositionStorageKey) ?? "bottom"
+    }
+}
+
+// MARK: - History Item
+struct TranscriptRecord: Identifiable, Codable, Equatable {
+    let id: UUID
+    let text: String
+    let timestamp: Date
+    let engine: String
+    
+    init(text: String, engine: String) {
+        self.id = UUID()
+        self.text = text
+        self.timestamp = Date()
+        self.engine = engine
+    }
+}
+
+// MARK: - History Store
+class HistoryStore: ObservableObject {
+    static let shared = HistoryStore()
+    @Published var records: [TranscriptRecord] = []
+    
+    init() {
+        load()
+    }
+    
+    func add(text: String, engine: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        
+        let record = TranscriptRecord(text: trimmed, engine: engine)
+        DispatchQueue.main.async {
+            self.records.insert(record, at: 0)
+            if self.records.count > 50 {
+                self.records = Array(self.records.prefix(50))
+            }
+            self.save()
+        }
+    }
+    
+    func clear() {
+        records.removeAll()
+        save()
+    }
+    
+    private func save() {
+        if let data = try? JSONEncoder().encode(records) {
+            UserDefaults.standard.set(data, forKey: TalkTypeConfig.historyStorageKey)
+        }
+    }
+    
+    private func load() {
+        if let data = UserDefaults.standard.data(forKey: TalkTypeConfig.historyStorageKey),
+           let loaded = try? JSONDecoder().decode([TranscriptRecord].self, from: data) {
+            self.records = loaded
+        }
+    }
 }
 
 // MARK: - App Delegate & Entry Point
@@ -26,6 +89,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem!
     var popover: NSPopover!
     let engine = SpeechEngine()
+    let history = HistoryStore.shared
     private var liveHUDController: LiveHUDWindowController?
 
     private var pttMonitors: [Any] = []
@@ -41,7 +105,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
-        // Request Permissions
         SFSpeechRecognizer.requestAuthorization { authStatus in
             print("Speech auth status: \(authStatus.rawValue)")
         }
@@ -62,19 +125,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Setup Popover
         popover = NSPopover()
-        popover.contentSize = NSSize(width: 320, height: 418)
+        popover.contentSize = NSSize(width: 330, height: 440)
         popover.behavior = .transient
         
         // Host the SwiftUI View
-        let contentView = ContentView(speechEngine: engine, appDelegate: self)
+        let contentView = ContentView(speechEngine: engine, history: history, appDelegate: self)
         popover.contentViewController = NSHostingController(rootView: contentView)
         
         // Live HUD controller
         liveHUDController = LiveHUDWindowController(speechEngine: engine)
 
-        // Setup paste hook
+        // Setup paste & history hook
         engine.onFinal = { [weak self] text in
-            guard let self = self, self.pendingPaste else { return }
+            guard let self = self else { return }
+            let engineName = TalkTypeConfig.isUsingDeepgram ? "Nova-3" : "Apple"
+            if !text.isEmpty {
+                self.history.add(text: text, engine: engineName)
+            }
+            
+            guard self.pendingPaste else { return }
             self.pendingPaste = false
             self.liveHUDController?.hide()
             self.updateMenuBarIcon(isRecording: false)
@@ -97,34 +166,70 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         checkAccessibilityPermissions()
     }
     
+    // Generates sleek native vector icons: open eyes when idle, smiling listening slits (^ ^) when recording
     func updateMenuBarIcon(isRecording: Bool) {
         guard let button = statusItem.button else { return }
-        if let ghost = NSImage(named: "ghost-menubar") {
-            let size = NSSize(width: 18, height: 18)
-            ghost.size = size
-            if isRecording {
-                // Warm glowing blush tint when recording
-                ghost.isTemplate = false
-                button.image = tintedGhost(image: ghost, color: NSColor(red: 1.0, green: 0.48, blue: 0.78, alpha: 1.0))
-            } else {
-                ghost.isTemplate = true
-                button.image = ghost
-            }
+        
+        let size = NSSize(width: 18, height: 18)
+        let icon = NSImage(size: size)
+        icon.lockFocus()
+        
+        // Base ghost silhouette
+        let path = NSBezierPath()
+        // Head curve
+        path.move(to: NSPoint(x: 9, y: 16))
+        path.curve(to: NSPoint(x: 16, y: 9.5), controlPoint1: NSPoint(x: 14.5, y: 16), controlPoint2: NSPoint(x: 16, y: 13.5))
+        // Right side
+        path.line(to: NSPoint(x: 16, y: 4))
+        // Bottom ruffles / skirt
+        path.curve(to: NSPoint(x: 12.5, y: 5), controlPoint1: NSPoint(x: 15, y: 4.5), controlPoint2: NSPoint(x: 14, y: 5.5))
+        path.curve(to: NSPoint(x: 9, y: 3.5), controlPoint1: NSPoint(x: 11, y: 4.5), controlPoint2: NSPoint(x: 10, y: 3.5))
+        path.curve(to: NSPoint(x: 5.5, y: 5), controlPoint1: NSPoint(x: 8, y: 3.5), controlPoint2: NSPoint(x: 7, y: 4.5))
+        path.curve(to: NSPoint(x: 2, y: 4), controlPoint1: NSPoint(x: 4, y: 5.5), controlPoint2: NSPoint(x: 3, y: 4.5))
+        // Left side
+        path.line(to: NSPoint(x: 2, y: 9.5))
+        path.curve(to: NSPoint(x: 9, y: 16), controlPoint1: NSPoint(x: 2, y: 13.5), controlPoint2: NSPoint(x: 3.5, y: 16))
+        path.close()
+        
+        NSColor.black.setFill()
+        path.fill()
+        
+        // Eyes (cut out from the silhouette)
+        
+        if isRecording {
+            // Cute listening slits / smiling squint (^ ^)
+            let leftEye = NSBezierPath()
+            leftEye.move(to: NSPoint(x: 5.0, y: 10.0))
+            leftEye.line(to: NSPoint(x: 6.5, y: 11.5))
+            leftEye.line(to: NSPoint(x: 8.0, y: 10.0))
+            leftEye.lineWidth = 1.3
+            leftEye.lineCapStyle = .round
+            
+            let rightEye = NSBezierPath()
+            rightEye.move(to: NSPoint(x: 10.0, y: 10.0))
+            rightEye.line(to: NSPoint(x: 11.5, y: 11.5))
+            rightEye.line(to: NSPoint(x: 13.0, y: 10.0))
+            rightEye.lineWidth = 1.3
+            rightEye.lineCapStyle = .round
+            
+            NSGraphicsContext.current?.compositingOperation = .clear
+            leftEye.stroke()
+            rightEye.stroke()
+            NSGraphicsContext.current?.compositingOperation = .sourceOver
         } else {
-            button.title = isRecording ? "🎙️" : "👻"
+            // Open dot eyes
+            let leftEye = NSRect(x: 5.5, y: 9.5, width: 2.2, height: 2.5)
+            let rightEye = NSRect(x: 10.3, y: 9.5, width: 2.2, height: 2.5)
+            
+            NSGraphicsContext.current?.compositingOperation = .clear
+            NSBezierPath(ovalIn: leftEye).fill()
+            NSBezierPath(ovalIn: rightEye).fill()
+            NSGraphicsContext.current?.compositingOperation = .sourceOver
         }
-    }
-    
-    private func tintedGhost(image: NSImage, color: NSColor) -> NSImage {
-        let tinted = NSImage(size: image.size)
-        tinted.lockFocus()
-        color.set()
-        let imageRect = NSRect(origin: .zero, size: image.size)
-        imageRect.fill()
-        image.draw(in: imageRect, from: .zero, operation: .destinationIn, fraction: 1.0)
-        tinted.unlockFocus()
-        tinted.isTemplate = false
-        return tinted
+        
+        icon.unlockFocus()
+        icon.isTemplate = true
+        button.image = icon
     }
 
     /// Hold Right Option anywhere to dictate; release to paste into whatever has focus.
@@ -183,6 +288,39 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(titleItem)
         menu.addItem(NSMenuItem.separator())
         
+        // Quick Recovery: Copy Last Transcript
+        if let last = history.records.first {
+            let snippet = last.text.count > 32 ? String(last.text.prefix(30)) + "…" : last.text
+            let copyLast = NSMenuItem(title: "Copy Last: \"\(snippet)\"", action: #selector(copyLastTranscript), keyEquivalent: "c")
+            copyLast.target = self
+            menu.addItem(copyLast)
+        } else {
+            let copyLast = NSMenuItem(title: "No Recent Transcripts", action: nil, keyEquivalent: "")
+            copyLast.isEnabled = false
+            menu.addItem(copyLast)
+        }
+        
+        // Recent History Submenu
+        let historyMenu = NSMenu(title: "Recent")
+        if history.records.isEmpty {
+            let empty = NSMenuItem(title: "History empty", action: nil, keyEquivalent: "")
+            empty.isEnabled = false
+            historyMenu.addItem(empty)
+        } else {
+            for record in history.records.prefix(8) {
+                let preview = record.text.count > 40 ? String(record.text.prefix(38)) + "…" : record.text
+                let item = NSMenuItem(title: preview, action: #selector(copySpecificRecord(_:)), keyEquivalent: "")
+                item.target = self
+                item.representedObject = record.text
+                historyMenu.addItem(item)
+            }
+        }
+        let historyParent = NSMenuItem(title: "Recent Transcripts (\(history.records.count))", action: nil, keyEquivalent: "")
+        historyParent.submenu = historyMenu
+        menu.addItem(historyParent)
+        
+        menu.addItem(NSMenuItem.separator())
+        
         // Model Selection Submenu
         let modelMenu = NSMenu(title: "Model")
         let isDeepgram = TalkTypeConfig.isUsingDeepgram
@@ -200,6 +338,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let modelParent = NSMenuItem(title: "Transcription Engine", action: nil, keyEquivalent: "")
         modelParent.submenu = modelMenu
         menu.addItem(modelParent)
+        
+        // HUD Position Submenu
+        let posMenu = NSMenu(title: "HUD Position")
+        let isTop = TalkTypeConfig.hudPosition == "top"
+        
+        let posBottom = NSMenuItem(title: "Bottom of Screen", action: #selector(setHudBottom), keyEquivalent: "")
+        posBottom.target = self
+        posBottom.state = !isTop ? .on : .off
+        posMenu.addItem(posBottom)
+        
+        let posTop = NSMenuItem(title: "Top of Screen", action: #selector(setHudTop), keyEquivalent: "")
+        posTop.target = self
+        posTop.state = isTop ? .on : .off
+        posMenu.addItem(posTop)
+        
+        let posParent = NSMenuItem(title: "HUD Position", action: nil, keyEquivalent: "")
+        posParent.submenu = posMenu
+        menu.addItem(posParent)
         
         menu.addItem(NSMenuItem.separator())
         
@@ -223,6 +379,34 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.menu = menu
         statusItem.button?.performClick(nil)
         statusItem.menu = nil
+    }
+
+    @objc func copyLastTranscript() {
+        if let last = history.records.first {
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.setString(last.text, forType: .string)
+            print("Copied last transcript to clipboard: \(last.text)")
+        }
+    }
+
+    @objc func copySpecificRecord(_ sender: NSMenuItem) {
+        if let text = sender.representedObject as? String {
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.setString(text, forType: .string)
+            print("Copied transcript to clipboard: \(text)")
+        }
+    }
+
+    @objc func setHudBottom() {
+        UserDefaults.standard.set("bottom", forKey: TalkTypeConfig.hudPositionStorageKey)
+        liveHUDController?.updatePosition()
+    }
+
+    @objc func setHudTop() {
+        UserDefaults.standard.set("top", forKey: TalkTypeConfig.hudPositionStorageKey)
+        liveHUDController?.updatePosition()
     }
 
     @objc func selectDeepgramModel() {
@@ -301,13 +485,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
 // MARK: - Live Transcript Floating HUD Window Controller
 final class LiveHUDWindowController: NSWindowController {
+    let size = NSSize(width: 640, height: 110)
+    
     init(speechEngine: SpeechEngine) {
-        let size = NSSize(width: 620, height: 104)
         let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1280, height: 800)
-        let origin = NSPoint(
-            x: screenFrame.midX - size.width / 2,
-            y: screenFrame.minY + 68
-        )
+        let isTop = TalkTypeConfig.hudPosition == "top"
+        let y = isTop ? (screenFrame.maxY - size.height - 32) : (screenFrame.minY + 68)
+        let origin = NSPoint(x: screenFrame.midX - size.width / 2, y: y)
+        
         let window = NSWindow(
             contentRect: NSRect(origin: origin, size: size),
             styleMask: [.borderless],
@@ -318,6 +503,7 @@ final class LiveHUDWindowController: NSWindowController {
         window.isOpaque = false
         window.backgroundColor = .clear
         window.hasShadow = false
+        window.isMovableByWindowBackground = false
         window.ignoresMouseEvents = true
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         window.isReleasedWhenClosed = false
@@ -330,8 +516,17 @@ final class LiveHUDWindowController: NSWindowController {
         fatalError("init(coder:) has not been implemented")
     }
     
+    func updatePosition() {
+        guard let window = self.window else { return }
+        let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1280, height: 800)
+        let isTop = TalkTypeConfig.hudPosition == "top"
+        let y = isTop ? (screenFrame.maxY - size.height - 32) : (screenFrame.minY + 68)
+        window.setFrameOrigin(NSPoint(x: screenFrame.midX - size.width / 2, y: y))
+    }
+    
     func show() {
         guard let window = self.window else { return }
+        updatePosition()
         window.alphaValue = 0
         window.orderFrontRegardless()
         NSAnimationContext.runAnimationGroup { context in
@@ -351,10 +546,11 @@ final class LiveHUDWindowController: NSWindowController {
     }
 }
 
-// MARK: - Live Transcript HUD View (Lush, Warm, Auto-Scrolling & Juicy)
+// MARK: - Live Transcript HUD View (Lush, Floating, Liquid Color Flow)
 struct LiveTranscriptHUDView: View {
     @ObservedObject var speechEngine: SpeechEngine
     @State private var wavePhase: Double = 0
+    @State private var borderAngle: Double = 0
     @State private var ghostBounce: CGFloat = 1.0
     
     private var displayedText: String {
@@ -362,132 +558,138 @@ struct LiveTranscriptHUDView: View {
     }
     
     var body: some View {
-        HStack(spacing: 16) {
-            // Animated Peach Ghost with bouncy reaction
-            ZStack {
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [TT.pink.opacity(0.32), TT.tangerine.opacity(0.12)],
-                            center: .center,
-                            startRadius: 0,
-                            endRadius: 28
+        // Container with generous internal padding so soft shadows and glowing corners never clip
+        ZStack {
+            HStack(spacing: 16) {
+                // Animated Peach Ghost with bouncy reaction
+                ZStack {
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [TT.pink.opacity(0.32), TT.tangerine.opacity(0.12)],
+                                center: .center,
+                                startRadius: 0,
+                                endRadius: 28
+                            )
+                        )
+                        .frame(width: 48, height: 48)
+                    
+                    GhostMark(isRecording: speechEngine.isRecording)
+                        .frame(width: 36, height: 36)
+                        .scaleEffect(ghostBounce)
+                }
+                .shadow(color: TT.pink.opacity(0.35), radius: 8, x: 0, y: 2)
+                
+                // Auto-scrolling Live Text Container (never cuts off)
+                ScrollViewReader { proxy in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 0) {
+                            Text(displayedText)
+                                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                                .lineLimit(1)
+                                .foregroundStyle(
+                                    speechEngine.transcript.isEmpty
+                                        ? Color(red: 0.35, green: 0.28, blue: 0.24).opacity(0.55)
+                                        : Color(red: 0.12, green: 0.09, blue: 0.08)
+                                )
+                                .id("liveStreamText")
+                            
+                            // Trailing anchor for auto-scroll
+                            Color.clear
+                                .frame(width: 2, height: 2)
+                                .id("trailingAnchor")
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    .mask(
+                        LinearGradient(
+                            stops: [
+                                .init(color: .clear, location: 0),
+                                .init(color: .black, location: speechEngine.transcript.count > 25 ? 0.07 : 0),
+                                .init(color: .black, location: 1.0)
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
                         )
                     )
-                    .frame(width: 48, height: 48)
-                
-                GhostMark(isRecording: speechEngine.isRecording)
-                    .frame(width: 36, height: 36)
-                    .scaleEffect(ghostBounce)
-            }
-            .shadow(color: TT.pink.opacity(0.35), radius: 8, x: 0, y: 2)
-            
-            // Auto-scrolling Live Text Container (never cuts off)
-            ScrollViewReader { proxy in
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 0) {
-                        Text(displayedText)
-                            .font(.system(size: 17, weight: .semibold, design: .rounded))
-                            .lineLimit(1)
-                            .foregroundStyle(
-                                speechEngine.transcript.isEmpty
-                                    ? Color(red: 0.35, green: 0.28, blue: 0.24).opacity(0.55)
-                                    : Color(red: 0.12, green: 0.09, blue: 0.08)
-                            )
-                            .id("liveStreamText")
-                        
-                        // Trailing anchor for auto-scroll
-                        Color.clear
-                            .frame(width: 2, height: 2)
-                            .id("trailingAnchor")
-                    }
-                    .padding(.vertical, 4)
-                }
-                .mask(
-                    LinearGradient(
-                        stops: [
-                            .init(color: .clear, location: 0),
-                            .init(color: .black, location: speechEngine.transcript.count > 25 ? 0.07 : 0),
-                            .init(color: .black, location: 1.0)
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-                .onChange(of: speechEngine.transcript) { _ in
-                    withAnimation(.easeOut(duration: 0.12)) {
-                        proxy.scrollTo("trailingAnchor", anchor: .trailing)
-                    }
-                    // Cute subtle bounce when words stream in
-                    withAnimation(.spring(response: 0.2, dampingFraction: 0.5)) {
-                        ghostBounce = 1.12
-                    }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-                        withAnimation(.easeOut(duration: 0.15)) {
-                            ghostBounce = 1.0
+                    .onChange(of: speechEngine.transcript) { _ in
+                        withAnimation(.easeOut(duration: 0.12)) {
+                            proxy.scrollTo("trailingAnchor", anchor: .trailing)
+                        }
+                        // Cute subtle bounce when words stream in
+                        withAnimation(.spring(response: 0.2, dampingFraction: 0.5)) {
+                            ghostBounce = 1.12
+                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                            withAnimation(.easeOut(duration: 0.15)) {
+                                ghostBounce = 1.0
+                            }
                         }
                     }
                 }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            
-            // Live pulsing soundwave radar dot
-            ZStack {
-                // Expanding outer aura ring
-                Circle()
-                    .stroke(TT.pink.opacity(0.45), lineWidth: 1.5)
-                    .scaleEffect(1.0 + CGFloat(sin(wavePhase)) * 0.45)
-                    .opacity(0.85 - sin(wavePhase) * 0.35)
-                    .frame(width: 26, height: 26)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 
-                // Soft glow halo
-                Circle()
-                    .fill(TT.hot)
-                    .frame(width: 12, height: 12)
-                    .shadow(color: TT.pink.opacity(0.85), radius: 8)
+                // Live pulsing soundwave radar dot
+                ZStack {
+                    // Expanding outer aura ring
+                    Circle()
+                        .stroke(TT.pink.opacity(0.45), lineWidth: 1.5)
+                        .scaleEffect(1.0 + CGFloat(sin(wavePhase)) * 0.45)
+                        .opacity(0.85 - sin(wavePhase) * 0.35)
+                        .frame(width: 26, height: 26)
+                    
+                    // Soft glow halo
+                    Circle()
+                        .fill(TT.hot)
+                        .frame(width: 12, height: 12)
+                        .shadow(color: TT.pink.opacity(0.85), radius: 8)
+                }
+                .frame(width: 32, height: 32)
             }
-            .frame(width: 32, height: 32)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
+            .background(
+                ZStack {
+                    // Warm creamy paper grounding
+                    RoundedRectangle(cornerRadius: 32, style: .continuous)
+                        .fill(Color(red: 0.992, green: 0.965, blue: 0.932).opacity(0.95))
+                    
+                    // Liquid gradient color flow on outline
+                    RoundedRectangle(cornerRadius: 32, style: .continuous)
+                        .strokeBorder(
+                            AngularGradient(
+                                gradient: Gradient(colors: [
+                                    TT.pink,
+                                    TT.tangerine,
+                                    Color(red: 1.0, green: 0.82, blue: 0.35),
+                                    TT.pink.opacity(0.9),
+                                    TT.tangerine,
+                                    TT.pink
+                                ]),
+                                center: .center,
+                                startAngle: .degrees(borderAngle),
+                                endAngle: .degrees(borderAngle + 360)
+                            ),
+                            lineWidth: 2.5
+                        )
+                    
+                    // Inner hairline highlight
+                    RoundedRectangle(cornerRadius: 31, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.5), lineWidth: 1)
+                        .padding(1)
+                }
+            )
+            // Multi-stage drop shadows
+            .shadow(color: TT.pink.opacity(0.32), radius: 22, x: 0, y: 8)
+            .shadow(color: Color(red: 0.12, green: 0.09, blue: 0.08).opacity(0.12), radius: 10, x: 0, y: 3)
         }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 16)
-        .background(
-            ZStack {
-                // Base frosted blur
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .fill(.ultraThickMaterial)
-                    .opacity(0.5)
-
-                // Creamy warm paper grounding
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .fill(Color(red: 0.992, green: 0.965, blue: 0.932).opacity(0.96))
-                
-                // Outer peach-to-pink gradient border
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .strokeBorder(
-                        LinearGradient(
-                            stops: [
-                                .init(color: TT.pink, location: 0.0),
-                                .init(color: TT.tangerine, location: 0.55),
-                                .init(color: Color(red: 1.0, green: 0.81, blue: 0.35), location: 1.0)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 2.5
-                    )
-                
-                // Inner hairline highlight
-                RoundedRectangle(cornerRadius: 27, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.4), lineWidth: 1)
-                    .padding(1)
-            }
-        )
-        // Delicious multi-stage drop shadows
-        .shadow(color: TT.pink.opacity(0.32), radius: 24, x: 0, y: 8)
-        .shadow(color: Color(red: 0.12, green: 0.09, blue: 0.08).opacity(0.14), radius: 12, x: 0, y: 4)
+        .padding(8) // Prevents window boundary clip
         .onAppear {
             withAnimation(.easeInOut(duration: 0.75).repeatForever(autoreverses: true)) {
                 wavePhase = .pi * 2
+            }
+            withAnimation(.linear(duration: 4.5).repeatForever(autoreverses: false)) {
+                borderAngle = 360
             }
         }
     }
@@ -875,11 +1077,14 @@ struct GhostMark: View {
     }
 }
 
-// MARK: - SwiftUI Popover UI
+// MARK: - SwiftUI Popover UI (with History Tab & Quick Recovery)
 struct ContentView: View {
     @ObservedObject var speechEngine: SpeechEngine
+    @ObservedObject var history: HistoryStore
     @Environment(\.colorScheme) private var scheme
     @State private var breathing = false
+    @State private var selectedTab: Int = 0 // 0: Dictate, 1: History
+    @State private var copiedId: UUID? = nil
     var appDelegate: AppDelegate
 
     private var p: Palette { scheme == .dark ? .dark : .light }
@@ -887,24 +1092,70 @@ struct ContentView: View {
     private var isDeepgram: Bool { TalkTypeConfig.isUsingDeepgram }
 
     var body: some View {
-        VStack(spacing: 14) {
-            wordmark
-            transcriptCard
-            ghostButton
-            statusLine
+        VStack(spacing: 12) {
+            // Header with Wordmark + Tab Picker
+            HStack {
+                HStack(spacing: 0) {
+                    Text("Talk").foregroundStyle(p.ink)
+                    Text("Type").foregroundStyle(TT.hot)
+                }
+                .font(.system(size: 26, weight: .heavy, design: .rounded))
+                .kerning(-0.5)
+                
+                Spacer()
+                
+                // Mode Toggle
+                HStack(spacing: 2) {
+                    Button(action: { selectedTab = 0 }) {
+                        Text("Live")
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(selectedTab == 0 ? p.card : Color.clear)
+                            .foregroundStyle(selectedTab == 0 ? p.ink : p.inkSoft.opacity(0.6))
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    
+                    Button(action: { selectedTab = 1 }) {
+                        HStack(spacing: 3) {
+                            Text("History")
+                            if !history.records.isEmpty {
+                                Text("\(history.records.count)")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .padding(.horizontal, 4)
+                                    .padding(.vertical, 1)
+                                    .background(TT.pink.opacity(0.25))
+                                    .clipShape(Capsule())
+                            }
+                        }
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(selectedTab == 1 ? p.card : Color.clear)
+                        .foregroundStyle(selectedTab == 1 ? p.ink : p.inkSoft.opacity(0.6))
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(2)
+                .background(p.border.opacity(0.12))
+                .clipShape(Capsule())
+            }
+            
+            if selectedTab == 0 {
+                // Live View
+                transcriptCard
+                ghostButton
+                statusLine
+            } else {
+                // History View (Never lose text again)
+                historyCard
+            }
         }
-        .padding(22)
-        .frame(width: 320, height: 418)
+        .padding(18)
+        .frame(width: 330, height: 440)
         .background(p.shell)
-    }
-
-    private var wordmark: some View {
-        HStack(spacing: 0) {
-            Text("Talk").foregroundStyle(p.ink)
-            Text("Type").foregroundStyle(TT.hot)
-        }
-        .font(.system(size: 30, weight: .heavy, design: .rounded))
-        .kerning(-0.5)
     }
 
     private var transcriptCard: some View {
@@ -956,6 +1207,89 @@ struct ContentView: View {
             Text(isDeepgram ? "⚡ Live streaming with Nova-3" : "🔒 Offline Apple Speech")
                 .font(.system(size: 10.5, weight: .medium, design: .rounded))
                 .foregroundStyle(p.inkSoft.opacity(0.5))
+        }
+    }
+
+    private var historyCard: some View {
+        VStack(spacing: 8) {
+            if history.records.isEmpty {
+                VStack(spacing: 12) {
+                    Spacer()
+                    Image(systemName: "clock.arrow.circlepath")
+                        .font(.system(size: 32))
+                        .foregroundStyle(p.inkSoft.opacity(0.35))
+                    Text("No transcripts saved yet.")
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundStyle(p.inkSoft.opacity(0.5))
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 10) {
+                        ForEach(history.records) { record in
+                            VStack(alignment: .leading, spacing: 6) {
+                                HStack {
+                                    Text(record.timestamp, style: .time)
+                                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                                        .foregroundStyle(p.inkSoft.opacity(0.55))
+                                    
+                                    Spacer()
+                                    
+                                    Button(action: {
+                                        let pb = NSPasteboard.general
+                                        pb.clearContents()
+                                        pb.setString(record.text, forType: .string)
+                                        copiedId = record.id
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                                            if copiedId == record.id { copiedId = nil }
+                                        }
+                                    }) {
+                                        HStack(spacing: 3) {
+                                            Image(systemName: copiedId == record.id ? "checkmark" : "doc.on.doc")
+                                            Text(copiedId == record.id ? "Copied!" : "Copy")
+                                        }
+                                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 3)
+                                        .background(copiedId == record.id ? TT.pink.opacity(0.2) : p.border.opacity(0.12))
+                                        .foregroundStyle(copiedId == record.id ? TT.pink : p.inkSoft)
+                                        .clipShape(Capsule())
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                                
+                                Text(record.text)
+                                    .font(.system(size: 12.5, weight: .medium, design: .monospaced))
+                                    .lineSpacing(2)
+                                    .foregroundStyle(p.ink)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .padding(12)
+                            .background(p.card)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .strokeBorder(p.border.opacity(0.6), lineWidth: 1)
+                            )
+                        }
+                    }
+                    .padding(4)
+                }
+                .frame(maxHeight: 330)
+                
+                HStack {
+                    Button("Clear History") {
+                        history.clear()
+                    }
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(p.inkSoft.opacity(0.5))
+                    .buttonStyle(.plain)
+                    
+                    Spacer()
+                }
+                .padding(.horizontal, 4)
+            }
         }
     }
 
