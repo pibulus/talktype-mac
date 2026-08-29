@@ -105,7 +105,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if isRecording {
                 // Warm glowing blush tint when recording
                 ghost.isTemplate = false
-                button.image = tintedGhost(image: ghost, color: NSColor(red: 1.0, green: 0.51, blue: 0.79, alpha: 1.0))
+                button.image = tintedGhost(image: ghost, color: NSColor(red: 1.0, green: 0.48, blue: 0.78, alpha: 1.0))
             } else {
                 ghost.isTemplate = true
                 button.image = ghost
@@ -299,14 +299,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-// MARK: - Live Transcript Floating HUD
+// MARK: - Live Transcript Floating HUD Window Controller
 final class LiveHUDWindowController: NSWindowController {
     init(speechEngine: SpeechEngine) {
-        let size = NSSize(width: 520, height: 96)
+        let size = NSSize(width: 620, height: 104)
         let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1280, height: 800)
         let origin = NSPoint(
             x: screenFrame.midX - size.width / 2,
-            y: screenFrame.minY + 64
+            y: screenFrame.minY + 68
         )
         let window = NSWindow(
             contentRect: NSRect(origin: origin, size: size),
@@ -335,7 +335,7 @@ final class LiveHUDWindowController: NSWindowController {
         window.alphaValue = 0
         window.orderFrontRegardless()
         NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.2
+            context.duration = 0.18
             window.animator().alphaValue = 1.0
         }
     }
@@ -343,7 +343,7 @@ final class LiveHUDWindowController: NSWindowController {
     func hide() {
         guard let window = self.window else { return }
         NSAnimationContext.runAnimationGroup({ context in
-            context.duration = 0.25
+            context.duration = 0.22
             window.animator().alphaValue = 0
         }, completionHandler: {
             window.orderOut(nil)
@@ -351,69 +351,142 @@ final class LiveHUDWindowController: NSWindowController {
     }
 }
 
-// MARK: - Live Transcript HUD View (Blush, Warm & Delicious)
+// MARK: - Live Transcript HUD View (Lush, Warm, Auto-Scrolling & Juicy)
 struct LiveTranscriptHUDView: View {
     @ObservedObject var speechEngine: SpeechEngine
     @State private var wavePhase: Double = 0
+    @State private var ghostBounce: CGFloat = 1.0
     
     private var displayedText: String {
-        speechEngine.transcript.isEmpty ? "Listening…" : speechEngine.transcript
+        speechEngine.transcript.isEmpty ? "Listening… speak freely" : speechEngine.transcript
     }
     
     var body: some View {
-        HStack(spacing: 14) {
-            // Little breathing ghost mark
+        HStack(spacing: 16) {
+            // Animated Peach Ghost with bouncy reaction
             ZStack {
                 Circle()
-                    .fill(TT.hot.opacity(0.18))
-                    .frame(width: 44, height: 44)
+                    .fill(
+                        RadialGradient(
+                            colors: [TT.pink.opacity(0.32), TT.tangerine.opacity(0.12)],
+                            center: .center,
+                            startRadius: 0,
+                            endRadius: 28
+                        )
+                    )
+                    .frame(width: 48, height: 48)
                 
                 GhostMark(isRecording: speechEngine.isRecording)
-                    .frame(width: 32, height: 32)
+                    .frame(width: 36, height: 36)
+                    .scaleEffect(ghostBounce)
             }
+            .shadow(color: TT.pink.opacity(0.35), radius: 8, x: 0, y: 2)
             
-            // Live typing text
-            ScrollView(.horizontal, showsIndicators: false) {
-                Text(displayedText)
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-                    .foregroundStyle(speechEngine.transcript.isEmpty ? Color.black.opacity(0.4) : Color(red: 0.12, green: 0.09, blue: 0.08))
-                    .lineLimit(2)
-                    .frame(minHeight: 40, alignment: .leading)
-                    .animation(.easeOut(duration: 0.15), value: displayedText)
+            // Auto-scrolling Live Text Container (never cuts off)
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 0) {
+                        Text(displayedText)
+                            .font(.system(size: 17, weight: .semibold, design: .rounded))
+                            .lineLimit(1)
+                            .foregroundStyle(
+                                speechEngine.transcript.isEmpty
+                                    ? Color(red: 0.35, green: 0.28, blue: 0.24).opacity(0.55)
+                                    : Color(red: 0.12, green: 0.09, blue: 0.08)
+                            )
+                            .id("liveStreamText")
+                        
+                        // Trailing anchor for auto-scroll
+                        Color.clear
+                            .frame(width: 2, height: 2)
+                            .id("trailingAnchor")
+                    }
+                    .padding(.vertical, 4)
+                }
+                .mask(
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear, location: 0),
+                            .init(color: .black, location: speechEngine.transcript.count > 25 ? 0.07 : 0),
+                            .init(color: .black, location: 1.0)
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .onChange(of: speechEngine.transcript) { _ in
+                    withAnimation(.easeOut(duration: 0.12)) {
+                        proxy.scrollTo("trailingAnchor", anchor: .trailing)
+                    }
+                    // Cute subtle bounce when words stream in
+                    withAnimation(.spring(response: 0.2, dampingFraction: 0.5)) {
+                        ghostBounce = 1.12
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            ghostBounce = 1.0
+                        }
+                    }
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             
-            // Waveform recording pulse dot
-            Circle()
-                .fill(TT.pink)
-                .frame(width: 10, height: 10)
-                .shadow(color: TT.pink.opacity(0.8), radius: 6)
-                .scaleEffect(1.0 + sin(wavePhase) * 0.25)
+            // Live pulsing soundwave radar dot
+            ZStack {
+                // Expanding outer aura ring
+                Circle()
+                    .stroke(TT.pink.opacity(0.45), lineWidth: 1.5)
+                    .scaleEffect(1.0 + CGFloat(sin(wavePhase)) * 0.45)
+                    .opacity(0.85 - sin(wavePhase) * 0.35)
+                    .frame(width: 26, height: 26)
+                
+                // Soft glow halo
+                Circle()
+                    .fill(TT.hot)
+                    .frame(width: 12, height: 12)
+                    .shadow(color: TT.pink.opacity(0.85), radius: 8)
+            }
+            .frame(width: 32, height: 32)
         }
-        .padding(.horizontal, 22)
-        .padding(.vertical, 14)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 16)
         .background(
             ZStack {
-                // Creamy paper surface with blush glass blur
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(Color(red: 0.99, green: 0.96, blue: 0.92).opacity(0.94))
+                // Base frosted blur
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .fill(.ultraThickMaterial)
+                    .opacity(0.5)
+
+                // Creamy warm paper grounding
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .fill(Color(red: 0.992, green: 0.965, blue: 0.932).opacity(0.96))
                 
-                // Warm blush peach edge
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                // Outer peach-to-pink gradient border
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
                     .strokeBorder(
                         LinearGradient(
-                            colors: [TT.pink.opacity(0.7), TT.tangerine.opacity(0.5)],
+                            stops: [
+                                .init(color: TT.pink, location: 0.0),
+                                .init(color: TT.tangerine, location: 0.55),
+                                .init(color: Color(red: 1.0, green: 0.81, blue: 0.35), location: 1.0)
+                            ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
-                        lineWidth: 2
+                        lineWidth: 2.5
                     )
+                
+                // Inner hairline highlight
+                RoundedRectangle(cornerRadius: 27, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.4), lineWidth: 1)
+                    .padding(1)
             }
         )
-        .shadow(color: TT.pink.opacity(0.25), radius: 18, y: 6)
-        .shadow(color: Color.black.opacity(0.12), radius: 10, y: 4)
+        // Delicious multi-stage drop shadows
+        .shadow(color: TT.pink.opacity(0.32), radius: 24, x: 0, y: 8)
+        .shadow(color: Color(red: 0.12, green: 0.09, blue: 0.08).opacity(0.14), radius: 12, x: 0, y: 4)
         .onAppear {
-            withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
+            withAnimation(.easeInOut(duration: 0.75).repeatForever(autoreverses: true)) {
                 wavePhase = .pi * 2
             }
         }
