@@ -2,7 +2,7 @@
 set -e
 
 # TalkType Mac Build Pipeline
-# Builds Direct Distribution (Unlocked DMG) or Mac App Store (Sandboxed PKG)
+# Builds Direct Distribution (Unlocked DMG with Notarization readiness) or Mac App Store (Sandboxed PKG)
 
 APP_NAME="TalkType"
 VERSION="1.0"
@@ -54,9 +54,9 @@ cat > "${APP_DIR}/Contents/Info.plist" << PLIST
     <key>NSHumanReadableCopyright</key>
     <string>Copyright © 2026 Pablo Alvarado. All rights reserved.</string>
     <key>NSSpeechRecognitionUsageDescription</key>
-    <string>TalkType uses speech recognition to transcribe your voice into text accurately.</string>
+    <string>TalkType uses on-device speech recognition to transcribe your voice into text accurately.</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>TalkType needs microphone access to listen to your voice when you hold the dictate key.</string>
+    <string>TalkType needs microphone access to listen to your voice when you hold the dictate shortcut.</string>
 </dict>
 </plist>
 PLIST
@@ -69,43 +69,66 @@ fi
 
 chmod +x "${BIN_DIR}/${APP_NAME}"
 
-# 4. Code Signing & Entitlements
-IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null \
-           | grep "Developer ID Application" | head -1 | sed 's/.*"\(.*\)"/\1/')
-
+# 4. Code Signing & Entitlements (Secure Timestamp enabled)
 if [ "${TARGET_MODE}" = "mas" ]; then
     ENTITLEMENTS="TalkType.sandbox.entitlements"
     echo "📦 Sandboxed App Store mode enabled with ${ENTITLEMENTS}"
     
     MAS_IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null \
-                   | grep "Apple Distribution\|3rd Party Mac Developer Application" | head -1 | sed 's/.*"\(.*\)"/\1/')
-    SIGN_ID="${MAS_IDENTITY:-${IDENTITY}}"
+                   | grep "3rd Party Mac Developer Application\|Apple Distribution" | head -1 | sed 's/.*"\(.*\)"/\1/' || true)
     
-    if [ -n "${SIGN_ID}" ]; then
-        codesign --force --deep --sign "${SIGN_ID}" \
+    if [ -n "${MAS_IDENTITY}" ]; then
+        codesign --force --sign "${MAS_IDENTITY}" \
                  --entitlements "${ENTITLEMENTS}" \
-                 --identifier com.pibulus.talktype \
-                 --timestamp=none "${APP_DIR}"
-        echo "🔏 Signed with: ${SIGN_ID}"
+                 --timestamp \
+                 --identifier com.pibulus.talktype "${BIN_DIR}/${APP_NAME}"
+        codesign --force --sign "${MAS_IDENTITY}" \
+                 --entitlements "${ENTITLEMENTS}" \
+                 --timestamp \
+                 --identifier com.pibulus.talktype "${APP_DIR}"
+        echo "🔏 Signed with MAS certificate: ${MAS_IDENTITY}"
     else
-        codesign --force --deep --sign - \
+        echo "⚠️ No Mac App Store Application certificate found. Signing ad-hoc for local testing..."
+        codesign --force --sign - \
+                 --entitlements "${ENTITLEMENTS}" \
+                 --identifier com.pibulus.talktype "${BIN_DIR}/${APP_NAME}"
+        codesign --force --sign - \
                  --entitlements "${ENTITLEMENTS}" \
                  --identifier com.pibulus.talktype "${APP_DIR}"
-        echo "🔏 Ad-hoc signed for App Store local testing"
+        echo "🔏 Ad-hoc signed for local testing"
     fi
+
+    # Check for Installer certificate to package .pkg
+    INSTALLER_ID=$(security find-identity -v -p basic 2>/dev/null \
+                   | grep "3rd Party Mac Developer Installer\|Mac Developer Installer" | head -1 | sed 's/.*"\(.*\)"/\1/' || true)
+    if [ -n "${INSTALLER_ID}" ]; then
+        productbuild --component "${APP_DIR}" /Applications \
+                     --sign "${INSTALLER_ID}" \
+                     "${DIST_DIR}/${APP_NAME}-${VERSION}.pkg"
+        echo "✨ Mac App Store PKG ready at ${DIST_DIR}/${APP_NAME}-${VERSION}.pkg"
+    fi
+
 else
     ENTITLEMENTS="TalkType.entitlements"
     echo "⚡ Direct distribution mode enabled with Hardened Runtime & ${ENTITLEMENTS}"
     
+    IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null \
+               | grep "Developer ID Application" | head -1 | sed 's/.*"\(.*\)"/\1/' || true)
+    
     if [ -n "${IDENTITY}" ]; then
-        codesign --force --deep --sign "${IDENTITY}" \
+        codesign --force --sign "${IDENTITY}" \
                  --options runtime \
                  --entitlements "${ENTITLEMENTS}" \
-                 --identifier com.pibulus.talktype \
-                 --timestamp=none "${APP_DIR}"
+                 --timestamp \
+                 --identifier com.pibulus.talktype "${BIN_DIR}/${APP_NAME}"
+        codesign --force --sign "${IDENTITY}" \
+                 --options runtime \
+                 --entitlements "${ENTITLEMENTS}" \
+                 --timestamp \
+                 --identifier com.pibulus.talktype "${APP_DIR}"
         echo "🔏 Signed with Developer ID: ${IDENTITY}"
     else
-        codesign --force --deep --sign - \
+        codesign --force --sign - \
                  --entitlements "${ENTITLEMENTS}" \
                  --identifier com.pibulus.talktype "${APP_DIR}"
         echo "🔏 Ad-hoc signed"

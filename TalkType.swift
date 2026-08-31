@@ -57,20 +57,20 @@ enum PTTTrigger: String, CaseIterable, Identifiable {
 
 // MARK: - Constants & Config
 enum TalkTypeConfig {
-    static let defaultDeepgramKey = "REDACTED_ROTATE_ME"
     static let deepgramKeyStorageKey = "deepgramApiKey"
-    static let engineStorageKey = "talktypeEngine" // "deepgram" or "apple"
+    static let engineStorageKey = "talktypeEngine" // "apple" (default) or "deepgram"
     static let hudPositionStorageKey = "hudPosition" // "bottom" or "top"
     static let historyStorageKey = "talktypeHistory"
     static let pttTriggerStorageKey = "talktypePttTrigger"
     
     static var deepgramApiKey: String {
-        let custom = UserDefaults.standard.string(forKey: deepgramKeyStorageKey)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return custom.isEmpty ? defaultDeepgramKey : custom
+        return UserDefaults.standard.string(forKey: deepgramKeyStorageKey)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
     
     static var isUsingDeepgram: Bool {
-        return (UserDefaults.standard.string(forKey: engineStorageKey) ?? "deepgram") == "deepgram"
+        let selected = UserDefaults.standard.string(forKey: engineStorageKey) ?? "apple"
+        // Deepgram is only active if user selected it AND provided a valid key
+        return selected == "deepgram" && !deepgramApiKey.isEmpty
     }
     
     static var hudPosition: String {
@@ -200,10 +200,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             
             guard self.pendingPaste else { return }
             self.pendingPaste = false
-            self.liveHUDController?.hide()
             self.stopMenubarBounce()
-            guard !text.isEmpty else { return }
-            self.pasteToActiveApp(text: text)
+            guard !text.isEmpty else {
+                self.liveHUDController?.hide()
+                return
+            }
+            
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.setString(text, forType: .string)
+            
+            if AXIsProcessTrusted() {
+                self.liveHUDController?.hide()
+                self.pasteToActiveApp(text: text)
+            } else {
+                // Clipboard fallback with explicit visual feedback
+                self.engine.transcript = "Copied to clipboard — Press ⌘V to paste! 📋"
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+                    self?.liveHUDController?.hide()
+                }
+            }
         }
         
         engine.onStateChange = { [weak self] isRecording in
@@ -325,6 +341,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(titleItem)
         menu.addItem(NSMenuItem.separator())
         
+        // Accessibility Status Alert if not trusted
+        if !AXIsProcessTrusted() {
+            let permItem = NSMenuItem(title: "⚠️ Accessibility Disabled (Click to Enable ⌘V)", action: #selector(openAccessibilitySettings), keyEquivalent: "")
+            permItem.target = self
+            menu.addItem(permItem)
+            menu.addItem(NSMenuItem.separator())
+        }
+        
         // Quick Recovery: Copy Last Transcript
         if let last = history.records.first {
             let snippet = last.text.count > 32 ? String(last.text.prefix(30)) + "…" : last.text
@@ -378,15 +402,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let modelMenu = NSMenu(title: "Model")
         let isDeepgram = TalkTypeConfig.isUsingDeepgram
         
-        let dgItem = NSMenuItem(title: "Deepgram Nova-3 (Live Streaming)", action: #selector(selectDeepgramModel), keyEquivalent: "1")
-        dgItem.target = self
-        dgItem.state = isDeepgram ? .on : .off
-        modelMenu.addItem(dgItem)
-        
-        let appleItem = NSMenuItem(title: "Apple Speech (Offline)", action: #selector(selectAppleModel), keyEquivalent: "2")
+        let appleItem = NSMenuItem(title: "Apple Speech (On-Device, Offline)", action: #selector(selectAppleModel), keyEquivalent: "1")
         appleItem.target = self
         appleItem.state = !isDeepgram ? .on : .off
         modelMenu.addItem(appleItem)
+        
+        let dgItem = NSMenuItem(title: "Deepgram Nova-3 (Live Streaming)", action: #selector(selectDeepgramModel), keyEquivalent: "2")
+        dgItem.target = self
+        dgItem.state = isDeepgram ? .on : .off
+        modelMenu.addItem(dgItem)
         
         let modelParent = NSMenuItem(title: "Transcription Engine", action: nil, keyEquivalent: "")
         modelParent.submenu = modelMenu
@@ -413,7 +437,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem.separator())
         
         // Deepgram Key Config
-        let keyItem = NSMenuItem(title: "Custom Deepgram Key…", action: #selector(promptDeepgramKey), keyEquivalent: "k")
+        let keyItem = NSMenuItem(title: "Deepgram API Key…", action: #selector(promptDeepgramKey), keyEquivalent: "k")
         keyItem.target = self
         menu.addItem(keyItem)
         
@@ -426,6 +450,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.menu = menu
         statusItem.button?.performClick(nil)
         statusItem.menu = nil
+    }
+
+    @objc func openAccessibilitySettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+            NSWorkspace.shared.open(url)
+        }
     }
 
     @objc func selectShortcutTrigger(_ sender: NSMenuItem) {
@@ -461,6 +491,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func selectDeepgramModel() {
+        if TalkTypeConfig.deepgramApiKey.isEmpty {
+            promptDeepgramKey()
+            if TalkTypeConfig.deepgramApiKey.isEmpty {
+                UserDefaults.standard.set("apple", forKey: TalkTypeConfig.engineStorageKey)
+                return
+            }
+        }
         UserDefaults.standard.set("deepgram", forKey: TalkTypeConfig.engineStorageKey)
     }
 
@@ -471,23 +508,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func promptDeepgramKey() {
         let alert = NSAlert()
         alert.messageText = "Deepgram API Key"
-        alert.informativeText = "Enter your own Deepgram API Key (or leave blank to use the built-in fleet key):"
+        alert.informativeText = "Enter your Deepgram API Key for live streaming transcription (leave empty to use Apple on-device speech):"
         alert.alertStyle = .informational
         alert.addButton(withTitle: "Save")
         alert.addButton(withTitle: "Cancel")
-        alert.addButton(withTitle: "Use Built-in Key")
 
         let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
         input.stringValue = UserDefaults.standard.string(forKey: TalkTypeConfig.deepgramKeyStorageKey) ?? ""
-        input.placeholderString = "Paste API key here"
+        input.placeholderString = "Paste Deepgram API key"
         alert.accessoryView = input
 
         let response = alert.runModal()
         if response == .alertFirstButtonReturn {
             let key = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            UserDefaults.standard.set(key, forKey: TalkTypeConfig.deepgramKeyStorageKey)
-        } else if response == .alertThirdButtonReturn {
-            UserDefaults.standard.removeObject(forKey: TalkTypeConfig.deepgramKeyStorageKey)
+            if key.isEmpty {
+                UserDefaults.standard.removeObject(forKey: TalkTypeConfig.deepgramKeyStorageKey)
+                UserDefaults.standard.set("apple", forKey: TalkTypeConfig.engineStorageKey)
+            } else {
+                UserDefaults.standard.set(key, forKey: TalkTypeConfig.deepgramKeyStorageKey)
+                UserDefaults.standard.set("deepgram", forKey: TalkTypeConfig.engineStorageKey)
+            }
         }
     }
 
@@ -774,7 +814,7 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
     override init() {
         super.init()
         let config = URLSessionConfiguration.default
-        self.urlSession = URLSession(configuration: config, delegate: self, delegateQueue: OperationQueue())
+        self.urlSession = URLSession(configuration: config, delegate: self, delegateQueue: OperationQueue.main)
         
         NotificationCenter.default.addObserver(
             self,
@@ -786,12 +826,15 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
     
     deinit {
         NotificationCenter.default.removeObserver(self)
+        urlSession?.invalidateAndCancel()
         safeRemoveTap()
     }
     
     @objc private func handleAudioEngineConfigChange(_ notification: Notification) {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
+            // CoreAudio has already invalidated the tap on hardware switch
+            self.hasInstalledAudioTap = false
             if self.isRecording {
                 self.stopRecording()
             }
@@ -833,7 +876,8 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
     // MARK: - Deepgram WebSocket Streaming
     private func startDeepgramStreaming() {
         let apiKey = TalkTypeConfig.deepgramApiKey
-        guard let url = URL(string: "wss://api.deepgram.com/v1/listen?model=nova-3&smart_format=true&interim_results=true&encoding=linear16&sample_rate=16000&channels=1") else {
+        guard !apiKey.isEmpty,
+              let url = URL(string: "wss://api.deepgram.com/v1/listen?model=nova-3&smart_format=true&interim_results=true&encoding=linear16&sample_rate=16000&channels=1") else {
             startAppleSpeechRecognition()
             return
         }
@@ -862,7 +906,7 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: nativeFormat) { [weak self] buffer, _ in
             guard let self = self, self.isRecording else { return }
             
-            let frameCount = AVAudioFrameCount(Double(buffer.frameLength) * 16000.0 / nativeFormat.sampleRate)
+            let frameCount = AVAudioFrameCount(ceil(Double(buffer.frameLength) * 16000.0 / nativeFormat.sampleRate) + 2)
             guard let convertedBuffer = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: frameCount) else { return }
             
             var error: NSError?
@@ -917,8 +961,13 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
                 self.listenWebSocket()
                 
             case .failure:
-                // If Deepgram streaming fails mid-session, seamlessly finish or fallback
-                break
+                // If Deepgram WebSocket fails mid-recording, seamlessly fallback
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self, self.isRecording else { return }
+                    self.safeRemoveTap()
+                    self.audioEngine.stop()
+                    self.startAppleSpeechRecognition()
+                }
             }
         }
     }
@@ -1004,11 +1053,11 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
                 }
                 
                 if error != nil || isFinal {
-                    self.audioEngine.stop()
-                    self.safeRemoveTap()
-                    self.recognitionRequest = nil
-                    self.recognitionTask = nil
                     DispatchQueue.main.async {
+                        self.audioEngine.stop()
+                        self.safeRemoveTap()
+                        self.recognitionRequest = nil
+                        self.recognitionTask = nil
                         self.isRecording = false
                         self.onStateChange?(false)
                         self.onFinal?(self.transcript)
@@ -1022,10 +1071,11 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
     }
     
     private func stopAppleSpeechRecognition() {
-        audioEngine.stop()
-        recognitionRequest?.endAudio()
-        safeRemoveTap()
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.audioEngine.stop()
+            self.recognitionRequest?.endAudio()
+            self.safeRemoveTap()
             self.isRecording = false
             self.onStateChange?(false)
         }
