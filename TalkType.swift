@@ -536,9 +536,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 // MARK: - Live Transcript Floating HUD Window Controller
 final class LiveHUDWindowController: NSWindowController {
     let size = NSSize(width: 580, height: 76)
+    private var isVisibleTarget = false
     
     init(speechEngine: SpeechEngine) {
-        let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1280, height: 800)
+        let screen = NSScreen.screens.first(where: { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) }) ?? NSScreen.main ?? NSScreen.screens.first
+        let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1280, height: 800)
         let isTop = TalkTypeConfig.hudPosition == "top"
         let y = isTop ? (screenFrame.maxY - size.height - 32) : (screenFrame.minY + 68)
         let origin = NSPoint(x: screenFrame.midX - size.width / 2, y: y)
@@ -549,13 +551,16 @@ final class LiveHUDWindowController: NSWindowController {
             backing: .buffered,
             defer: false
         )
-        window.level = .floating
+        // High overlay level: sits strictly above all full-screen apps, terminal windows, and dialogues
+        window.level = .popUpMenu
         window.isOpaque = false
         window.backgroundColor = .clear
         window.hasShadow = false
         window.isMovableByWindowBackground = false
         window.ignoresMouseEvents = true
-        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        window.canHide = false
+        window.hidesOnDeactivate = false
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(rootView: LiveTranscriptHUDView(speechEngine: speechEngine))
         
@@ -568,30 +573,36 @@ final class LiveHUDWindowController: NSWindowController {
     
     func updatePosition() {
         guard let window = self.window else { return }
-        let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1280, height: 800)
+        let screen = NSScreen.screens.first(where: { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) }) ?? NSScreen.main ?? NSScreen.screens.first
+        let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1280, height: 800)
         let isTop = TalkTypeConfig.hudPosition == "top"
         let y = isTop ? (screenFrame.maxY - size.height - 32) : (screenFrame.minY + 68)
-        window.setFrameOrigin(NSPoint(x: screenFrame.midX - size.width / 2, y: y))
+        let origin = NSPoint(x: screenFrame.midX - size.width / 2, y: y)
+        window.setFrame(NSRect(origin: origin, size: size), display: true)
     }
     
     func show() {
         guard let window = self.window else { return }
+        isVisibleTarget = true
         updatePosition()
-        window.alphaValue = 0
         window.orderFrontRegardless()
         NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.16
+            context.duration = 0.14
             window.animator().alphaValue = 1.0
         }
     }
     
     func hide() {
         guard let window = self.window else { return }
+        isVisibleTarget = false
         NSAnimationContext.runAnimationGroup({ context in
-            context.duration = 0.20
+            context.duration = 0.18
             window.animator().alphaValue = 0
-        }, completionHandler: {
-            window.orderOut(nil)
+        }, completionHandler: { [weak self] in
+            guard let self = self else { return }
+            if !self.isVisibleTarget {
+                window.orderOut(nil)
+            }
         })
     }
 }
