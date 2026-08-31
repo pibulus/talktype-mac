@@ -757,6 +757,7 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     private let audioEngine = AVAudioEngine()
+    private var hasInstalledAudioTap = false
     
     // Deepgram WebSocket
     private var webSocketTask: URLSessionWebSocketTask?
@@ -774,6 +775,34 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
         super.init()
         let config = URLSessionConfiguration.default
         self.urlSession = URLSession(configuration: config, delegate: self, delegateQueue: OperationQueue())
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleAudioEngineConfigChange),
+            name: .AVAudioEngineConfigurationChange,
+            object: audioEngine
+        )
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+        safeRemoveTap()
+    }
+    
+    @objc private func handleAudioEngineConfigChange(_ notification: Notification) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            if self.isRecording {
+                self.stopRecording()
+            }
+        }
+    }
+    
+    private func safeRemoveTap() {
+        if hasInstalledAudioTap {
+            audioEngine.inputNode.removeTap(onBus: 0)
+            hasInstalledAudioTap = false
+        }
     }
     
     func startRecording() {
@@ -825,11 +854,11 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
         }
         
         guard let converter = AVAudioConverter(from: nativeFormat, to: targetFormat) else {
-            print("Could not create audio converter")
             startAppleSpeechRecognition()
             return
         }
         
+        safeRemoveTap()
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: nativeFormat) { [weak self] buffer, _ in
             guard let self = self, self.isRecording else { return }
             
@@ -854,6 +883,7 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
                 self.webSocketTask?.send(.data(data)) { _ in }
             }
         }
+        hasInstalledAudioTap = true
         
         audioEngine.prepare()
         do {
@@ -863,6 +893,7 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
                 self.onStateChange?(true)
             }
         } catch {
+            safeRemoveTap()
             stopRecording()
         }
     }
@@ -886,6 +917,7 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
                 self.listenWebSocket()
                 
             case .failure:
+                // If Deepgram streaming fails mid-session, seamlessly finish or fallback
                 break
             }
         }
@@ -921,7 +953,7 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
     
     private func stopDeepgramStreaming() {
         audioEngine.stop()
-        audioEngine.inputNode.removeTap(onBus: 0)
+        safeRemoveTap()
         
         let closeData = Data()
         webSocketTask?.send(.data(closeData)) { _ in }
@@ -947,17 +979,22 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
         let inputNode = audioEngine.inputNode
         let recordingFormat = inputNode.outputFormat(forBus: 0)
         
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { buffer, _ in
-            self.recognitionRequest?.append(buffer)
+        safeRemoveTap()
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
+            self?.recognitionRequest?.append(buffer)
         }
+        hasInstalledAudioTap = true
         
         audioEngine.prepare()
         do {
             try audioEngine.start()
-            isRecording = true
-            onStateChange?(true)
+            DispatchQueue.main.async {
+                self.isRecording = true
+                self.onStateChange?(true)
+            }
             
-            recognitionTask = speechRecognizer?.recognitionTask(with: recognitionRequest) { result, error in
+            recognitionTask = speechRecognizer?.recognitionTask(with: recognitionRequest) { [weak self] result, error in
+                guard let self = self else { return }
                 var isFinal = false
                 if let result = result {
                     DispatchQueue.main.async {
@@ -968,7 +1005,7 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
                 
                 if error != nil || isFinal {
                     self.audioEngine.stop()
-                    inputNode.removeTap(onBus: 0)
+                    self.safeRemoveTap()
                     self.recognitionRequest = nil
                     self.recognitionTask = nil
                     DispatchQueue.main.async {
@@ -979,6 +1016,7 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
                 }
             }
         } catch {
+            safeRemoveTap()
             print("Could not start audio engine: \(error)")
         }
     }
@@ -986,9 +1024,11 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
     private func stopAppleSpeechRecognition() {
         audioEngine.stop()
         recognitionRequest?.endAudio()
-        audioEngine.inputNode.removeTap(onBus: 0)
-        isRecording = false
-        onStateChange?(false)
+        safeRemoveTap()
+        DispatchQueue.main.async {
+            self.isRecording = false
+            self.onStateChange?(false)
+        }
     }
 }
 

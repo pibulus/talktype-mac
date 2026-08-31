@@ -1,28 +1,31 @@
 #!/bin/bash
+set -e
 
-# TalkType Mac Build Script
-# Creates a standalone .app bundle from a single Swift file
+# TalkType Mac Build Pipeline
+# Builds Direct Distribution (Unlocked DMG) or Mac App Store (Sandboxed PKG)
 
 APP_NAME="TalkType"
+VERSION="1.0"
+BUILD_NUMBER="1"
 SRC_FILE="TalkType.swift"
 BUILD_DIR="build"
+DIST_DIR="dist"
 APP_DIR="${BUILD_DIR}/${APP_NAME}.app"
 BIN_DIR="${APP_DIR}/Contents/MacOS"
 RES_DIR="${APP_DIR}/Contents/Resources"
 
-echo "🔨 Building ${APP_NAME}..."
+TARGET_MODE="${1:-direct}" # "direct" or "mas"
 
-# Clean previous build
-rm -rf "${BUILD_DIR}"
-mkdir -p "${BIN_DIR}"
-mkdir -p "${RES_DIR}"
+echo "🎨 Building ${APP_NAME} v${VERSION} (${TARGET_MODE} target)..."
 
-# Compile Swift file
-# -O for optimization
-# target arm64 (Apple Silicon)
+# Clean previous build artifacts
+rm -rf "${BUILD_DIR}" "${DIST_DIR}"
+mkdir -p "${BIN_DIR}" "${RES_DIR}" "${DIST_DIR}"
+
+# 1. Compile Swift executable (Apple Silicon optimized)
 swiftc -parse-as-library -O -target arm64-apple-macos13.0 "${SRC_FILE}" -o "${BIN_DIR}/${APP_NAME}"
 
-# Create basic Info.plist
+# 2. Generate Production Info.plist
 cat > "${APP_DIR}/Contents/Info.plist" << PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -34,44 +37,94 @@ cat > "${APP_DIR}/Contents/Info.plist" << PLIST
     <string>com.pibulus.talktype</string>
     <key>CFBundleName</key>
     <string>${APP_NAME}</string>
+    <key>CFBundleDisplayName</key>
+    <string>${APP_NAME}</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
+    <string>${VERSION}</string>
+    <key>CFBundleVersion</key>
+    <string>${BUILD_NUMBER}</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>LSUIElement</key>
-    <true/> <!-- Hides from Dock, Menu Bar app only -->
+    <true/>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.productivity</string>
+    <key>NSHumanReadableCopyright</key>
+    <string>Copyright © 2026 Pablo Alvarado. All rights reserved.</string>
     <key>NSSpeechRecognitionUsageDescription</key>
-    <string>TalkType needs speech recognition to transcribe your voice.</string>
+    <string>TalkType uses speech recognition to transcribe your voice into text accurately.</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>TalkType needs microphone access to hear you speak.</string>
+    <string>TalkType needs microphone access to listen to your voice when you hold the dictate key.</string>
 </dict>
 </plist>
 PLIST
 
-# Copy assets (ghost mark, rendered from the web app's talktype-icon.svg)
-cp Assets/*.png "${RES_DIR}/" 2>/dev/null
+# 3. Copy Assets & AppIcon
+cp Assets/*.png "${RES_DIR}/" 2>/dev/null || true
+if [ -f "Assets/AppIcon.icns" ]; then
+    cp Assets/AppIcon.icns "${RES_DIR}/"
+fi
 
-# Make executable
 chmod +x "${BIN_DIR}/${APP_NAME}"
 
-# Sign with the Developer ID if it is in the keychain, ad-hoc otherwise.
-#
-# This is not cosmetic. TCC (mic / speech / accessibility) remembers an app by its
-# DESIGNATED REQUIREMENT. Ad-hoc signing produces `designated => cdhash H"..."` — a raw
-# hash of the binary — so every single rebuild looks like a brand new app and macOS
-# re-prompts for everything. A Developer ID gives `identifier "..." and ... subject.OU`,
-# which is stable across rebuilds, so the grants stick.
+# 4. Code Signing & Entitlements
 IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null \
            | grep "Developer ID Application" | head -1 | sed 's/.*"\(.*\)"/\1/')
 
-if [ -n "${IDENTITY}" ]; then
-    codesign --force --sign "${IDENTITY}" --identifier com.pibulus.talktype \
-             --timestamp=none "${APP_DIR}" 2>/dev/null \
-      && echo "🔏 Signed: ${IDENTITY}"
+if [ "${TARGET_MODE}" = "mas" ]; then
+    ENTITLEMENTS="TalkType.sandbox.entitlements"
+    echo "📦 Sandboxed App Store mode enabled with ${ENTITLEMENTS}"
+    
+    MAS_IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null \
+                   | grep "Apple Distribution\|3rd Party Mac Developer Application" | head -1 | sed 's/.*"\(.*\)"/\1/')
+    SIGN_ID="${MAS_IDENTITY:-${IDENTITY}}"
+    
+    if [ -n "${SIGN_ID}" ]; then
+        codesign --force --deep --sign "${SIGN_ID}" \
+                 --entitlements "${ENTITLEMENTS}" \
+                 --identifier com.pibulus.talktype \
+                 --timestamp=none "${APP_DIR}"
+        echo "🔏 Signed with: ${SIGN_ID}"
+    else
+        codesign --force --deep --sign - \
+                 --entitlements "${ENTITLEMENTS}" \
+                 --identifier com.pibulus.talktype "${APP_DIR}"
+        echo "🔏 Ad-hoc signed for App Store local testing"
+    fi
 else
-    codesign --force --sign - --identifier com.pibulus.talktype "${APP_DIR}" 2>/dev/null \
-      && echo "🔏 Ad-hoc signed (no Developer ID — TCC will re-prompt on every rebuild)"
+    ENTITLEMENTS="TalkType.entitlements"
+    echo "⚡ Direct distribution mode enabled with Hardened Runtime & ${ENTITLEMENTS}"
+    
+    if [ -n "${IDENTITY}" ]; then
+        codesign --force --deep --sign "${IDENTITY}" \
+                 --options runtime \
+                 --entitlements "${ENTITLEMENTS}" \
+                 --identifier com.pibulus.talktype \
+                 --timestamp=none "${APP_DIR}"
+        echo "🔏 Signed with Developer ID: ${IDENTITY}"
+    else
+        codesign --force --deep --sign - \
+                 --entitlements "${ENTITLEMENTS}" \
+                 --identifier com.pibulus.talktype "${APP_DIR}"
+        echo "🔏 Ad-hoc signed"
+    fi
+    
+    # 5. Build DMG for Direct Distribution
+    echo "💿 Creating DMG disk image..."
+    DMG_STAGE="${BUILD_DIR}/dmg_stage"
+    mkdir -p "${DMG_STAGE}"
+    cp -R "${APP_DIR}" "${DMG_STAGE}/"
+    ln -s /Applications "${DMG_STAGE}/Applications"
+    
+    hdiutil create -volname "${APP_NAME}" \
+            -srcfolder "${DMG_STAGE}" \
+            -ov -format UDZO \
+            "${DIST_DIR}/${APP_NAME}-${VERSION}.dmg" > /dev/null
+            
+    rm -rf "${DMG_STAGE}"
+    echo "✨ Direct DMG ready at ${DIST_DIR}/${APP_NAME}-${VERSION}.dmg"
 fi
 
-echo "✨ Built at ${APP_DIR}"
-echo "🚀 Run with: open ${APP_DIR}"
+echo "✨ Built successfully at ${APP_DIR}"
