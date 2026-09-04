@@ -577,8 +577,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 final class LiveHUDWindowController: NSWindowController {
     let size = NSSize(width: 580, height: 76)
     private var isVisibleTarget = false
-    
+    private let speechEngine: SpeechEngine
+
     init(speechEngine: SpeechEngine) {
+        self.speechEngine = speechEngine
         let screen = NSScreen.screens.first(where: { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) }) ?? NSScreen.main ?? NSScreen.screens.first
         let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1280, height: 800)
         let isTop = TalkTypeConfig.hudPosition == "top"
@@ -602,8 +604,11 @@ final class LiveHUDWindowController: NSWindowController {
         window.hidesOnDeactivate = false
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         window.isReleasedWhenClosed = false
-        window.contentView = NSHostingView(rootView: LiveTranscriptHUDView(speechEngine: speechEngine))
-        
+        // Content is built in show() and torn down in hide(). The HUD's
+        // .repeatForever animations keep CoreAnimation committing frames for
+        // as long as the view exists — orderOut() does not stop them — so a
+        // view built here would spin ~50% of a core from launch, forever.
+
         super.init(window: window)
     }
     
@@ -624,6 +629,10 @@ final class LiveHUDWindowController: NSWindowController {
     func show() {
         guard let window = self.window else { return }
         isVisibleTarget = true
+        if !(window.contentView is NSHostingView<LiveTranscriptHUDView>) {
+            window.contentView = NSHostingView(
+                rootView: LiveTranscriptHUDView(speechEngine: speechEngine))
+        }
         updatePosition()
         window.orderFrontRegardless()
         NSAnimationContext.runAnimationGroup { context in
@@ -642,6 +651,9 @@ final class LiveHUDWindowController: NSWindowController {
             guard let self = self else { return }
             if !self.isVisibleTarget {
                 window.orderOut(nil)
+                // Release the SwiftUI view; that is what actually stops the
+                // repeating animations and drops CPU back to idle.
+                window.contentView = NSView()
             }
         })
     }
@@ -786,6 +798,14 @@ struct LiveTranscriptHUDView: View {
             }
             withAnimation(.linear(duration: 4.5).repeatForever(autoreverses: false)) {
                 borderAngle = 360
+            }
+        }
+        .onDisappear {
+            // A repeatForever animation keeps driving frames until something
+            // replaces it. Re-animating with duration 0 is what stops it.
+            withAnimation(.linear(duration: 0)) {
+                wavePhase = 0
+                borderAngle = 0
             }
         }
     }
@@ -1170,6 +1190,7 @@ struct GhostMark: View {
         .offset(y: floatY)
         .rotationEffect(.degrees(tilt))
         .onAppear { startFloating(); scheduleBlink() }
+        .onDisappear { stopFloating(); blinkTimer?.invalidate() }
         .onDisappear { blinkTimer?.invalidate(); blinkTimer = nil }
         .onChange(of: isRecording) { _ in startFloating() }
     }
@@ -1190,6 +1211,15 @@ struct GhostMark: View {
         withAnimation(.easeInOut(duration: duration).repeatForever(autoreverses: true)) {
             floatY = isRecording ? -4 : -3
             tilt   = isRecording ? 0.25 : 0.35
+        }
+    }
+
+    private func stopFloating() {
+        // Cancels the repeatForever above; without this the ghost keeps
+        // animating inside a closed popover, which stays retained.
+        withAnimation(.linear(duration: 0)) {
+            floatY = 0
+            tilt = 0
         }
     }
 
