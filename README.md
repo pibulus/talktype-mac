@@ -1,17 +1,33 @@
 # TalkType for Mac
 
-Menu-bar dictation. Click the ghost (or hold ⌥ Right Option anywhere), talk, and the
-text pastes into whatever app has focus. On-device via Apple's `SFSpeechRecognizer` —
-no API key, no network, no cost.
+Menu-bar dictation with the ghost. Click the ghost (or hold ⌥ Right Option anywhere),
+talk, and the text pastes into whatever app has focus.
+
+Three engines, one ghost:
+
+- **Apple on-device** — free, offline, private. No key, no network.
+- **Deepgram live** — bring your own key for realtime streaming accuracy.
+- **Gemini polish** — optional BYOK pass that rewrites your transcript into clean prose.
+
+English and Spanish, with auto-detect (Deepgram `multi`) or a manual pick.
 
 ## Build
 
 ```bash
-./build.sh          # compiles + signs -> build/TalkType.app
+./build.sh direct     # compiles + signs (Developer ID) + builds a notarized-ready DMG
+./build.sh mas        # sandboxed App Store target (requires MAS certs)
 open build/TalkType.app
 ```
 
 Install with `ditto build/TalkType.app /Applications/TalkType.app`.
+
+Notarization is wired into `build.sh` (it staples the DMG). It skips gracefully until you
+create a notary profile once:
+
+```bash
+xcrun notarytool store-credentials "talktype-notary" \
+  --apple-id <apple-id-email> --team-id V433H655PN --password <app-specific-password>
+```
 
 ## Two things that will waste your afternoon if you don't know them
 
@@ -28,15 +44,21 @@ accessibility every single time. `build.sh` signs with the Developer ID when it 
 the keychain, giving an identifier + team-ID requirement that survives rebuilds.
 Verify with `codesign -d -r- build/TalkType.app`.
 
-Hardened runtime (`--options runtime`) is deliberately NOT enabled: it requires a
-`com.apple.security.device.audio-input` entitlement and silently kills the mic without
-one. Add both together when notarizing.
+Direct distribution uses hardened runtime (`--options runtime`) with the
+`com.apple.security.device.audio-input` entitlement — both together, so the mic survives.
+The App Store target uses the sandbox entitlements instead.
 
 ## Permissions
 
 Microphone and Speech Recognition prompt on first launch. Accessibility must be granted
-by hand in System Settings → Privacy & Security → Accessibility — it covers both the
-⌥ push-to-talk global monitor and the Cmd+V paste.
+by hand in System Settings → Privacy & Security → Accessibility — it covers the ⌥
+push-to-talk global monitor and the Cmd+V paste. The App Store build compiles that path
+out (clipboard-only), since sandboxed apps can't be granted Accessibility.
+
+## Keys & polish
+
+API keys (Deepgram, Gemini) are stored in the Keychain, never in plaintext. A one-time
+migration moves any legacy `UserDefaults` key automatically.
 
 ## Design
 
