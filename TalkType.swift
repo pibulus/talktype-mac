@@ -154,7 +154,7 @@ enum TalkTypeConfig {
     static let keychainAccount = "deepgramApiKey"
     static let keychainAccountGemini = "geminiApiKey"
     static let polishStorageKey = "talktypePolish"
-    static let geminiModel = "gemini-2.5-flash-latest"
+    static let geminiModel = "gemini-flash-latest"
 
     static var deepgramApiKey: String {
         if let key = KeychainHelper.read(service: keychainService, account: keychainAccount) {
@@ -218,7 +218,10 @@ enum Polisher {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        let body: [String: Any] = ["contents": [["parts": [["text": prompt]]]]]
+        let body: [String: Any] = [
+            "contents": [["parts": [["text": prompt]]]],
+            "generationConfig": ["thinkingConfig": ["thinkingBudget": 0]]
+        ]
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
         URLSession.shared.dataTask(with: request) { data, _, error in
