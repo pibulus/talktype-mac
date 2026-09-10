@@ -3,6 +3,7 @@ import SwiftUI
 import Speech
 import AVFoundation
 import ApplicationServices
+import Security
 
 // MARK: - PTT Shortcut Trigger Options (Full Keyboard & Mobility Accessibility)
 enum PTTTrigger: String, CaseIterable, Identifiable {
@@ -55,16 +56,109 @@ enum PTTTrigger: String, CaseIterable, Identifiable {
     }
 }
 
+// MARK: - Transcription Language
+enum TranscriptionLanguage: String, CaseIterable {
+    case auto
+    case en
+    case es
+
+    var title: String {
+        switch self {
+        case .auto: return L10n.t("auto")
+        case .en: return L10n.t("english")
+        case .es: return L10n.t("spanish")
+        }
+    }
+
+    var appleLocale: Locale {
+        switch self {
+        case .auto: return Locale.current
+        case .en: return Locale(identifier: "en-US")
+        case .es: return Locale(identifier: "es-ES")
+        }
+    }
+
+    var deepgramLanguage: String {
+        switch self {
+        case .auto: return "multi"
+        case .en: return "en"
+        case .es: return "es"
+        }
+    }
+}
+
+// MARK: - Localization
+enum L10n {
+    static func t(_ key: String) -> String {
+        let lang = TalkTypeConfig.language == .es ? "es" : "en"
+        return strings[key]?[lang] ?? strings[key]?["en"] ?? key
+    }
+
+    static let strings: [String: [String: String]] = [
+        "auto": ["en": "Auto-detect", "es": "Detección automática"],
+        "english": ["en": "English", "es": "Inglés"],
+        "spanish": ["en": "Spanish", "es": "Español"],
+        "language": ["en": "Language", "es": "Idioma"],
+        "accessibilityDisabled": ["en": "⚠️ Accessibility Disabled (Click to Enable ⌘V)", "es": "⚠️ Accesibilidad desactivada (Clic para activar ⌘V)"],
+        "copyLast": ["en": "Copy Last", "es": "Copiar último"],
+        "noRecentTranscripts": ["en": "No Recent Transcripts", "es": "Sin transcripciones recientes"],
+        "recentTranscripts": ["en": "Recent Transcripts", "es": "Transcripciones recientes"],
+        "historyEmpty": ["en": "History empty", "es": "Historial vacío"],
+        "pushToTalkKey": ["en": "Push to Talk Key", "es": "Tecla pulsar para hablar"],
+        "transcriptionEngine": ["en": "Transcription Engine", "es": "Motor de transcripción"],
+        "appleSpeech": ["en": "Apple Speech (On-Device, Offline)", "es": "Voz de Apple (en el dispositivo, sin conexión)"],
+        "deepgramNova": ["en": "Deepgram Nova-3 (Live Streaming)", "es": "Deepgram Nova-3 (transmisión en vivo)"],
+        "hudPosition": ["en": "HUD Position", "es": "Posición del HUD"],
+        "bottomOfScreen": ["en": "Bottom of Screen", "es": "Parte inferior de la pantalla"],
+        "topOfScreen": ["en": "Top of Screen", "es": "Parte superior de la pantalla"],
+        "deepgramApiKey": ["en": "Deepgram API Key…", "es": "Clave de API de Deepgram…"],
+        "quit": ["en": "Quit TalkType", "es": "Salir de TalkType"],
+        "dgAlertTitle": ["en": "Deepgram API Key", "es": "Clave de API de Deepgram"],
+        "dgAlertInfo": ["en": "Enter your Deepgram API Key for live streaming transcription (leave empty to use Apple on-device speech). No key? Get one free at console.deepgram.com.", "es": "Introduce tu clave de API de Deepgram para la transcripción en vivo (déjala vacía para usar la voz en el dispositivo de Apple). ¿Sin clave? Consíguela gratis en console.deepgram.com."],
+        "save": ["en": "Save", "es": "Guardar"],
+        "getKey": ["en": "Get a Deepgram Key…", "es": "Obtener clave de Deepgram…"],
+        "cancel": ["en": "Cancel", "es": "Cancelar"],
+        "pasteKey": ["en": "Paste Deepgram API key", "es": "Pegar clave de API de Deepgram"],
+        "listeningSpeak": ["en": "Listening… speak freely", "es": "Escuchando… habla con libertad"],
+        "listening": ["en": "Listening…", "es": "Escuchando…"],
+        "live": ["en": "Live", "es": "En vivo"],
+        "history": ["en": "History", "es": "Historial"],
+        "holdGhost": ["en": "Hold the ghost to start talking…", "es": "Mantén el fantasma para empezar a hablar…"],
+        "clickGhostHold": ["en": "Click ghost or hold ", "es": "Haz clic en el fantasma o mantén "],
+        "noTranscriptsSaved": ["en": "No transcripts saved yet.", "es": "Aún no hay transcripciones guardadas."],
+        "copy": ["en": "Copy", "es": "Copiar"],
+        "copied": ["en": "Copied!", "es": "¡Copiado!"],
+        "clearHistory": ["en": "Clear History", "es": "Borrar historial"],
+        "copiedToClipboard": ["en": "Copied to clipboard — Press ⌘V to paste! 📋", "es": "Copiado al portapapeles — ¡Pulsa ⌘V para pegar! 📋"]
+    ]
+}
+
 // MARK: - Constants & Config
 enum TalkTypeConfig {
+    // Legacy UserDefaults key (pre-Keychain). Kept only for one-time migration.
     static let deepgramKeyStorageKey = "deepgramApiKey"
     static let engineStorageKey = "talktypeEngine" // "apple" (default) or "deepgram"
     static let hudPositionStorageKey = "hudPosition" // "bottom" or "top"
     static let historyStorageKey = "talktypeHistory"
     static let pttTriggerStorageKey = "talktypePttTrigger"
-    
+    static let languageStorageKey = "talktypeLanguage"
+
+    // Keychain location for the Deepgram API key.
+    static let keychainService = "com.pibulus.talktype"
+    static let keychainAccount = "deepgramApiKey"
+
     static var deepgramApiKey: String {
-        return UserDefaults.standard.string(forKey: deepgramKeyStorageKey)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if let key = KeychainHelper.read(service: keychainService, account: keychainAccount) {
+            return key
+        }
+        // One-time migration from the old plaintext UserDefaults store.
+        if let legacy = UserDefaults.standard.string(forKey: deepgramKeyStorageKey)?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !legacy.isEmpty {
+            KeychainHelper.save(legacy, service: keychainService, account: keychainAccount)
+            UserDefaults.standard.removeObject(forKey: deepgramKeyStorageKey)
+            return legacy
+        }
+        return ""
     }
     
     static var isUsingDeepgram: Bool {
@@ -80,6 +174,60 @@ enum TalkTypeConfig {
     static var pttTrigger: PTTTrigger {
         let raw = UserDefaults.standard.string(forKey: pttTriggerStorageKey) ?? PTTTrigger.rightOption.rawValue
         return PTTTrigger(rawValue: raw) ?? .rightOption
+    }
+
+    static var language: TranscriptionLanguage {
+        get {
+            let raw = UserDefaults.standard.string(forKey: languageStorageKey) ?? TranscriptionLanguage.auto.rawValue
+            return TranscriptionLanguage(rawValue: raw) ?? .auto
+        }
+        set {
+            UserDefaults.standard.set(newValue.rawValue, forKey: languageStorageKey)
+        }
+    }
+}
+
+// MARK: - Keychain Helper
+enum KeychainHelper {
+    @discardableResult
+    static func save(_ value: String, service: String, account: String) -> Bool {
+        let data = Data(value.utf8)
+        let base: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+        let status = SecItemUpdate(base as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+        if status == errSecItemNotFound {
+            var query = base
+            query[kSecValueData as String] = data
+            return SecItemAdd(query as CFDictionary, nil) == errSecSuccess
+        }
+        return status == errSecSuccess
+    }
+
+    static func read(service: String, account: String) -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var result: AnyObject?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+              let data = result as? Data else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    @discardableResult
+    static func delete(service: String, account: String) -> Bool {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+        return SecItemDelete(query as CFDictionary) == errSecSuccess
     }
 }
 
@@ -215,7 +363,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self.pasteToActiveApp(text: text)
             } else {
                 // Clipboard fallback with explicit visual feedback
-                self.engine.transcript = "Copied to clipboard — Press ⌘V to paste! 📋"
+                self.engine.transcript = L10n.t("copiedToClipboard")
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
                     self?.liveHUDController?.hide()
                 }
@@ -343,7 +491,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         // Accessibility Status Alert if not trusted
         if !AXIsProcessTrusted() {
-            let permItem = NSMenuItem(title: "⚠️ Accessibility Disabled (Click to Enable ⌘V)", action: #selector(openAccessibilitySettings), keyEquivalent: "")
+            let permItem = NSMenuItem(title: L10n.t("accessibilityDisabled"), action: #selector(openAccessibilitySettings), keyEquivalent: "")
             permItem.target = self
             menu.addItem(permItem)
             menu.addItem(NSMenuItem.separator())
@@ -352,11 +500,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Quick Recovery: Copy Last Transcript
         if let last = history.records.first {
             let snippet = last.text.count > 32 ? String(last.text.prefix(30)) + "…" : last.text
-            let copyLast = NSMenuItem(title: "Copy Last: \"\(snippet)\"", action: #selector(copyLastTranscript), keyEquivalent: "c")
+            let copyLast = NSMenuItem(title: "\(L10n.t("copyLast")): \"\(snippet)\"", action: #selector(copyLastTranscript), keyEquivalent: "c")
             copyLast.target = self
             menu.addItem(copyLast)
         } else {
-            let copyLast = NSMenuItem(title: "No Recent Transcripts", action: nil, keyEquivalent: "")
+            let copyLast = NSMenuItem(title: L10n.t("noRecentTranscripts"), action: nil, keyEquivalent: "")
             copyLast.isEnabled = false
             menu.addItem(copyLast)
         }
@@ -364,7 +512,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Recent History Submenu
         let historyMenu = NSMenu(title: "Recent")
         if history.records.isEmpty {
-            let empty = NSMenuItem(title: "History empty", action: nil, keyEquivalent: "")
+            let empty = NSMenuItem(title: L10n.t("historyEmpty"), action: nil, keyEquivalent: "")
             empty.isEnabled = false
             historyMenu.addItem(empty)
         } else {
@@ -376,7 +524,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 historyMenu.addItem(item)
             }
         }
-        let historyParent = NSMenuItem(title: "Recent Transcripts (\(history.records.count))", action: nil, keyEquivalent: "")
+        let historyParent = NSMenuItem(title: "\(L10n.t("recentTranscripts")) (\(history.records.count))", action: nil, keyEquivalent: "")
         historyParent.submenu = historyMenu
         menu.addItem(historyParent)
         
@@ -394,7 +542,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             shortcutMenu.addItem(item)
         }
         
-        let shortcutParent = NSMenuItem(title: "Push to Talk Key", action: nil, keyEquivalent: "")
+        let shortcutParent = NSMenuItem(title: L10n.t("pushToTalkKey"), action: nil, keyEquivalent: "")
         shortcutParent.submenu = shortcutMenu
         menu.addItem(shortcutParent)
         
@@ -402,48 +550,62 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let modelMenu = NSMenu(title: "Model")
         let isDeepgram = TalkTypeConfig.isUsingDeepgram
         
-        let appleItem = NSMenuItem(title: "Apple Speech (On-Device, Offline)", action: #selector(selectAppleModel), keyEquivalent: "1")
+        let appleItem = NSMenuItem(title: L10n.t("appleSpeech"), action: #selector(selectAppleModel), keyEquivalent: "1")
         appleItem.target = self
         appleItem.state = !isDeepgram ? .on : .off
         modelMenu.addItem(appleItem)
         
-        let dgItem = NSMenuItem(title: "Deepgram Nova-3 (Live Streaming)", action: #selector(selectDeepgramModel), keyEquivalent: "2")
+        let dgItem = NSMenuItem(title: L10n.t("deepgramNova"), action: #selector(selectDeepgramModel), keyEquivalent: "2")
         dgItem.target = self
         dgItem.state = isDeepgram ? .on : .off
         modelMenu.addItem(dgItem)
         
-        let modelParent = NSMenuItem(title: "Transcription Engine", action: nil, keyEquivalent: "")
+        let modelParent = NSMenuItem(title: L10n.t("transcriptionEngine"), action: nil, keyEquivalent: "")
         modelParent.submenu = modelMenu
         menu.addItem(modelParent)
+
+        // Language Submenu
+        let langMenu = NSMenu(title: "Language")
+        let activeLanguage = TalkTypeConfig.language
+        for language in TranscriptionLanguage.allCases {
+            let item = NSMenuItem(title: language.title, action: #selector(selectLanguage(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = language.rawValue
+            item.state = (language == activeLanguage) ? .on : .off
+            langMenu.addItem(item)
+        }
+        let langParent = NSMenuItem(title: L10n.t("language"), action: nil, keyEquivalent: "")
+        langParent.submenu = langMenu
+        menu.addItem(langParent)
         
         // HUD Position Submenu
         let posMenu = NSMenu(title: "HUD Position")
         let isTop = TalkTypeConfig.hudPosition == "top"
         
-        let posBottom = NSMenuItem(title: "Bottom of Screen", action: #selector(setHudBottom), keyEquivalent: "")
+        let posBottom = NSMenuItem(title: L10n.t("bottomOfScreen"), action: #selector(setHudBottom), keyEquivalent: "")
         posBottom.target = self
         posBottom.state = !isTop ? .on : .off
         posMenu.addItem(posBottom)
         
-        let posTop = NSMenuItem(title: "Top of Screen", action: #selector(setHudTop), keyEquivalent: "")
+        let posTop = NSMenuItem(title: L10n.t("topOfScreen"), action: #selector(setHudTop), keyEquivalent: "")
         posTop.target = self
         posTop.state = isTop ? .on : .off
         posMenu.addItem(posTop)
         
-        let posParent = NSMenuItem(title: "HUD Position", action: nil, keyEquivalent: "")
+        let posParent = NSMenuItem(title: L10n.t("hudPosition"), action: nil, keyEquivalent: "")
         posParent.submenu = posMenu
         menu.addItem(posParent)
         
         menu.addItem(NSMenuItem.separator())
         
         // Deepgram Key Config
-        let keyItem = NSMenuItem(title: "Deepgram API Key…", action: #selector(promptDeepgramKey), keyEquivalent: "k")
+        let keyItem = NSMenuItem(title: L10n.t("deepgramApiKey"), action: #selector(promptDeepgramKey), keyEquivalent: "k")
         keyItem.target = self
         menu.addItem(keyItem)
         
         menu.addItem(NSMenuItem.separator())
         
-        let quitItem = NSMenuItem(title: "Quit TalkType", action: #selector(quitApp), keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: L10n.t("quit"), action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
         
@@ -461,6 +623,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func selectShortcutTrigger(_ sender: NSMenuItem) {
         if let raw = sender.representedObject as? String {
             UserDefaults.standard.set(raw, forKey: TalkTypeConfig.pttTriggerStorageKey)
+        }
+    }
+
+    @objc func selectLanguage(_ sender: NSMenuItem) {
+        if let raw = sender.representedObject as? String,
+           let language = TranscriptionLanguage(rawValue: raw) {
+            TalkTypeConfig.language = language
         }
     }
 
@@ -507,27 +676,37 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func promptDeepgramKey() {
         let alert = NSAlert()
-        alert.messageText = "Deepgram API Key"
-        alert.informativeText = "Enter your Deepgram API Key for live streaming transcription (leave empty to use Apple on-device speech):"
+        alert.messageText = L10n.t("dgAlertTitle")
+        alert.informativeText = L10n.t("dgAlertInfo")
         alert.alertStyle = .informational
-        alert.addButton(withTitle: "Save")
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: L10n.t("save"))
+        alert.addButton(withTitle: L10n.t("getKey"))
+        alert.addButton(withTitle: L10n.t("cancel"))
 
         let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
-        input.stringValue = UserDefaults.standard.string(forKey: TalkTypeConfig.deepgramKeyStorageKey) ?? ""
-        input.placeholderString = "Paste Deepgram API key"
+        input.stringValue = TalkTypeConfig.deepgramApiKey
+        input.placeholderString = L10n.t("pasteKey")
         alert.accessoryView = input
 
         let response = alert.runModal()
-        if response == .alertFirstButtonReturn {
+        switch response {
+        case .alertFirstButtonReturn:
             let key = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
             if key.isEmpty {
+                KeychainHelper.delete(service: TalkTypeConfig.keychainService, account: TalkTypeConfig.keychainAccount)
                 UserDefaults.standard.removeObject(forKey: TalkTypeConfig.deepgramKeyStorageKey)
                 UserDefaults.standard.set("apple", forKey: TalkTypeConfig.engineStorageKey)
             } else {
-                UserDefaults.standard.set(key, forKey: TalkTypeConfig.deepgramKeyStorageKey)
+                KeychainHelper.save(key, service: TalkTypeConfig.keychainService, account: TalkTypeConfig.keychainAccount)
+                UserDefaults.standard.removeObject(forKey: TalkTypeConfig.deepgramKeyStorageKey)
                 UserDefaults.standard.set("deepgram", forKey: TalkTypeConfig.engineStorageKey)
             }
+        case .alertSecondButtonReturn:
+            if let url = URL(string: "https://console.deepgram.com") {
+                NSWorkspace.shared.open(url)
+            }
+        default:
+            break
         }
     }
 
@@ -667,7 +846,7 @@ struct LiveTranscriptHUDView: View {
     @State private var ghostBounce: CGFloat = 1.0
     
     private var displayedText: String {
-        speechEngine.transcript.isEmpty ? "Listening… speak freely" : speechEngine.transcript
+        speechEngine.transcript.isEmpty ? L10n.t("listeningSpeak") : speechEngine.transcript
     }
     
     var body: some View {
@@ -813,7 +992,9 @@ struct LiveTranscriptHUDView: View {
 
 // MARK: - Speech Engine (Deepgram Nova-3 WebSocket + Apple Fallback)
 class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
-    private let speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
+    private var speechRecognizer: SFSpeechRecognizer? {
+        SFSpeechRecognizer(locale: TalkTypeConfig.language.appleLocale)
+    }
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     private let audioEngine = AVAudioEngine()
@@ -897,7 +1078,7 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
     private func startDeepgramStreaming() {
         let apiKey = TalkTypeConfig.deepgramApiKey
         guard !apiKey.isEmpty,
-              let url = URL(string: "wss://api.deepgram.com/v1/listen?model=nova-3&smart_format=true&interim_results=true&encoding=linear16&sample_rate=16000&channels=1") else {
+              let url = URL(string: "wss://api.deepgram.com/v1/listen?model=nova-3&smart_format=true&interim_results=true&encoding=linear16&sample_rate=16000&channels=1&language=\(TalkTypeConfig.language.deepgramLanguage)") else {
             startAppleSpeechRecognition()
             return
         }
@@ -1277,7 +1458,7 @@ struct ContentView: View {
                 // Mode Toggle
                 HStack(spacing: 2) {
                     Button(action: { selectedTab = 0 }) {
-                        Text("Live")
+                        Text(L10n.t("live"))
                             .font(.system(size: 11, weight: .bold, design: .rounded))
                             .padding(.horizontal, 10)
                             .padding(.vertical, 4)
@@ -1289,7 +1470,7 @@ struct ContentView: View {
                     
                     Button(action: { selectedTab = 1 }) {
                         HStack(spacing: 3) {
-                            Text("History")
+                            Text(L10n.t("history"))
                             if !history.records.isEmpty {
                                 Text("\(history.records.count)")
                                     .font(.system(size: 9, weight: .bold))
@@ -1331,7 +1512,7 @@ struct ContentView: View {
     private var transcriptCard: some View {
         ScrollView {
             Text(speechEngine.transcript.isEmpty
-                 ? "Hold the ghost to start talking…"
+                 ? L10n.t("holdGhost")
                  : speechEngine.transcript)
                 .font(.system(size: 14, weight: .medium, design: .monospaced))
                 .lineSpacing(3)
@@ -1369,7 +1550,7 @@ struct ContentView: View {
     }
 
     private var statusLine: some View {
-        Text(isRec ? "Listening…" : "Click ghost or hold \(pttKeyName)")
+        Text(isRec ? L10n.t("listening") : L10n.t("clickGhostHold") + pttKeyName)
             .font(.system(size: 12, weight: .semibold, design: .rounded))
             .foregroundStyle(isRec ? AnyShapeStyle(TT.hot) : AnyShapeStyle(p.inkSoft.opacity(0.75)))
             .frame(height: 20)
@@ -1383,7 +1564,7 @@ struct ContentView: View {
                     Image(systemName: "clock.arrow.circlepath")
                         .font(.system(size: 32))
                         .foregroundStyle(p.inkSoft.opacity(0.35))
-                    Text("No transcripts saved yet.")
+                    Text(L10n.t("noTranscriptsSaved"))
                         .font(.system(size: 13, weight: .medium, design: .rounded))
                         .foregroundStyle(p.inkSoft.opacity(0.5))
                     Spacer()
@@ -1412,7 +1593,7 @@ struct ContentView: View {
                                     }) {
                                         HStack(spacing: 3) {
                                             Image(systemName: copiedId == record.id ? "checkmark" : "doc.on.doc")
-                                            Text(copiedId == record.id ? "Copied!" : "Copy")
+                                            Text(copiedId == record.id ? L10n.t("copied") : L10n.t("copy"))
                                         }
                                         .font(.system(size: 10, weight: .semibold, design: .rounded))
                                         .padding(.horizontal, 8)
@@ -1444,7 +1625,7 @@ struct ContentView: View {
                 .frame(height: 330)
                 
                 HStack {
-                    Button("Clear History") {
+                    Button(L10n.t("clearHistory")) {
                         history.clear()
                     }
                     .font(.system(size: 11, weight: .medium, design: .rounded))
