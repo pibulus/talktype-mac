@@ -617,6 +617,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         menu.addItem(NSMenuItem.separator())
         
+        let webItem = NSMenuItem(title: "TalkType on the Web…", action: #selector(openTalkTypeWeb), keyEquivalent: "")
+        webItem.target = self
+        menu.addItem(webItem)
+        
+        menu.addItem(NSMenuItem.separator())
+        
         let quitItem = NSMenuItem(title: L10n.t("quit"), action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
@@ -724,6 +730,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func quitApp() {
         NSApplication.shared.terminate(nil)
+    }
+
+    @objc func openTalkTypeWeb() {
+        if let url = URL(string: "https://talktype.app") {
+            NSWorkspace.shared.open(url)
+        }
     }
 
     @objc func togglePopover(_ sender: AnyObject?) {
