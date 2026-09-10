@@ -23,7 +23,11 @@ rm -rf "${BUILD_DIR}" "${DIST_DIR}"
 mkdir -p "${BIN_DIR}" "${RES_DIR}" "${DIST_DIR}"
 
 # 1. Compile Swift executable (Apple Silicon optimized)
-swiftc -parse-as-library -O -target arm64-apple-macos13.0 "${SRC_FILE}" -o "${BIN_DIR}/${APP_NAME}"
+SWIFT_FLAGS="-parse-as-library -O -target arm64-apple-macos13.0"
+if [ "${TARGET_MODE}" = "mas" ]; then
+    SWIFT_FLAGS="${SWIFT_FLAGS} -D MAS_BUILD"
+fi
+swiftc ${SWIFT_FLAGS} "${SRC_FILE}" -o "${BIN_DIR}/${APP_NAME}"
 
 # 2. Generate Production Info.plist
 cat > "${APP_DIR}/Contents/Info.plist" << PLIST
@@ -51,6 +55,8 @@ cat > "${APP_DIR}/Contents/Info.plist" << PLIST
     <true/>
     <key>LSApplicationCategoryType</key>
     <string>public.app-category.productivity</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>13.0</string>
     <key>NSHumanReadableCopyright</key>
     <string>Copyright © 2026 Pablo Alvarado. All rights reserved.</string>
     <key>NSSpeechRecognitionUsageDescription</key>
@@ -65,6 +71,9 @@ PLIST
 cp Assets/*.png "${RES_DIR}/" 2>/dev/null || true
 if [ -f "Assets/AppIcon.icns" ]; then
     cp Assets/AppIcon.icns "${RES_DIR}/"
+fi
+if [ -f "PrivacyInfo.xcprivacy" ]; then
+    cp PrivacyInfo.xcprivacy "${RES_DIR}/"
 fi
 
 chmod +x "${BIN_DIR}/${APP_NAME}"

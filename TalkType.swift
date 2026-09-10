@@ -358,6 +358,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             pasteboard.clearContents()
             pasteboard.setString(text, forType: .string)
             
+            #if MAS_BUILD
+            // Sandboxed App Store build: no Accessibility/auto-paste. Clipboard only.
+            self.engine.transcript = L10n.t("copiedToClipboard")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+                self?.liveHUDController?.hide()
+            }
+            #else
             if AXIsProcessTrusted() {
                 self.liveHUDController?.hide()
                 self.pasteToActiveApp(text: text)
@@ -368,6 +375,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     self?.liveHUDController?.hide()
                 }
             }
+            #endif
         }
         
         engine.onStateChange = { [weak self] isRecording in
@@ -464,8 +472,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func checkAccessibilityPermissions() {
+        #if !MAS_BUILD
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
         let _ = AXIsProcessTrustedWithOptions(options)
+        #endif
     }
 
     @objc func statusItemClicked(_ sender: NSStatusBarButton) {
@@ -489,13 +499,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(titleItem)
         menu.addItem(NSMenuItem.separator())
         
-        // Accessibility Status Alert if not trusted
+        // Accessibility Status Alert if not trusted (direct distribution only)
+        #if !MAS_BUILD
         if !AXIsProcessTrusted() {
             let permItem = NSMenuItem(title: L10n.t("accessibilityDisabled"), action: #selector(openAccessibilitySettings), keyEquivalent: "")
             permItem.target = self
             menu.addItem(permItem)
             menu.addItem(NSMenuItem.separator())
         }
+        #endif
         
         // Quick Recovery: Copy Last Transcript
         if let last = history.records.first {
