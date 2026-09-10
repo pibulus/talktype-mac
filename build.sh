@@ -156,7 +156,29 @@ else
             "${DIST_DIR}/${APP_NAME}-${VERSION}.dmg" > /dev/null
             
     rm -rf "${DMG_STAGE}"
-    echo "✨ Direct DMG ready at ${DIST_DIR}/${APP_NAME}-${VERSION}.dmg"
+
+    # 6. Notarize & staple (direct distribution). Gracefully skipped without a profile.
+    NOTARY_PROFILE="${NOTARY_PROFILE:-talktype-notary}"
+    DMG_PATH="${DIST_DIR}/${APP_NAME}-${VERSION}.dmg"
+    if [ "${SKIP_NOTARIZE:-0}" = "1" ]; then
+        echo "⏭️  Skipping notarization (SKIP_NOTARIZE=1)."
+    elif xcrun notarytool history --keychain-profile "${NOTARY_PROFILE}" >/dev/null 2>&1; then
+        echo "🔐 Submitting DMG for notarization (profile: ${NOTARY_PROFILE})…"
+        if xcrun notarytool submit "${DMG_PATH}" --keychain-profile "${NOTARY_PROFILE}" --wait; then
+            echo "📎 Stapling notarization ticket…"
+            xcrun stapler staple "${DMG_PATH}"
+            echo "✅ Notarized & stapled: ${DMG_PATH}"
+        else
+            echo "❌ Notarization failed. DMG is signed but not notarized."
+        fi
+    else
+        echo "⚠️  Notary profile '${NOTARY_PROFILE}' not found — skipping notarization."
+        echo "    Create it once with:"
+        echo "      xcrun notarytool store-credentials \"${NOTARY_PROFILE}\" \\"
+        echo "        --apple-id <apple-id-email> --team-id V433H655PN --password <app-specific-password>"
+        echo "    (or an App Store Connect API key via --key / --key-id / --issuer)"
+    fi
+    echo "✨ Direct DMG ready at ${DMG_PATH}"
 fi
 
 echo "✨ Built successfully at ${APP_DIR}"
