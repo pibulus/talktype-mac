@@ -448,8 +448,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 if isRecording {
                     self?.startMenubarBounce()
                     self?.liveHUDController?.show()
+                    NSSound(named: "Tink")?.play()
                 } else {
                     self?.stopMenubarBounce()
+                    NSSound(named: "Pop")?.play()
                     if !(self?.pendingPaste ?? false) {
                         self?.liveHUDController?.hide()
                     }
