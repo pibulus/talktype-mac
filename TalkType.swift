@@ -129,7 +129,13 @@ enum L10n {
         "copy": ["en": "Copy", "es": "Copiar"],
         "copied": ["en": "Copied!", "es": "¡Copiado!"],
         "clearHistory": ["en": "Clear History", "es": "Borrar historial"],
-        "copiedToClipboard": ["en": "Copied to clipboard — Press ⌘V to paste! 📋", "es": "Copiado al portapapeles — ¡Pulsa ⌘V para pegar! 📋"]
+        "copiedToClipboard": ["en": "Copied to clipboard — Press ⌘V to paste! 📋", "es": "Copiado al portapapeles — ¡Pulsa ⌘V para pegar! 📋"],
+        "polishing": ["en": "Polishing…", "es": "Puliendo…"],
+        "polishOutput": ["en": "Polish Output (Gemini)", "es": "Pulir texto (Gemini)"],
+        "geminiApiKey": ["en": "Gemini API Key…", "es": "Clave de API de Gemini…"],
+        "pasteGeminiKey": ["en": "Paste Gemini API key", "es": "Pegar clave de API de Gemini"],
+        "geminiAlertTitle": ["en": "Gemini API Key", "es": "Clave de API de Gemini"],
+        "geminiAlertInfo": ["en": "Optional. Paste a Gemini API key to polish transcripts into clean prose (leave empty to keep raw text). No key? Get one free at aistudio.google.com.", "es": "Opcional. Pega una clave de API de Gemini para pulir las transcripciones (déjala vacía para conservar el texto original). ¿Sin clave? Consíguela gratis en aistudio.google.com."]
     ]
 }
 
@@ -146,6 +152,9 @@ enum TalkTypeConfig {
     // Keychain location for the Deepgram API key.
     static let keychainService = "com.pibulus.talktype"
     static let keychainAccount = "deepgramApiKey"
+    static let keychainAccountGemini = "geminiApiKey"
+    static let polishStorageKey = "talktypePolish"
+    static let geminiModel = "gemini-2.5-flash-latest"
 
     static var deepgramApiKey: String {
         if let key = KeychainHelper.read(service: keychainService, account: keychainAccount) {
@@ -166,6 +175,15 @@ enum TalkTypeConfig {
         // Deepgram is only active if user selected it AND provided a valid key
         return selected == "deepgram" && !deepgramApiKey.isEmpty
     }
+
+    static var geminiApiKey: String {
+        return KeychainHelper.read(service: keychainService, account: keychainAccountGemini) ?? ""
+    }
+
+    static var isPolishing: Bool {
+        get { return UserDefaults.standard.bool(forKey: polishStorageKey) }
+        set { UserDefaults.standard.set(newValue, forKey: polishStorageKey) }
+    }
     
     static var hudPosition: String {
         return UserDefaults.standard.string(forKey: hudPositionStorageKey) ?? "bottom"
@@ -184,6 +202,39 @@ enum TalkTypeConfig {
         set {
             UserDefaults.standard.set(newValue.rawValue, forKey: languageStorageKey)
         }
+    }
+}
+
+// MARK: - Gemini Polish
+enum Polisher {
+    static func polish(_ text: String, completion: @escaping (String) -> Void) {
+        let key = TalkTypeConfig.geminiApiKey
+        guard !key.isEmpty else { completion(text); return }
+        let model = TalkTypeConfig.geminiModel
+        let prompt = "Rewrite this dictation into clean, natural prose. Fix grammar, punctuation, and repeated words. Keep the meaning and voice exactly. Return only the rewritten text, no preamble or quotes:\n\n\(text)"
+        guard let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(model):generateContent?key=\(key)") else {
+            completion(text); return
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let body: [String: Any] = ["contents": [["parts": [["text": prompt]]]]]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+        URLSession.shared.dataTask(with: request) { data, _, error in
+            let polished: String? = {
+                guard error == nil, let data = data,
+                      let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let candidates = json["candidates"] as? [[String: Any]],
+                      let content = candidates.first?["content"] as? [String: Any],
+                      let parts = content["parts"] as? [[String: Any]],
+                      let first = parts.first?["text"] as? String else { return nil }
+                return first.trimmingCharacters(in: .whitespacesAndNewlines)
+            }()
+            DispatchQueue.main.async {
+                completion((polished?.isEmpty == false) ? polished! : text)
+            }
+        }.resume()
     }
 }
 
@@ -354,28 +405,39 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
             
-            let pasteboard = NSPasteboard.general
-            pasteboard.clearContents()
-            pasteboard.setString(text, forType: .string)
-            
-            #if MAS_BUILD
-            // Sandboxed App Store build: no Accessibility/auto-paste. Clipboard only.
-            self.engine.transcript = L10n.t("copiedToClipboard")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
-                self?.liveHUDController?.hide()
-            }
-            #else
-            if AXIsProcessTrusted() {
-                self.liveHUDController?.hide()
-                self.pasteToActiveApp(text: text)
-            } else {
-                // Clipboard fallback with explicit visual feedback
+            let deliver = { (finalText: String) in
+                let pasteboard = NSPasteboard.general
+                pasteboard.clearContents()
+                pasteboard.setString(finalText, forType: .string)
+                
+                #if MAS_BUILD
+                // Sandboxed App Store build: no Accessibility/auto-paste. Clipboard only.
                 self.engine.transcript = L10n.t("copiedToClipboard")
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
                     self?.liveHUDController?.hide()
                 }
+                #else
+                if AXIsProcessTrusted() {
+                    self.liveHUDController?.hide()
+                    self.pasteToActiveApp(text: finalText)
+                } else {
+                    // Clipboard fallback with explicit visual feedback
+                    self.engine.transcript = L10n.t("copiedToClipboard")
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+                        self?.liveHUDController?.hide()
+                    }
+                }
+                #endif
             }
-            #endif
+            
+            if TalkTypeConfig.isPolishing && !TalkTypeConfig.geminiApiKey.isEmpty {
+                self.engine.transcript = L10n.t("polishing")
+                Polisher.polish(text) { polished in
+                    deliver(polished)
+                }
+            } else {
+                deliver(text)
+            }
         }
         
         engine.onStateChange = { [weak self] isRecording in
@@ -614,6 +676,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let keyItem = NSMenuItem(title: L10n.t("deepgramApiKey"), action: #selector(promptDeepgramKey), keyEquivalent: "k")
         keyItem.target = self
         menu.addItem(keyItem)
+
+        let geminiItem = NSMenuItem(title: L10n.t("geminiApiKey"), action: #selector(promptGeminiKey), keyEquivalent: "")
+        geminiItem.target = self
+        menu.addItem(geminiItem)
+
+        let polishItem = NSMenuItem(title: L10n.t("polishOutput"), action: #selector(togglePolish), keyEquivalent: "")
+        polishItem.target = self
+        polishItem.state = TalkTypeConfig.isPolishing ? .on : .off
+        menu.addItem(polishItem)
         
         menu.addItem(NSMenuItem.separator())
         
@@ -735,6 +806,44 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func openTalkTypeWeb() {
         if let url = URL(string: "https://talktype.app") {
             NSWorkspace.shared.open(url)
+        }
+    }
+
+    @objc func togglePolish() {
+        TalkTypeConfig.isPolishing.toggle()
+    }
+
+    @objc func promptGeminiKey() {
+        let alert = NSAlert()
+        alert.messageText = L10n.t("geminiAlertTitle")
+        alert.informativeText = L10n.t("geminiAlertInfo")
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: L10n.t("save"))
+        alert.addButton(withTitle: L10n.t("getKey"))
+        alert.addButton(withTitle: L10n.t("cancel"))
+
+        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
+        input.stringValue = TalkTypeConfig.geminiApiKey
+        input.placeholderString = L10n.t("pasteGeminiKey")
+        alert.accessoryView = input
+
+        let response = alert.runModal()
+        switch response {
+        case .alertFirstButtonReturn:
+            let key = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            if key.isEmpty {
+                KeychainHelper.delete(service: TalkTypeConfig.keychainService, account: TalkTypeConfig.keychainAccountGemini)
+                TalkTypeConfig.isPolishing = false
+            } else {
+                KeychainHelper.save(key, service: TalkTypeConfig.keychainService, account: TalkTypeConfig.keychainAccountGemini)
+                TalkTypeConfig.isPolishing = true
+            }
+        case .alertSecondButtonReturn:
+            if let url = URL(string: "https://aistudio.google.com") {
+                NSWorkspace.shared.open(url)
+            }
+        default:
+            break
         }
     }
 
