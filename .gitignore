@@ -7,3 +7,4 @@ dist/
 test_app
 test_app.swift
 fix_*.py
+screenshots/raw_capture.png

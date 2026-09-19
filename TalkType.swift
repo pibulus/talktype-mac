@@ -118,8 +118,8 @@ enum L10n {
         "topOfScreen": ["en": "Top of Screen", "es": "Parte superior de la pantalla"],
         "deepgramApiKey": ["en": "Deepgram API Key…", "es": "Clave de API de Deepgram…"],
         "quit": ["en": "Quit TalkType", "es": "Salir de TalkType"],
-        "dgAlertTitle": ["en": "Deepgram API Key", "es": "Clave de API de Deepgram"],
-        "dgAlertInfo": ["en": "Enter your Deepgram API Key for live streaming transcription (leave empty to use Apple on-device speech). No key? Get one free at console.deepgram.com.", "es": "Introduce tu clave de API de Deepgram para la transcripción en vivo (déjala vacía para usar la voz en el dispositivo de Apple). ¿Sin clave? Consíguela gratis en console.deepgram.com."],
+        "dgAlertTitle": ["en": "Deepgram API Key (Optional BYOK)", "es": "Clave de API de Deepgram (BYOK Opcional)"],
+        "dgAlertInfo": ["en": "TalkType uses on-device Apple Speech by default (100% private, zero setup). Optionally add a Deepgram API key for cloud streaming Nova-3 transcription. Free tier available at console.deepgram.com.", "es": "TalkType usa la voz en el dispositivo de Apple por defecto (100% privada, sin configuración). Opcionalmente añade una clave de Deepgram para transcripción Nova-3 en la nube. Nivel gratuito en console.deepgram.com."],
         "save": ["en": "Save", "es": "Guardar"],
         "getKey": ["en": "Get a Deepgram Key…", "es": "Obtener clave de Deepgram…"],
         "cancel": ["en": "Cancel", "es": "Cancelar"],
@@ -139,8 +139,8 @@ enum L10n {
         "polishOutput": ["en": "Polish Output (Gemini)", "es": "Pulir texto (Gemini)"],
         "geminiApiKey": ["en": "Gemini API Key…", "es": "Clave de API de Gemini…"],
         "pasteGeminiKey": ["en": "Paste Gemini API key", "es": "Pegar clave de API de Gemini"],
-        "geminiAlertTitle": ["en": "Gemini API Key", "es": "Clave de API de Gemini"],
-        "geminiAlertInfo": ["en": "Optional. Paste a Gemini API key to polish transcripts into clean prose (leave empty to keep raw text). No key? Get one free at aistudio.google.com.", "es": "Opcional. Pega una clave de API de Gemini para pulir las transcripciones (déjala vacía para conservar el texto original). ¿Sin clave? Consíguela gratis en aistudio.google.com."]
+        "geminiAlertTitle": ["en": "Gemini API Key (Optional BYOK)", "es": "Clave de API de Gemini (BYOK Opcional)"],
+        "geminiAlertInfo": ["en": "TalkType operates completely standalone. Optionally add a Gemini API key to polish transcripts into clean prose. Free keys available at aistudio.google.com.", "es": "TalkType funciona de forma completamente independiente. Opcionalmente añade una clave de Gemini para pulir transcripciones. Claves gratuitas en aistudio.google.com."]
     ]
 }
 
@@ -362,6 +362,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     private var menubarBounceTimer: Timer?
     private var bouncePhase: Double = 0
+    private var menubarBlinkTimer: Timer?
+    private var isBlinking = false
 
     static func main() {
         let app = NSApplication.shared
@@ -379,6 +381,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
             resetMenuBarIcon()
+            startIdleBlinking()
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
             button.action = #selector(statusItemClicked(_:))
             button.target = self
@@ -464,7 +467,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         checkAccessibilityPermissions()
     }
     
-    // MARK: - Menu Bar Icon (Original TalkType Ghost with Smooth Floating Animation)
+    // MARK: - Menu Bar Icon (Living Mascot with Idle Blinking & Listening Bounce)
     func resetMenuBarIcon() {
         guard let button = statusItem.button else { return }
         if let originalGhost = NSImage(named: "ghost-menubar") {
@@ -476,37 +479,103 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             button.title = "👻"
         }
     }
-    
+
+    func startIdleBlinking() {
+        stopIdleBlinking()
+        scheduleNextBlink()
+    }
+
+    func stopIdleBlinking() {
+        menubarBlinkTimer?.invalidate()
+        menubarBlinkTimer = nil
+        isBlinking = false
+    }
+
+    private func scheduleNextBlink() {
+        menubarBlinkTimer?.invalidate()
+        let interval = Double.random(in: 3.5...7.0)
+        menubarBlinkTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
+            self?.performBlink()
+        }
+    }
+
+    private func performBlink() {
+        guard !engine.isRecording && !pttHeld else {
+            scheduleNextBlink()
+            return
+        }
+
+        showBlinkIcon(true)
+
+        // Return to open eyes after 140ms
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.14) { [weak self] in
+            guard let self = self, !self.engine.isRecording else { return }
+            self.showBlinkIcon(false)
+
+            // 25% chance of a quick, playful double-blink
+            if Double.random(in: 0...1) < 0.25 {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
+                    guard let self = self, !self.engine.isRecording else { return }
+                    self.showBlinkIcon(true)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
+                        guard let self = self, !self.engine.isRecording else { return }
+                        self.showBlinkIcon(false)
+                        self.scheduleNextBlink()
+                    }
+                }
+            } else {
+                self.scheduleNextBlink()
+            }
+        }
+    }
+
+    private func showBlinkIcon(_ blinking: Bool) {
+        guard let button = statusItem.button else { return }
+        isBlinking = blinking
+        let imageName = blinking ? "ghost-menubar-blink" : "ghost-menubar"
+        if let img = NSImage(named: imageName) {
+            let icon = img.copy() as! NSImage
+            icon.size = NSSize(width: 18, height: 18)
+            icon.isTemplate = true
+            button.image = icon
+        } else if !blinking {
+            resetMenuBarIcon()
+        }
+    }
+
     func startMenubarBounce() {
+        stopIdleBlinking()
         stopMenubarBounce()
-        guard let originalGhost = NSImage(named: "ghost-menubar") else { return }
+        let ghostImage = NSImage(named: "ghost-menubar-squint") ?? NSImage(named: "ghost-menubar")
+        guard let originalGhost = ghostImage else { return }
         bouncePhase = 0
-        
-        // Silky 30fps harmonic floating sine wave
+
+        // Silky 30fps harmonic floating sine wave with listening eyes
         menubarBounceTimer = Timer.scheduledTimer(withTimeInterval: 0.033, repeats: true) { [weak self] _ in
             guard let self = self, let button = self.statusItem.button else { return }
             self.bouncePhase += 0.16
             let yOffset = sin(self.bouncePhase) * 1.8
-            
+
             let size = NSSize(width: 18, height: 18)
             let bounced = NSImage(size: size)
             bounced.lockFocus()
-            
+
             originalGhost.draw(in: NSRect(x: 0, y: yOffset, width: 18, height: 18),
                                from: .zero,
                                operation: .sourceOver,
                                fraction: 1.0)
-            
+
             bounced.unlockFocus()
             bounced.isTemplate = true
             button.image = bounced
         }
     }
-    
+
     func stopMenubarBounce() {
         menubarBounceTimer?.invalidate()
         menubarBounceTimer = nil
         resetMenuBarIcon()
+        startIdleBlinking()
     }
 
     /// Hold designated shortcut anywhere to dictate; release to paste into whatever has focus.
@@ -801,6 +870,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if let url = URL(string: "https://console.deepgram.com") {
                 NSWorkspace.shared.open(url)
             }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                self?.promptDeepgramKey()
+            }
         default:
             break
         }
@@ -846,8 +918,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 TalkTypeConfig.isPolishing = true
             }
         case .alertSecondButtonReturn:
-            if let url = URL(string: "https://aistudio.google.com") {
+            if let url = URL(string: "https://aistudio.google.com/app/apikey") {
                 NSWorkspace.shared.open(url)
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                self?.promptGeminiKey()
             }
         default:
             break
@@ -1384,6 +1459,13 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
         recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
         guard let recognitionRequest = recognitionRequest else { return }
         recognitionRequest.shouldReportPartialResults = true
+        
+        if #available(macOS 13.0, *) {
+            recognitionRequest.addsPunctuation = true
+        }
+        if speechRecognizer?.supportsOnDeviceRecognition == true {
+            recognitionRequest.requiresOnDeviceRecognition = true
+        }
         
         let inputNode = audioEngine.inputNode
         let recordingFormat = inputNode.outputFormat(forBus: 0)
