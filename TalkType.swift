@@ -84,7 +84,9 @@ enum TranscriptionLanguage: String, CaseIterable {
 
     var deepgramLanguage: String {
         switch self {
-        case .auto: return "multi"
+        case .auto:
+            let isSpanish = Locale.current.identifier.starts(with: "es") || Locale.preferredLanguages.first?.starts(with: "es") == true
+            return isSpanish ? "es" : "en"
         case .en: return "en"
         case .es: return "es"
         }
@@ -1189,17 +1191,23 @@ final class LiveHUDWindowController: NSWindowController {
         let hideBlock = DispatchWorkItem { [weak self, weak window] in
             guard let self = self, let window = window else { return }
             self.isVisibleTarget = false
-            NSAnimationContext.runAnimationGroup({ context in
-                context.duration = 0.12
-                window.animator().alphaValue = 0
-            }, completionHandler: { [weak self] in
-                guard let self = self else { return }
-                if !self.isVisibleTarget {
-                    window.orderOut(nil)
-                    // Release the SwiftUI view; stops repeating animations and drops CPU back to idle.
-                    window.contentView = NSView()
-                }
-            })
+            if delay == 0 {
+                // Instant zero-lag dismissal
+                window.alphaValue = 0
+                window.orderOut(nil)
+                window.contentView = NSView()
+            } else {
+                NSAnimationContext.runAnimationGroup({ context in
+                    context.duration = 0.08
+                    window.animator().alphaValue = 0
+                }, completionHandler: { [weak self] in
+                    guard let self = self else { return }
+                    if !self.isVisibleTarget {
+                        window.orderOut(nil)
+                        window.contentView = NSView()
+                    }
+                })
+            }
         }
         
         self.pendingHideItem = hideBlock
@@ -1587,7 +1595,7 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
         let closeData = Data()
         webSocketTask?.send(.data(closeData)) { _ in }
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
             guard let self = self else { return }
             self.webSocketTask?.cancel(with: .normalClosure, reason: nil)
             self.webSocketTask = nil
