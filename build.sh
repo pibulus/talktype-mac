@@ -157,6 +157,12 @@ else
             
     rm -rf "${DMG_STAGE}"
 
+    # Sign the DMG disk image container
+    if [ -n "${IDENTITY}" ]; then
+        codesign --force --sign "${IDENTITY}" --timestamp "${DIST_DIR}/${APP_NAME}-${VERSION}.dmg"
+        echo "🔏 Signed DMG container with Developer ID: ${IDENTITY}"
+    fi
+
     # 6. Notarize & staple (direct distribution). Gracefully skipped without a profile.
     NOTARY_PROFILE="${NOTARY_PROFILE:-talktype-notary}"
     DMG_PATH="${DIST_DIR}/${APP_NAME}-${VERSION}.dmg"

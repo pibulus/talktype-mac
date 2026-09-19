@@ -1,0 +1,34 @@
+# Minimal repo-local launch hints for Launch Arsenal.
+# Pin the parts inference gets wrong most often.
+
+name: TalkType for Mac
+slug: talktype-mac
+app_type: mac-app
+audience: writers, ADHD thinkers, creators, and anyone who talks faster than they type
+problem: subscription-trapped transcription tools that upload private voice audio to distant cloud servers
+promise: instant on-device dictation and transcription with a friendly pastel-punk ghost mascot
+cta: Download TalkType for Mac at https://talktype.app
+
+differentiators:
+  - Runs 100% on-device using Apple speech recognition — zero audio leaves your Mac
+  - No subscription, no login wall, no account required
+  - Global Push-to-Talk shortcut inserts clean text right into whatever app you are typing in
+  - Friendly peach ghost mascot with personality, live floating HUD, and clipboard fallback
+
+proof_points:
+  - Single-binary native Swift app with zero bloat
+  - Offline mode requires no API keys and no internet connection
+  - Hardened runtime signed with Developer ID
+
+keywords:
+  seed:
+    - voice to text mac
+    - offline dictation mac
+    - push to talk dictation mac
+    - privacy voice recognition
+    - talktype mac
+  audience: mac productivity writers ADHD thinkers
+
+manual_notes:
+  - Lean into: cute pink ghost, zero telemetry, instant push-to-talk, one-time purchase, weaponized simplicity
+  - Avoid: enterprise SaaS jargon, recurring monthly subscriptions
