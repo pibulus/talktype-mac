@@ -140,7 +140,11 @@ enum L10n {
         "geminiApiKey": ["en": "Gemini API Key…", "es": "Clave de API de Gemini…"],
         "pasteGeminiKey": ["en": "Paste Gemini API key", "es": "Pegar clave de API de Gemini"],
         "geminiAlertTitle": ["en": "Gemini API Key (Optional BYOK)", "es": "Clave de API de Gemini (BYOK Opcional)"],
-        "geminiAlertInfo": ["en": "TalkType operates completely standalone. Optionally add a Gemini API key to polish transcripts into clean prose. Free keys available at aistudio.google.com.", "es": "TalkType funciona de forma completamente independiente. Opcionalmente añade una clave de Gemini para pulir transcripciones. Claves gratuitas en aistudio.google.com."]
+        "geminiAlertInfo": ["en": "TalkType operates completely standalone. Optionally add a Gemini API key to polish transcripts into clean prose. Free keys available at aistudio.google.com.", "es": "TalkType funciona de forma completamente independiente. Opcionalmente añade una clave de Gemini para pulir transcripciones. Claves gratuitas en aistudio.google.com."],
+        "customKeywords": ["en": "Custom Vocabulary…", "es": "Vocabulario personalizado…"],
+        "keywordsAlertTitle": ["en": "Custom Vocabulary & Keywords", "es": "Vocabulario y palabras clave"],
+        "keywordsAlertInfo": ["en": "Add words or names speech recognition should prioritize (comma-separated, e.g. TalkType, pibulus, NoteBro). You can also use 'wrong -> right' rules (e.g. doctype -> TalkType).", "es": "Añade palabras que el reconocimiento de voz deba priorizar (separadas por comas, ej. TalkType, pibulus). También puedes usar reglas 'error -> corrección'."],
+        "delete": ["en": "Delete", "es": "Eliminar"]
     ]
 }
 
@@ -153,6 +157,7 @@ enum TalkTypeConfig {
     static let historyStorageKey = "talktypeHistory"
     static let pttTriggerStorageKey = "talktypePttTrigger"
     static let languageStorageKey = "talktypeLanguage"
+    static let customKeywordsStorageKey = "talktypeCustomKeywords"
 
     // Keychain location for the Deepgram API key.
     static let keychainService = "com.pibulus.talktype"
@@ -207,6 +212,96 @@ enum TalkTypeConfig {
         set {
             UserDefaults.standard.set(newValue.rawValue, forKey: languageStorageKey)
         }
+    }
+}
+
+// MARK: - Vocabulary & Custom Keywords Normalizer
+enum VocabularyManager {
+    static var userKeywordsString: String {
+        get { UserDefaults.standard.string(forKey: TalkTypeConfig.customKeywordsStorageKey) ?? "" }
+        set { UserDefaults.standard.set(newValue, forKey: TalkTypeConfig.customKeywordsStorageKey) }
+    }
+
+    /// Contextual speech strings to hint recognition engines
+    static var contextualHints: [String] {
+        var hints = ["TalkType", "pibulus"]
+        let userEntries = userKeywordsString
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        for entry in userEntries {
+            if entry.contains("->") {
+                let parts = entry.components(separatedBy: "->")
+                if parts.count == 2 {
+                    let target = parts[1].trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !target.isEmpty && !hints.contains(target) {
+                        hints.append(target)
+                    }
+                }
+            } else if !hints.contains(entry) {
+                hints.append(entry)
+            }
+        }
+        return hints
+    }
+
+    /// Deepgram keywords query parameter (e.g. &keywords=TalkType:2)
+    static var deepgramKeywordsParam: String {
+        let hints = contextualHints
+        guard !hints.isEmpty else { return "" }
+        let params = hints.compactMap { hint -> String? in
+            guard let enc = hint.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { return nil }
+            return "keywords=\(enc):2"
+        }.joined(separator: "&")
+        return params.isEmpty ? "" : "&" + params
+    }
+
+    /// Clean transcripts to fix common misrecognitions & apply user keyword rules
+    static func clean(_ input: String) -> String {
+        guard !input.isEmpty else { return input }
+        var output = input
+
+        // 1. Built-in TalkType phonetic fixes (word boundaries, case-insensitive)
+        let builtInRules: [(pattern: String, replacement: String)] = [
+            ("(?i)\\bdoc\\s*types?\\b", "TalkType"),
+            ("(?i)\\bdoctype\\b", "TalkType"),
+            ("(?i)\\bdock\\s*types?\\b", "TalkType"),
+            ("(?i)\\btalk\\s*type\\b", "TalkType"),
+            ("(?i)\\btalktype\\b", "TalkType"),
+            ("(?i)\\btalk\\s*tight\\b", "TalkType")
+        ]
+
+        for rule in builtInRules {
+            if let regex = try? NSRegularExpression(pattern: rule.pattern, options: []) {
+                let range = NSRange(output.startIndex..<output.endIndex, in: output)
+                output = regex.stringByReplacingMatches(in: output, options: [], range: range, withTemplate: rule.replacement)
+            }
+        }
+
+        // 2. User-defined rules: "wrong -> right"
+        let userEntries = userKeywordsString
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        for entry in userEntries {
+            if entry.contains("->") {
+                let parts = entry.components(separatedBy: "->")
+                if parts.count == 2 {
+                    let wrong = parts[0].trimmingCharacters(in: .whitespacesAndNewlines)
+                    let right = parts[1].trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !wrong.isEmpty && !right.isEmpty {
+                        let escaped = NSRegularExpression.escapedPattern(for: wrong)
+                        if let regex = try? NSRegularExpression(pattern: "(?i)\\b\(escaped)\\b", options: []) {
+                            let range = NSRange(output.startIndex..<output.endIndex, in: output)
+                            output = regex.stringByReplacingMatches(in: output, options: [], range: range, withTemplate: right)
+                        }
+                    }
+                }
+            }
+        }
+
+        return output
     }
 }
 
@@ -318,12 +413,24 @@ class HistoryStore: ObservableObject {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         
-        let record = TranscriptRecord(text: trimmed, engine: engine)
         DispatchQueue.main.async {
+            // Deduplicate if identical to the most recent record
+            if let last = self.records.first, last.text == trimmed {
+                return
+            }
+
+            let record = TranscriptRecord(text: trimmed, engine: engine)
             self.records.insert(record, at: 0)
             if self.records.count > 50 {
                 self.records = Array(self.records.prefix(50))
             }
+            self.save()
+        }
+    }
+
+    func delete(id: UUID) {
+        DispatchQueue.main.async {
+            self.records.removeAll { $0.id == id }
             self.save()
         }
     }
@@ -355,6 +462,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     let engine = SpeechEngine()
     let history = HistoryStore.shared
     private var liveHUDController: LiveHUDWindowController?
+    private var dictationTargetApp: NSRunningApplication?
 
     private var pttMonitors: [Any] = []
     private var pttHeld = false
@@ -401,52 +509,38 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         liveHUDController = LiveHUDWindowController(speechEngine: engine)
 
         // Setup paste & history hook
-        engine.onFinal = { [weak self] text in
+        engine.onFinal = { [weak self] rawText in
             guard let self = self else { return }
+            let text = VocabularyManager.clean(rawText.trimmingCharacters(in: .whitespacesAndNewlines))
             let engineName = TalkTypeConfig.isUsingDeepgram ? "Nova-3" : "Apple"
-            if !text.isEmpty {
-                self.history.add(text: text, engine: engineName)
-            }
             
             self.pasteWatchdogItem?.cancel()
             self.pasteWatchdogItem = nil
             
-            guard self.pendingPaste else { return }
+            guard self.pendingPaste else {
+                if !self.engine.isRecording {
+                    self.liveHUDController?.hide()
+                }
+                return
+            }
             self.pendingPaste = false
             self.stopMenubarBounce()
+            
             guard !text.isEmpty else {
                 self.liveHUDController?.hide()
                 return
             }
             
-            let deliver = { (finalText: String) in
-                let pasteboard = NSPasteboard.general
-                pasteboard.clearContents()
-                pasteboard.setString(finalText, forType: .string)
-                
-                #if MAS_BUILD
-                // Sandboxed App Store build: no Accessibility/auto-paste. Clipboard only.
-                self.engine.transcript = L10n.t("copiedToClipboard")
-                self.liveHUDController?.hide(after: 0.6)
-                #else
-                if AXIsProcessTrusted() {
-                    self.liveHUDController?.hide()
-                    self.pasteToActiveApp(text: finalText)
-                } else {
-                    // Clipboard fallback with explicit visual feedback
-                    self.engine.transcript = L10n.t("copiedToClipboard")
-                    self.liveHUDController?.hide(after: 0.6)
-                }
-                #endif
-            }
+            self.history.add(text: text, engine: engineName)
             
             if TalkTypeConfig.isPolishing && !TalkTypeConfig.geminiApiKey.isEmpty {
                 self.engine.transcript = L10n.t("polishing")
                 Polisher.polish(text) { polished in
-                    deliver(polished)
+                    let cleanedPolished = VocabularyManager.clean(polished)
+                    self.deliver(text: cleanedPolished)
                 }
             } else {
-                deliver(text)
+                self.deliver(text: text)
             }
         }
         
@@ -562,38 +656,53 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         if down, !pttHeld {
             pttHeld = true
+            dictationTargetApp = NSWorkspace.shared.frontmostApplication
             liveHUDController?.show()
             engine.startRecording()
         } else if !down, pttHeld {
             pttHeld = false
-            let currentText = engine.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-            if currentText.isEmpty {
-                // Key released with no speech: hide IMMEDIATELY with 0ms latency, no lingering!
-                pendingPaste = false
-                pasteWatchdogItem?.cancel()
-                pasteWatchdogItem = nil
-                engine.stopRecording()
-                liveHUDController?.hide()
-            } else {
-                pendingPaste = true
-                engine.stopRecording()
-                
-                // Safety watchdog: gives engine up to 1.4s to deliver final transcript.
-                // If it hangs or times out, safely delivers current buffer and dismisses HUD!
-                pasteWatchdogItem?.cancel()
-                let watchdog = DispatchWorkItem { [weak self] in
-                    guard let self = self, self.pendingPaste else { return }
-                    self.pendingPaste = false
-                    let fallbackText = self.engine.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !fallbackText.isEmpty {
-                        self.pasteToActiveApp(text: fallbackText)
-                    }
+            pendingPaste = true
+            engine.stopRecording()
+            
+            // Safety watchdog (1.5s): gives engine time to deliver final transcript.
+            // If it hangs or times out, safely delivers current buffer and dismisses HUD!
+            pasteWatchdogItem?.cancel()
+            let watchdog = DispatchWorkItem { [weak self] in
+                guard let self = self, self.pendingPaste else { return }
+                self.pendingPaste = false
+                self.stopMenubarBounce()
+                let fallbackText = VocabularyManager.clean(self.engine.transcript.trimmingCharacters(in: .whitespacesAndNewlines))
+                if !fallbackText.isEmpty {
+                    self.history.add(text: fallbackText, engine: TalkTypeConfig.isUsingDeepgram ? "Nova-3" : "Apple")
+                    self.deliver(text: fallbackText)
+                } else {
                     self.liveHUDController?.hide()
                 }
-                self.pasteWatchdogItem = watchdog
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.4, execute: watchdog)
             }
+            self.pasteWatchdogItem = watchdog
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: watchdog)
         }
+    }
+
+    private func deliver(text: String) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+        
+        #if MAS_BUILD
+        // Sandboxed App Store build: no Accessibility/auto-paste. Clipboard only.
+        self.engine.transcript = L10n.t("copiedToClipboard")
+        self.liveHUDController?.hide(after: 0.6)
+        #else
+        if AXIsProcessTrusted() {
+            self.liveHUDController?.hide()
+            self.pasteToActiveApp(text: text)
+        } else {
+            // Clipboard fallback with explicit visual feedback
+            self.engine.transcript = L10n.t("copiedToClipboard")
+            self.liveHUDController?.hide(after: 0.6)
+        }
+        #endif
     }
 
     func requestPaste() {
@@ -753,6 +862,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         polishItem.target = self
         polishItem.state = TalkTypeConfig.isPolishing ? .on : .off
         menu.addItem(polishItem)
+        
+        let vocabItem = NSMenuItem(title: L10n.t("customKeywords"), action: #selector(promptCustomKeywords), keyEquivalent: "")
+        vocabItem.target = self
+        menu.addItem(vocabItem)
         
         menu.addItem(NSMenuItem.separator())
         
@@ -921,6 +1034,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    @objc func promptCustomKeywords() {
+        let alert = NSAlert()
+        alert.messageText = L10n.t("keywordsAlertTitle")
+        alert.informativeText = L10n.t("keywordsAlertInfo")
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: L10n.t("save"))
+        alert.addButton(withTitle: L10n.t("cancel"))
+
+        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 320, height: 48))
+        input.stringValue = VocabularyManager.userKeywordsString
+        input.placeholderString = "TalkType, pibulus, doctype -> TalkType"
+        alert.accessoryView = input
+
+        let response = alert.runModal()
+        if response == .alertFirstButtonReturn {
+            let val = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            VocabularyManager.userKeywordsString = val
+        }
+    }
+
     @objc func togglePopover(_ sender: AnyObject?) {
         if popover.isShown {
             popover.performClose(sender)
@@ -935,6 +1068,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     // Simulates Cmd+V to paste into the active app
     func pasteToActiveApp(text: String) {
+        let targetApp = self.dictationTargetApp
+        self.dictationTargetApp = nil
+
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
@@ -944,9 +1080,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             popover.performClose(nil)
         }
         
-        // If popover was shown, allow 150ms for frontmost app to regain key window focus.
-        // If triggered via Push-to-Talk HUD, target app already has focus; 50ms ensures pasteboard propagation.
-        let delay: TimeInterval = wasPopoverShown ? 0.15 : 0.05
+        // If an interfering window (e.g. expression script or system modal) stole focus,
+        // reactivate the original target application before simulating Cmd+V.
+        if let target = targetApp, target.processIdentifier != NSRunningApplication.current.processIdentifier {
+            target.activate(options: [.activateIgnoringOtherApps])
+        }
+        
+        // Allow time for target app to gain focus and pasteboard propagation
+        let delay: TimeInterval = (wasPopoverShown || targetApp != nil) ? 0.12 : 0.05
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
             let src = CGEventSource(stateID: .hidSystemState)
             let vKeyCode: CGKeyCode = 9 // 'v' key
@@ -1313,8 +1454,9 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
     // MARK: - Deepgram WebSocket Streaming
     private func startDeepgramStreaming() {
         let apiKey = TalkTypeConfig.deepgramApiKey
+        let keywordsParam = VocabularyManager.deepgramKeywordsParam
         guard !apiKey.isEmpty,
-              let url = URL(string: "wss://api.deepgram.com/v1/listen?model=nova-3&smart_format=true&interim_results=true&encoding=linear16&sample_rate=16000&channels=1&language=\(TalkTypeConfig.language.deepgramLanguage)") else {
+              let url = URL(string: "wss://api.deepgram.com/v1/listen?model=nova-3&smart_format=true&interim_results=true&encoding=linear16&sample_rate=16000&channels=1&language=\(TalkTypeConfig.language.deepgramLanguage)\(keywordsParam)") else {
             startAppleSpeechRecognition()
             return
         }
@@ -1419,7 +1561,7 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
               let chunk = firstAlt["transcript"] as? String else { return }
         
         let isFinal = (json["is_final"] as? Bool) ?? false
-        let trimmedChunk = chunk.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedChunk = VocabularyManager.clean(chunk.trimmingCharacters(in: .whitespacesAndNewlines))
         
         DispatchQueue.main.async {
             if isFinal && !trimmedChunk.isEmpty {
@@ -1461,6 +1603,7 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
         recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
         guard let recognitionRequest = recognitionRequest else { return }
         recognitionRequest.shouldReportPartialResults = true
+        recognitionRequest.contextualStrings = VocabularyManager.contextualHints
         
         if #available(macOS 13.0, *) {
             recognitionRequest.addsPunctuation = true
@@ -1490,8 +1633,9 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
                 guard let self = self else { return }
                 var isFinal = false
                 if let result = result {
+                    let cleaned = VocabularyManager.clean(result.bestTranscription.formattedString)
                     DispatchQueue.main.async {
-                        self.transcript = result.bestTranscription.formattedString
+                        self.transcript = cleaned
                     }
                     isFinal = result.isFinal
                 }
@@ -1869,27 +2013,45 @@ struct ContentView: View {
                                     
                                     Spacer()
                                     
-                                    Button(action: {
-                                        let pb = NSPasteboard.general
-                                        pb.clearContents()
-                                        pb.setString(record.text, forType: .string)
-                                        copiedId = record.id
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                                            if copiedId == record.id { copiedId = nil }
+                                    HStack(spacing: 5) {
+                                        Button(action: {
+                                            let pb = NSPasteboard.general
+                                            pb.clearContents()
+                                            pb.setString(record.text, forType: .string)
+                                            copiedId = record.id
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                                                if copiedId == record.id { copiedId = nil }
+                                            }
+                                        }) {
+                                            HStack(spacing: 3) {
+                                                Image(systemName: copiedId == record.id ? "checkmark" : "doc.on.doc")
+                                                Text(copiedId == record.id ? L10n.t("copied") : L10n.t("copy"))
+                                            }
+                                            .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 3)
+                                            .background(copiedId == record.id ? TT.pink.opacity(0.2) : p.border.opacity(0.12))
+                                            .foregroundStyle(copiedId == record.id ? TT.pink : p.inkSoft)
+                                            .clipShape(Capsule())
                                         }
-                                    }) {
-                                        HStack(spacing: 3) {
-                                            Image(systemName: copiedId == record.id ? "checkmark" : "doc.on.doc")
-                                            Text(copiedId == record.id ? L10n.t("copied") : L10n.t("copy"))
+                                        .buttonStyle(.plain)
+
+                                        Button(action: {
+                                            withAnimation(.easeOut(duration: 0.2)) {
+                                                history.delete(id: record.id)
+                                            }
+                                        }) {
+                                            Image(systemName: "trash")
+                                                .font(.system(size: 9, weight: .semibold))
+                                                .padding(.horizontal, 6)
+                                                .padding(.vertical, 3.5)
+                                                .background(p.border.opacity(0.10))
+                                                .foregroundStyle(p.inkSoft.opacity(0.55))
+                                                .clipShape(Capsule())
                                         }
-                                        .font(.system(size: 10, weight: .semibold, design: .rounded))
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 3)
-                                        .background(copiedId == record.id ? TT.pink.opacity(0.2) : p.border.opacity(0.12))
-                                        .foregroundStyle(copiedId == record.id ? TT.pink : p.inkSoft)
-                                        .clipShape(Capsule())
+                                        .buttonStyle(.plain)
+                                        .help(L10n.t("delete"))
                                     }
-                                    .buttonStyle(.plain)
                                 }
                                 
                                 Text(record.text)
