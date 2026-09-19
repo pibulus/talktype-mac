@@ -74,7 +74,11 @@ enum TranscriptionLanguage: String, CaseIterable {
         switch self {
         case .auto: return Locale.current
         case .en: return Locale(identifier: "en-US")
-        case .es: return Locale(identifier: "es-ES")
+        case .es:
+            if Locale.current.identifier.starts(with: "es") {
+                return Locale.current
+            }
+            return Locale(identifier: "es-ES")
         }
     }
 
@@ -90,7 +94,8 @@ enum TranscriptionLanguage: String, CaseIterable {
 // MARK: - Localization
 enum L10n {
     static func t(_ key: String) -> String {
-        let lang = TalkTypeConfig.language == .es ? "es" : "en"
+        let isSpanish = TalkTypeConfig.language == .es || (TalkTypeConfig.language == .auto && (Locale.current.identifier.starts(with: "es") || Locale.preferredLanguages.first?.starts(with: "es") == true))
+        let lang = isSpanish ? "es" : "en"
         return strings[key]?[lang] ?? strings[key]?["en"] ?? key
     }
 
@@ -416,9 +421,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 #if MAS_BUILD
                 // Sandboxed App Store build: no Accessibility/auto-paste. Clipboard only.
                 self.engine.transcript = L10n.t("copiedToClipboard")
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
-                    self?.liveHUDController?.hide()
-                }
+                self.liveHUDController?.hide(after: 1.2)
                 #else
                 if AXIsProcessTrusted() {
                     self.liveHUDController?.hide()
@@ -426,9 +429,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 } else {
                     // Clipboard fallback with explicit visual feedback
                     self.engine.transcript = L10n.t("copiedToClipboard")
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
-                        self?.liveHUDController?.hide()
-                    }
+                    self.liveHUDController?.hide(after: 1.2)
                 }
                 #endif
             }
@@ -525,6 +526,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         if down, !pttHeld {
             pttHeld = true
+            liveHUDController?.show()
             engine.startRecording()
         } else if !down, pttHeld {
             pttHeld = false
@@ -895,10 +897,13 @@ final class LiveHUDWindowController: NSWindowController {
     let size = NSSize(width: 580, height: 76)
     private var isVisibleTarget = false
     private let speechEngine: SpeechEngine
+    private var pendingHideItem: DispatchWorkItem?
 
     init(speechEngine: SpeechEngine) {
         self.speechEngine = speechEngine
-        let screen = NSScreen.screens.first(where: { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) }) ?? NSScreen.main ?? NSScreen.screens.first
+        let mouseLoc = NSEvent.mouseLocation
+        let screenWithMouse = NSScreen.screens.first(where: { NSMouseInRect(mouseLoc, $0.frame, false) })
+        let screen = screenWithMouse ?? NSScreen.main ?? NSScreen.screens.first
         let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1280, height: 800)
         let isTop = TalkTypeConfig.hudPosition == "top"
         let y = isTop ? (screenFrame.maxY - size.height - 32) : (screenFrame.minY + 68)
@@ -921,10 +926,6 @@ final class LiveHUDWindowController: NSWindowController {
         window.hidesOnDeactivate = false
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         window.isReleasedWhenClosed = false
-        // Content is built in show() and torn down in hide(). The HUD's
-        // .repeatForever animations keep CoreAnimation committing frames for
-        // as long as the view exists — orderOut() does not stop them — so a
-        // view built here would spin ~50% of a core from launch, forever.
 
         super.init(window: window)
     }
@@ -935,7 +936,9 @@ final class LiveHUDWindowController: NSWindowController {
     
     func updatePosition() {
         guard let window = self.window else { return }
-        let screen = NSScreen.screens.first(where: { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) }) ?? NSScreen.main ?? NSScreen.screens.first
+        let mouseLoc = NSEvent.mouseLocation
+        let screenWithMouse = NSScreen.screens.first(where: { NSMouseInRect(mouseLoc, $0.frame, false) })
+        let screen = screenWithMouse ?? NSScreen.main ?? NSScreen.screens.first
         let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1280, height: 800)
         let isTop = TalkTypeConfig.hudPosition == "top"
         let y = isTop ? (screenFrame.maxY - size.height - 32) : (screenFrame.minY + 68)
@@ -945,6 +948,10 @@ final class LiveHUDWindowController: NSWindowController {
     
     func show() {
         guard let window = self.window else { return }
+        // 1. Cancel any pending delayed hide from a prior recording session
+        pendingHideItem?.cancel()
+        pendingHideItem = nil
+
         isVisibleTarget = true
         if !(window.contentView is NSHostingView<LiveTranscriptHUDView>) {
             window.contentView = NSHostingView(
@@ -952,27 +959,41 @@ final class LiveHUDWindowController: NSWindowController {
         }
         updatePosition()
         window.orderFrontRegardless()
+        
+        // 2. Immediately ensure full opacity without getting stuck at alpha 0
         NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.14
+            context.duration = 0.12
             window.animator().alphaValue = 1.0
         }
     }
     
-    func hide() {
+    func hide(after delay: TimeInterval = 0) {
         guard let window = self.window else { return }
-        isVisibleTarget = false
-        NSAnimationContext.runAnimationGroup({ context in
-            context.duration = 0.18
-            window.animator().alphaValue = 0
-        }, completionHandler: { [weak self] in
-            guard let self = self else { return }
-            if !self.isVisibleTarget {
-                window.orderOut(nil)
-                // Release the SwiftUI view; that is what actually stops the
-                // repeating animations and drops CPU back to idle.
-                window.contentView = NSView()
-            }
-        })
+        pendingHideItem?.cancel()
+        
+        let hideBlock = DispatchWorkItem { [weak self, weak window] in
+            guard let self = self, let window = window else { return }
+            self.isVisibleTarget = false
+            NSAnimationContext.runAnimationGroup({ context in
+                context.duration = 0.18
+                window.animator().alphaValue = 0
+            }, completionHandler: { [weak self] in
+                guard let self = self else { return }
+                if !self.isVisibleTarget {
+                    window.orderOut(nil)
+                    // Release the SwiftUI view; that is what actually stops the
+                    // repeating animations and drops CPU back to idle.
+                    window.contentView = NSView()
+                }
+            })
+        }
+        
+        self.pendingHideItem = hideBlock
+        if delay > 0 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: hideBlock)
+        } else {
+            hideBlock.perform()
+        }
     }
 }
 
@@ -1574,6 +1595,7 @@ struct ContentView: View {
     @State private var breathing = false
     @State private var selectedTab: Int = 0 // 0: Dictate, 1: History
     @State private var copiedId: UUID? = nil
+    @State private var liveCopied: Bool = false
     var appDelegate: AppDelegate
 
     private var p: Palette { scheme == .dark ? .dark : .light }
@@ -1648,15 +1670,49 @@ struct ContentView: View {
     }
 
     private var transcriptCard: some View {
-        ScrollView {
-            Text(speechEngine.transcript.isEmpty
-                 ? L10n.t("holdGhost")
-                 : speechEngine.transcript)
-                .font(.system(size: 14, weight: .medium, design: .monospaced))
-                .lineSpacing(3)
-                .foregroundStyle(speechEngine.transcript.isEmpty ? p.inkSoft.opacity(0.55) : p.ink)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(14)
+        ZStack(alignment: .topTrailing) {
+            ScrollView {
+                Text(speechEngine.transcript.isEmpty
+                     ? L10n.t("holdGhost")
+                     : speechEngine.transcript)
+                    .font(.system(size: 14, weight: .medium, design: .monospaced))
+                    .lineSpacing(3)
+                    .foregroundStyle(speechEngine.transcript.isEmpty ? p.inkSoft.opacity(0.55) : p.ink)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(14)
+                    .padding(.trailing, speechEngine.transcript.isEmpty ? 0 : 56)
+            }
+
+            if !speechEngine.transcript.isEmpty {
+                Button(action: {
+                    let pb = NSPasteboard.general
+                    pb.clearContents()
+                    pb.setString(speechEngine.transcript, forType: .string)
+                    liveCopied = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        liveCopied = false
+                    }
+                }) {
+                    HStack(spacing: 3) {
+                        Image(systemName: liveCopied ? "checkmark" : "doc.on.doc")
+                            .font(.system(size: 9.5, weight: .bold))
+                        Text(liveCopied ? L10n.t("copied") : L10n.t("copy"))
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(liveCopied ? TT.pink.opacity(0.22) : p.border.opacity(0.12))
+                    .foregroundStyle(liveCopied ? TT.pink : p.inkSoft)
+                    .clipShape(Capsule())
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(liveCopied ? TT.pink.opacity(0.5) : p.border.opacity(0.25), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+                .padding(9)
+                .transition(.opacity)
+            }
         }
         .frame(height: 142)
         .background(p.card)
