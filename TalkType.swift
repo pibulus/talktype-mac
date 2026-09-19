@@ -245,13 +245,13 @@ enum VocabularyManager {
         return hints
     }
 
-    /// Deepgram keywords query parameter (e.g. &keywords=TalkType:2)
+    /// Deepgram keyterm query parameter for Nova-3 (e.g. &keyterm=TalkType)
     static var deepgramKeywordsParam: String {
         let hints = contextualHints
         guard !hints.isEmpty else { return "" }
         let params = hints.compactMap { hint -> String? in
             guard let enc = hint.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { return nil }
-            return "keywords=\(enc):2"
+            return "keyterm=\(enc)"
         }.joined(separator: "&")
         return params.isEmpty ? "" : "&" + params
     }
@@ -1539,7 +1539,8 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
                 }
                 self.listenWebSocket()
                 
-            case .failure:
+            case .failure(let error):
+                NSLog("⚠️ TalkType Deepgram WebSocket error: %@", error.localizedDescription)
                 // If Deepgram WebSocket fails mid-recording, seamlessly fallback
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self, self.isRecording else { return }
