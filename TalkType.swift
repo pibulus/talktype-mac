@@ -361,9 +361,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var pendingPaste = false
     
     private var menubarBounceTimer: Timer?
+    private var menubarActiveBlinkTimer: Timer?
     private var bouncePhase: Double = 0
-    private var menubarBlinkTimer: Timer?
-    private var isBlinking = false
+    private var isRecordingBlink = false
 
     static func main() {
         let app = NSApplication.shared
@@ -381,7 +381,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
             resetMenuBarIcon()
-            startIdleBlinking()
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
             button.action = #selector(statusItemClicked(_:))
             button.target = self
@@ -424,7 +423,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 #if MAS_BUILD
                 // Sandboxed App Store build: no Accessibility/auto-paste. Clipboard only.
                 self.engine.transcript = L10n.t("copiedToClipboard")
-                self.liveHUDController?.hide(after: 1.2)
+                self.liveHUDController?.hide(after: 0.6)
                 #else
                 if AXIsProcessTrusted() {
                     self.liveHUDController?.hide()
@@ -432,7 +431,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 } else {
                     // Clipboard fallback with explicit visual feedback
                     self.engine.transcript = L10n.t("copiedToClipboard")
-                    self.liveHUDController?.hide(after: 1.2)
+                    self.liveHUDController?.hide(after: 0.6)
                 }
                 #endif
             }
@@ -467,7 +466,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         checkAccessibilityPermissions()
     }
     
-    // MARK: - Menu Bar Icon (Living Mascot with Idle Blinking & Listening Bounce)
+    // MARK: - Menu Bar Icon (Serene When Idle, Living & Blinking While Dictating)
     func resetMenuBarIcon() {
         guard let button = statusItem.button else { return }
         if let originalGhost = NSImage(named: "ghost-menubar") {
@@ -480,102 +479,66 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    func startIdleBlinking() {
-        stopIdleBlinking()
-        scheduleNextBlink()
-    }
-
-    func stopIdleBlinking() {
-        menubarBlinkTimer?.invalidate()
-        menubarBlinkTimer = nil
-        isBlinking = false
-    }
-
-    private func scheduleNextBlink() {
-        menubarBlinkTimer?.invalidate()
-        let interval = Double.random(in: 3.5...7.0)
-        menubarBlinkTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
-            self?.performBlink()
-        }
-    }
-
-    private func performBlink() {
-        guard !engine.isRecording && !pttHeld else {
-            scheduleNextBlink()
-            return
-        }
-
-        showBlinkIcon(true)
-
-        // Return to open eyes after 140ms
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.14) { [weak self] in
-            guard let self = self, !self.engine.isRecording else { return }
-            self.showBlinkIcon(false)
-
-            // 25% chance of a quick, playful double-blink
-            if Double.random(in: 0...1) < 0.25 {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
-                    guard let self = self, !self.engine.isRecording else { return }
-                    self.showBlinkIcon(true)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
-                        guard let self = self, !self.engine.isRecording else { return }
-                        self.showBlinkIcon(false)
-                        self.scheduleNextBlink()
-                    }
-                }
-            } else {
-                self.scheduleNextBlink()
-            }
-        }
-    }
-
-    private func showBlinkIcon(_ blinking: Bool) {
-        guard let button = statusItem.button else { return }
-        isBlinking = blinking
-        let imageName = blinking ? "ghost-menubar-blink" : "ghost-menubar"
-        if let img = NSImage(named: imageName) {
-            let icon = img.copy() as! NSImage
-            icon.size = NSSize(width: 18, height: 18)
-            icon.isTemplate = true
-            button.image = icon
-        } else if !blinking {
-            resetMenuBarIcon()
-        }
-    }
-
     func startMenubarBounce() {
-        stopIdleBlinking()
         stopMenubarBounce()
-        let ghostImage = NSImage(named: "ghost-menubar-squint") ?? NSImage(named: "ghost-menubar")
-        guard let originalGhost = ghostImage else { return }
-        bouncePhase = 0
+        guard let normalGhost = NSImage(named: "ghost-menubar") else { return }
+        let blinkGhost = NSImage(named: "ghost-menubar-squint") ?? (NSImage(named: "ghost-menubar-blink") ?? normalGhost)
 
-        // Silky 30fps harmonic floating sine wave with listening eyes
+        bouncePhase = 0
+        isRecordingBlink = false
+
+        // Silky 30fps harmonic floating sine wave
         menubarBounceTimer = Timer.scheduledTimer(withTimeInterval: 0.033, repeats: true) { [weak self] _ in
             guard let self = self, let button = self.statusItem.button else { return }
             self.bouncePhase += 0.16
             let yOffset = sin(self.bouncePhase) * 1.8
 
+            // Use squint/blink eyes during active blink; otherwise open eyes!
+            let activeGhost = self.isRecordingBlink ? blinkGhost : normalGhost
+
             let size = NSSize(width: 18, height: 18)
             let bounced = NSImage(size: size)
             bounced.lockFocus()
 
-            originalGhost.draw(in: NSRect(x: 0, y: yOffset, width: 18, height: 18),
-                               from: .zero,
-                               operation: .sourceOver,
-                               fraction: 1.0)
+            activeGhost.draw(in: NSRect(x: 0, y: yOffset, width: 18, height: 18),
+                             from: .zero,
+                             operation: .sourceOver,
+                             fraction: 1.0)
 
             bounced.unlockFocus()
             bounced.isTemplate = true
             button.image = bounced
+        }
+
+        // Active blink while dictating: blinks every 1.6 - 2.4s while talking
+        scheduleActiveBlink()
+    }
+
+    private func scheduleActiveBlink() {
+        menubarActiveBlinkTimer?.invalidate()
+        let interval = Double.random(in: 1.6...2.4)
+        menubarActiveBlinkTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
+            guard let self = self, self.engine.isRecording || self.pttHeld else { return }
+            self.isRecordingBlink = true
+
+            // Cute 130ms quick blink
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.13) { [weak self] in
+                guard let self = self else { return }
+                self.isRecordingBlink = false
+                if self.engine.isRecording || self.pttHeld {
+                    self.scheduleActiveBlink()
+                }
+            }
         }
     }
 
     func stopMenubarBounce() {
         menubarBounceTimer?.invalidate()
         menubarBounceTimer = nil
+        menubarActiveBlinkTimer?.invalidate()
+        menubarActiveBlinkTimer = nil
+        isRecordingBlink = false
         resetMenuBarIcon()
-        startIdleBlinking()
     }
 
     /// Hold designated shortcut anywhere to dictate; release to paste into whatever has focus.
@@ -599,8 +562,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             engine.startRecording()
         } else if !down, pttHeld {
             pttHeld = false
-            pendingPaste = true
-            engine.stopRecording()
+            let currentText = engine.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+            if currentText.isEmpty {
+                // Key released with no speech: hide IMMEDIATELY with 0ms latency, no lingering!
+                pendingPaste = false
+                engine.stopRecording()
+                liveHUDController?.hide()
+            } else {
+                pendingPaste = true
+                engine.stopRecording()
+                // Safety watchdog: if speech engine doesn't fire onFinal within 0.5s, force paste & hide
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                    guard let self = self, self.pendingPaste else { return }
+                    self.pendingPaste = false
+                    let fallbackText = self.engine.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !fallbackText.isEmpty {
+                        self.pasteToActiveApp(text: fallbackText)
+                    }
+                    self.liveHUDController?.hide()
+                }
+            }
         }
     }
 
@@ -1050,14 +1031,13 @@ final class LiveHUDWindowController: NSWindowController {
             guard let self = self, let window = window else { return }
             self.isVisibleTarget = false
             NSAnimationContext.runAnimationGroup({ context in
-                context.duration = 0.18
+                context.duration = 0.12
                 window.animator().alphaValue = 0
             }, completionHandler: { [weak self] in
                 guard let self = self else { return }
                 if !self.isVisibleTarget {
                     window.orderOut(nil)
-                    // Release the SwiftUI view; that is what actually stops the
-                    // repeating animations and drops CPU back to idle.
+                    // Release the SwiftUI view; stops repeating animations and drops CPU back to idle.
                     window.contentView = NSView()
                 }
             })
@@ -1067,7 +1047,11 @@ final class LiveHUDWindowController: NSWindowController {
         if delay > 0 {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: hideBlock)
         } else {
-            hideBlock.perform()
+            if Thread.isMainThread {
+                hideBlock.perform()
+            } else {
+                DispatchQueue.main.async(execute: hideBlock)
+            }
         }
     }
 }
