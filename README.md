@@ -1,15 +1,16 @@
-# TalkType for Mac
+# TalkType for Mac 👻
 
-Menu-bar dictation with the ghost. Click the ghost (or hold ⌥ Right Option anywhere),
-talk, and the text pastes into whatever app has focus.
+![TalkType for Mac](screenshots/hero-readme.jpg)
+
+Menu-bar dictation with the ghost. Click the ghost (or hold ⌥ Right Option anywhere), talk, and the text pastes straight into whatever app has focus.
 
 Three engines, one ghost:
 
-- **Apple on-device** — free, offline, private. No key, no network.
-- **Deepgram live** — bring your own key for realtime streaming accuracy.
-- **Gemini polish** — optional BYOK pass that rewrites your transcript into clean prose.
+- **Apple on-device** — free, offline, 100% private. No key, zero network.
+- **Deepgram live** — bring your own key for realtime cloud streaming accuracy (Nova-3).
+- **Gemini polish** — optional BYOK pass that cleans dictation into polished prose.
 
-English and Spanish, with auto-detect (Deepgram `multi`) or a manual pick.
+Strictly **English** and **Spanish** — auto-detects your macOS system locale or switch manually in the menu. Zero unwanted language jumping.
 
 ## Build
 

@@ -72,7 +72,12 @@ enum TranscriptionLanguage: String, CaseIterable {
 
     var appleLocale: Locale {
         switch self {
-        case .auto: return Locale.current
+        case .auto:
+            let isSpanish = Locale.current.identifier.starts(with: "es") || Locale.preferredLanguages.first?.starts(with: "es") == true
+            if isSpanish {
+                return Locale.current.identifier.starts(with: "es") ? Locale.current : Locale(identifier: "es-ES")
+            }
+            return Locale(identifier: "en-US")
         case .en: return Locale(identifier: "en-US")
         case .es:
             if Locale.current.identifier.starts(with: "es") {
