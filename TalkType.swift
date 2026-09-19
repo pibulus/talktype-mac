@@ -359,6 +359,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var pttMonitors: [Any] = []
     private var pttHeld = false
     private var pendingPaste = false
+    private var pasteWatchdogItem: DispatchWorkItem?
     
     private var menubarBounceTimer: Timer?
     private var menubarActiveBlinkTimer: Timer?
@@ -406,6 +407,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if !text.isEmpty {
                 self.history.add(text: text, engine: engineName)
             }
+            
+            self.pasteWatchdogItem?.cancel()
+            self.pasteWatchdogItem = nil
             
             guard self.pendingPaste else { return }
             self.pendingPaste = false
@@ -566,13 +570,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if currentText.isEmpty {
                 // Key released with no speech: hide IMMEDIATELY with 0ms latency, no lingering!
                 pendingPaste = false
+                pasteWatchdogItem?.cancel()
+                pasteWatchdogItem = nil
                 engine.stopRecording()
                 liveHUDController?.hide()
             } else {
                 pendingPaste = true
                 engine.stopRecording()
-                // Safety watchdog: if speech engine doesn't fire onFinal within 0.5s, force paste & hide
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                
+                // Safety watchdog: gives engine up to 1.4s to deliver final transcript.
+                // If it hangs or times out, safely delivers current buffer and dismisses HUD!
+                pasteWatchdogItem?.cancel()
+                let watchdog = DispatchWorkItem { [weak self] in
                     guard let self = self, self.pendingPaste else { return }
                     self.pendingPaste = false
                     let fallbackText = self.engine.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -581,6 +590,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     }
                     self.liveHUDController?.hide()
                 }
+                self.pasteWatchdogItem = watchdog
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.4, execute: watchdog)
             }
         }
     }
@@ -928,19 +939,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
         
-        popover.performClose(nil)
+        let wasPopoverShown = popover.isShown
+        if wasPopoverShown {
+            popover.performClose(nil)
+        }
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+        // If popover was shown, allow 150ms for frontmost app to regain key window focus.
+        // If triggered via Push-to-Talk HUD, target app already has focus; 50ms ensures pasteboard propagation.
+        let delay: TimeInterval = wasPopoverShown ? 0.15 : 0.05
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            let src = CGEventSource(stateID: .hidSystemState)
             let vKeyCode: CGKeyCode = 9 // 'v' key
-            let cmdFlag = CGEventFlags.maskCommand
             
-            guard let keyDown = CGEvent(keyboardEventSource: nil, virtualKey: vKeyCode, keyDown: true),
-                  let keyUp = CGEvent(keyboardEventSource: nil, virtualKey: vKeyCode, keyDown: false) else {
+            guard let keyDown = CGEvent(keyboardEventSource: src, virtualKey: vKeyCode, keyDown: true),
+                  let keyUp = CGEvent(keyboardEventSource: src, virtualKey: vKeyCode, keyDown: false) else {
                 return
             }
             
-            keyDown.flags = cmdFlag
-            keyUp.flags = cmdFlag
+            // Strictly Command flag — completely strip any lingering Option/Alt modifier
+            keyDown.flags = .maskCommand
+            keyUp.flags = .maskCommand
             
             keyDown.post(tap: .cghidEventTap)
             keyUp.post(tap: .cghidEventTap)
@@ -1736,8 +1754,8 @@ struct ContentView: View {
     }
 
     private var transcriptCard: some View {
-        ZStack(alignment: .topTrailing) {
-            ScrollView {
+        VStack(spacing: 0) {
+            ScrollView(.vertical, showsIndicators: false) {
                 Text(speechEngine.transcript.isEmpty
                      ? L10n.t("holdGhost")
                      : speechEngine.transcript)
@@ -1746,37 +1764,46 @@ struct ContentView: View {
                     .foregroundStyle(speechEngine.transcript.isEmpty ? p.inkSoft.opacity(0.55) : p.ink)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(14)
-                    .padding(.trailing, speechEngine.transcript.isEmpty ? 0 : 56)
             }
 
             if !speechEngine.transcript.isEmpty {
-                Button(action: {
-                    let pb = NSPasteboard.general
-                    pb.clearContents()
-                    pb.setString(speechEngine.transcript, forType: .string)
-                    liveCopied = true
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                        liveCopied = false
+                HStack {
+                    Text("\(speechEngine.transcript.split { $0.isWhitespace }.count) words")
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(p.inkSoft.opacity(0.45))
+                        .padding(.leading, 14)
+
+                    Spacer()
+
+                    Button(action: {
+                        let pb = NSPasteboard.general
+                        pb.clearContents()
+                        pb.setString(speechEngine.transcript, forType: .string)
+                        liveCopied = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                            liveCopied = false
+                        }
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: liveCopied ? "checkmark" : "doc.on.doc")
+                                .font(.system(size: 9.5, weight: .bold))
+                            Text(liveCopied ? L10n.t("copied") : L10n.t("copy"))
+                                .font(.system(size: 10, weight: .bold, design: .rounded))
+                        }
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 3.5)
+                        .background(liveCopied ? TT.pink.opacity(0.22) : p.border.opacity(0.12))
+                        .foregroundStyle(liveCopied ? TT.pink : p.inkSoft)
+                        .clipShape(Capsule())
+                        .overlay(
+                            Capsule()
+                                .strokeBorder(liveCopied ? TT.pink.opacity(0.5) : p.border.opacity(0.25), lineWidth: 1)
+                        )
                     }
-                }) {
-                    HStack(spacing: 3) {
-                        Image(systemName: liveCopied ? "checkmark" : "doc.on.doc")
-                            .font(.system(size: 9.5, weight: .bold))
-                        Text(liveCopied ? L10n.t("copied") : L10n.t("copy"))
-                            .font(.system(size: 10, weight: .bold, design: .rounded))
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(liveCopied ? TT.pink.opacity(0.22) : p.border.opacity(0.12))
-                    .foregroundStyle(liveCopied ? TT.pink : p.inkSoft)
-                    .clipShape(Capsule())
-                    .overlay(
-                        Capsule()
-                            .strokeBorder(liveCopied ? TT.pink.opacity(0.5) : p.border.opacity(0.25), lineWidth: 1)
-                    )
+                    .buttonStyle(.plain)
+                    .padding(.trailing, 10)
+                    .padding(.bottom, 8)
                 }
-                .buttonStyle(.plain)
-                .padding(9)
                 .transition(.opacity)
             }
         }
