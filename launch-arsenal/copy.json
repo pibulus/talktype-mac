@@ -1,0 +1,113 @@
+{
+  "app": {
+    "name": "TalkType for Mac",
+    "url": "https://talktype.app",
+    "hook": "TalkType for Mac is a mac app for mac productivity writers ADHD thinkers. Runs 100% on-device using Apple speech recognition — zero audio leaves your Mac.",
+    "one_liner": "instant on-device dictation and transcription with a friendly pastel-punk ghost mascot",
+    "audience": "writers, ADHD thinkers, creators, and anyone who talks faster than they type",
+    "problem": "subscription-trapped transcription tools that upload private voice audio to distant cloud servers",
+    "promise": "instant on-device dictation and transcription with a friendly pastel-punk ghost mascot"
+  },
+  "readiness": {
+    "summary": "18 pass, 4 warn, 1 fix",
+    "fix": [
+      {
+        "status": "fail",
+        "label": "Share image asset",
+        "detail": "No local/live share image found at 1200x630 or larger.",
+        "next": "Generate a real social share image and reference it with og:image."
+      }
+    ],
+    "warn": [
+      {
+        "status": "warn",
+        "label": "Service worker",
+        "detail": "No service worker found in root, public/static, or src.",
+        "next": "Add a small app-shell service worker for PWA resilience when appropriate."
+      },
+      {
+        "status": "warn",
+        "label": "Robots file",
+        "detail": "robots.txt is missing.",
+        "next": "Add robots.txt with sitemap reference for simple indexing hygiene."
+      },
+      {
+        "status": "warn",
+        "label": "Sitemap",
+        "detail": "sitemap.xml is missing.",
+        "next": "Add a sitemap with canonical app URL."
+      },
+      {
+        "status": "warn",
+        "label": "Screenshot evidence",
+        "detail": "Less than two screenshots available.",
+        "next": "Capture mobile and wide screenshots before final launch copy."
+      }
+    ]
+  },
+  "assets": {
+    "og": "assets/og-card.png",
+    "square": "assets/social-square.png",
+    "story": "assets/ig-story.png"
+  },
+  "metadata": {
+    "title": "TalkType for Mac | Apple on-device — free, offline, private. No key,...",
+    "description": "TalkType for Mac is a mac app for mac productivity writers ADHD thinkers. Runs 100% on-device using Apple speech recognition — zero audio leaves your...",
+    "ogTitle": "TalkType for Mac - Apple on-device — free, offline, private. No key, no network",
+    "ogDescription": "TalkType for Mac is a mac app for mac productivity writers ADHD thinkers. Runs 100% on-device using Apple speech recognition — zero audio leaves your Mac. Subscription-trapped..."
+  },
+  "posts": {
+    "short_caption": "I made TalkType for Mac, a mac app for mac productivity writers ADHD thinkers.",
+    "x_thread": "1/ I made TalkType for Mac, a mac app for mac productivity writers ADHD thinkers.\n\n2/ Subscription-trapped transcription tools that upload private voice audio to distant cloud servers. TalkType for Mac is a mac app for mac productivity writers ADHD thinkers. Runs 100% on-device using Apple speech recognition — zero audio leaves your Mac.\n\n3/ What it does:\n- Apple on-device — free, offline, private. No key, no network.\n- No subscription, no login wall, no account required\n- subscription-trapped transcription tools that upload private voice audio to distant cloud servers\n\n4/ Download TalkType for Mac at https://talktype.app",
+    "instagram_feed": "I made TalkType for Mac, a mac app for mac productivity writers ADHD thinkers.\n\n- Runs 100% on-device using Apple speech recognition — zero audio leaves your Mac\n- No subscription, no login wall, no account required\n\nLink in bio / story.\n\n#talktypemac #voicetotextmac #offlinedictationmac #pushtotalkdictationmac",
+    "instagram_story": {
+      "frame_1": "Apple on-device — free, offline, private. No key, no network",
+      "frame_2": "TalkType for Mac is a mac app for mac productivity writers ADHD thinkers. Runs 100% on-device using Apple speech recognition — zero audio leaves your Mac.",
+      "link_sticker": "try TalkType for Mac"
+    },
+    "facebook": "I made TalkType for Mac, a mac app for mac productivity writers ADHD thinkers.\n\n- Runs 100% on-device using Apple speech recognition — zero audio leaves your Mac\n- No subscription, no login wall, no account required\n\nhttps://talktype.app",
+    "reddit": {
+      "title": "I made TalkType for Mac, a small mac app for mac productivity writers ADHD thinkers",
+      "body": "I made TalkType for Mac because subscription-trapped transcription tools that upload private voice audio to distant cloud servers.\n\nWhat works right now:\n- Runs 100% on-device using Apple speech recognition — zero audio leaves your Mac\n- No subscription, no login wall, no account required\n- Global Push-to-Talk shortcut inserts clean text right into whatever app you are typing in\n\nI would be interested in feedback on whether TalkType for Mac is clear enough on first use, especially on mobile.\n\nhttps://talktype.app"
+    },
+    "hacker_news": {
+      "title": "Show HN: TalkType for Mac - Apple on-device — free, offline, private. No key, no network",
+      "body": "TalkType for Mac is a mac app for mac productivity writers ADHD thinkers. Runs 100% on-device using Apple speech recognition — zero audio leaves your Mac.\n\nThe current version includes:\n- Runs 100% on-device using Apple speech recognition — zero audio leaves your Mac\n- No subscription, no login wall, no account required\n- Global Push-to-Talk shortcut inserts clean text right into whatever app you are typing in\n\nhttps://talktype.app"
+    },
+    "product_hunt": {
+      "name": "TalkType for Mac",
+      "tagline": "Apple on-device — free, offline, private. No key, no network",
+      "description": "TalkType for Mac is a mac app for mac productivity writers ADHD thinkers. Runs 100% on-device using Apple speech recognition — zero audio leaves your Mac. Subscription-trapped transcription tools that upload private voice audio to distant cloud servers. No subscription, no login wall, no account required. Global Push-to-Talk shortcut inserts clean text right into whatever app you are typing in.",
+      "first_comment": "I made TalkType for Mac because subscription-trapped transcription tools that upload private voice audio to distant cloud servers.\n\nThe current version includes:\n- Runs 100% on-device using Apple speech recognition — zero audio leaves your Mac\n- No subscription, no login wall, no account required\n- Global Push-to-Talk shortcut inserts clean text right into whatever app you are typing in\n\nI would be interested in feedback on whether TalkType for Mac is clear enough on first use, especially on mobile."
+    },
+    "forum": {
+      "title": "I made TalkType for Mac, a small mac app for mac productivity writers ADHD thinkers",
+      "body": "I made TalkType for Mac because subscription-trapped transcription tools that upload private voice audio to distant cloud servers.\n\nWhat works right now:\n- Runs 100% on-device using Apple speech recognition — zero audio leaves your Mac\n- No subscription, no login wall, no account required\n- Global Push-to-Talk shortcut inserts clean text right into whatever app you are typing in\n\nI would be interested in feedback on whether TalkType for Mac is clear enough on first use, especially on mobile.\n\nhttps://talktype.app"
+    },
+    "directory": {
+      "name": "TalkType for Mac",
+      "short_description": "Apple on-device — free, offline, private. No key, no network",
+      "long_description": "TalkType for Mac is a mac app for mac productivity writers ADHD thinkers. Runs 100% on-device using Apple speech recognition — zero audio leaves your Mac. Subscription-trapped transcription tools that upload private voice audio to distant cloud servers. No subscription, no login wall, no account required. Global Push-to-Talk shortcut inserts clean text right into whatever app you are typing in.",
+      "keywords": [
+        "voice to text mac",
+        "offline dictation mac",
+        "push to talk dictation mac",
+        "privacy voice recognition"
+      ]
+    }
+  },
+  "email": {
+    "subject": "A small app: TalkType for Mac",
+    "text": "Hey,\n\nI made TalkType for Mac because subscription-trapped transcription tools that upload private voice audio to distant cloud servers.\n\nIt is a mac app for mac productivity writers ADHD thinkers.\n\nWhat it does:\n\n- Apple on-device — free, offline, private. No key, no network.\n- No subscription, no login wall, no account required\n- subscription-trapped transcription tools that upload private voice audio to distant cloud servers\n- Global Push-to-Talk shortcut inserts clean text right into whatever app you are typing in\n\nIt is still small, but the core flow is working.\n\nI would be interested in feedback on whether TalkType for Mac is clear enough on first use, especially on mobile.\n\nDownload TalkType for Mac at https://talktype.app\n\nPablo",
+    "html_asset": "email.html"
+  },
+  "leads": [],
+  "announce": null,
+  "manual_20_percent": [
+    "Pick one post and make the first sentence sound like you wrote it today.",
+    "Add one specific reason for each person/place before sending.",
+    "Preview the live URL in iMessage/Slack/X before posting.",
+    "Keep existing app metadata if it is stronger than generated metadata.",
+    "Use only the channels that feel native for this app; delete the rest."
+  ]
+}

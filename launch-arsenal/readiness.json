@@ -1,0 +1,129 @@
+{
+  "summary": {
+    "pass": 18,
+    "warn": 4,
+    "fail": 1
+  },
+  "checks": [
+    {
+      "status": "pass",
+      "label": "Initial HTML",
+      "detail": "Found inspectable HTML from live URL (https://talktype.app)."
+    },
+    {
+      "status": "pass",
+      "label": "HTML language",
+      "detail": "Root html tag declares a language."
+    },
+    {
+      "status": "pass",
+      "label": "Title tag",
+      "detail": "Title tag is present."
+    },
+    {
+      "status": "pass",
+      "label": "Meta description",
+      "detail": "Meta description is present."
+    },
+    {
+      "status": "pass",
+      "label": "Canonical URL",
+      "detail": "Canonical link is present."
+    },
+    {
+      "status": "pass",
+      "label": "Open Graph copy",
+      "detail": "OG title and description are present."
+    },
+    {
+      "status": "pass",
+      "label": "Open Graph image",
+      "detail": "OG image is referenced: https://talktype.app/og-card.jpg."
+    },
+    {
+      "status": "pass",
+      "label": "Twitter/X preview",
+      "detail": "Twitter card metadata is present."
+    },
+    {
+      "status": "pass",
+      "label": "Structured data",
+      "detail": "JSON-LD structured data is present."
+    },
+    {
+      "status": "pass",
+      "label": "Primary heading",
+      "detail": "A crawlable h1 is present."
+    },
+    {
+      "status": "pass",
+      "label": "Mobile viewport polish",
+      "detail": "Viewport includes mobile app niceties."
+    },
+    {
+      "status": "pass",
+      "label": "Web manifest",
+      "detail": "Manifest is present and parseable at https://talktype.app/manifest.json."
+    },
+    {
+      "status": "pass",
+      "label": "PWA display mode",
+      "detail": "Manifest display is standalone."
+    },
+    {
+      "status": "pass",
+      "label": "PWA icons",
+      "detail": "Manifest lists 4 icon(s)."
+    },
+    {
+      "status": "pass",
+      "label": "Install screenshots",
+      "detail": "Manifest lists 2 screenshot(s)."
+    },
+    {
+      "status": "warn",
+      "label": "Service worker",
+      "detail": "No service worker found in root, public/static, or src.",
+      "next": "Add a small app-shell service worker for PWA resilience when appropriate."
+    },
+    {
+      "status": "warn",
+      "label": "Robots file",
+      "detail": "robots.txt is missing.",
+      "next": "Add robots.txt with sitemap reference for simple indexing hygiene."
+    },
+    {
+      "status": "warn",
+      "label": "Sitemap",
+      "detail": "sitemap.xml is missing.",
+      "next": "Add a sitemap with canonical app URL."
+    },
+    {
+      "status": "pass",
+      "label": "192 icon",
+      "detail": "manifest icon: /appicon/web/icon-192.png declares 192x192."
+    },
+    {
+      "status": "pass",
+      "label": "512 icon",
+      "detail": "manifest icon: /appicon/web/icon-512.png declares 512x512."
+    },
+    {
+      "status": "fail",
+      "label": "Share image asset",
+      "detail": "No local/live share image found at 1200x630 or larger.",
+      "next": "Generate a real social share image and reference it with og:image."
+    },
+    {
+      "status": "warn",
+      "label": "Screenshot evidence",
+      "detail": "Less than two screenshots available.",
+      "next": "Capture mobile and wide screenshots before final launch copy."
+    },
+    {
+      "status": "pass",
+      "label": "Live URL",
+      "detail": "Live URL provided: https://talktype.app."
+    }
+  ]
+}

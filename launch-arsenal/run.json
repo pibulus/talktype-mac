@@ -1,0 +1,39 @@
+{
+  "generated_at": "2026-09-19T08:38:14.053Z",
+  "generation_mode": "deterministic",
+  "sources": {
+    "repo": "../../mac/talktype-mac",
+    "url": "https://talktype.app",
+    "hints": "../../mac/talktype-mac/.launch-hints.yaml",
+    "screenshots": [],
+    "notes": [],
+    "reference": {
+      "enabled": true,
+      "dir": "/Users/pabloalvarado/Documents/reference",
+      "sources": [
+        "/Users/pabloalvarado/Documents/reference/BRAND-voice-copy.md",
+        "/Users/pabloalvarado/Documents/reference/LAUNCH-marketing-playbook.md",
+        "/Users/pabloalvarado/Documents/reference/CORE-manifesto.md",
+        "/Users/pabloalvarado/Documents/reference/CORE-portfolio.md",
+        "/Users/pabloalvarado/Documents/reference/BRAND-design-reference.md"
+      ]
+    }
+  },
+  "positioning": {
+    "audience": "writers, ADHD thinkers, creators, and anyone who talks faster than they type",
+    "problem": "subscription-trapped transcription tools that upload private voice audio to distant cloud servers",
+    "promise": "instant on-device dictation and transcription with a friendly pastel-punk ghost mascot",
+    "one_liner": "instant on-device dictation and transcription with a friendly pastel-punk ghost mascot"
+  },
+  "keywords": {
+    "seeds": [
+      "voice to text mac",
+      "offline dictation mac",
+      "push to talk dictation mac",
+      "privacy voice recognition"
+    ],
+    "suggested": []
+  },
+  "web_research": null,
+  "announce": null
+}

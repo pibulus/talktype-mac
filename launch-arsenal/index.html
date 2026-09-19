@@ -1,0 +1,977 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TalkType for Mac launch board</title>
+    <meta name="description" content="TalkType for Mac is a mac app for mac productivity writers ADHD thinkers. Runs 100% on-device using Apple speech recognition — zero audio leaves your..." />
+    <meta property="og:title" content="TalkType for Mac - Apple on-device — free, offline, private. No key, no network" />
+    <meta property="og:description" content="TalkType for Mac is a mac app for mac productivity writers ADHD thinkers. Runs 100% on-device using Apple speech recognition — zero audio leaves your Mac. Subscription-trapped..." />
+    <meta property="og:image" content="./assets/og-card.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="TalkType for Mac - Apple on-device — free, offline, private. No key, no network" />
+    <meta name="twitter:description" content="TalkType for Mac is a mac app for mac productivity writers ADHD thinkers. Runs 100% on-device using Apple speech recognition — zero audio leaves your Mac. Subscription-trapped..." />
+    <meta name="twitter:image" content="./assets/og-card.png" />
+    <style>
+      :root {
+        --paper: #f5efe6;
+        --ink: #161616;
+        --muted: #645f57;
+        --panel: rgba(255, 255, 255, 0.78);
+        --line: rgba(22, 22, 22, 0.14);
+        --primary: #FF82C3;
+        --accent: #6C5CE7;
+        --neutral: #1F1B2C;
+        --shadow: 0 18px 48px rgba(0, 0, 0, 0.12);
+        --hard-shadow: 10px 10px 0 rgba(22, 22, 22, 0.12);
+        --radius: 22px;
+      }
+
+      * { box-sizing: border-box; }
+
+      html { scroll-behavior: smooth; }
+
+      body {
+        margin: 0;
+        font-family: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+        background:
+          radial-gradient(circle at top left, color-mix(in srgb, var(--primary) 28%, white) 0%, transparent 34%),
+          radial-gradient(circle at top right, color-mix(in srgb, var(--accent) 18%, white) 0%, transparent 30%),
+          linear-gradient(180deg, #fffaf3 0%, var(--paper) 100%);
+        color: var(--ink);
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background-image:
+          linear-gradient(to right, rgba(22, 22, 22, 0.035) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(22, 22, 22, 0.035) 1px, transparent 1px);
+        background-size: 32px 32px;
+        opacity: 0.45;
+      }
+
+      main {
+        width: min(1180px, calc(100vw - 28px));
+        margin: 0 auto;
+        padding: 18px 0 48px;
+        position: relative;
+      }
+
+      .hero {
+        border: 2px solid rgba(22, 22, 22, 0.12);
+        border-radius: 30px;
+        background:
+          linear-gradient(135deg, color-mix(in srgb, var(--primary) 18%, white) 0%, rgba(255,255,255,0.88) 44%, color-mix(in srgb, var(--accent) 12%, white) 100%);
+        box-shadow: var(--shadow);
+        padding: 22px;
+        overflow: hidden;
+        position: relative;
+      }
+
+      .hero::after {
+        content: "";
+        position: absolute;
+        right: -40px;
+        top: -30px;
+        width: 180px;
+        height: 180px;
+        border-radius: 50%;
+        background: color-mix(in srgb, var(--accent) 18%, white);
+        opacity: 0.8;
+      }
+
+      .hero-grid,
+      .grid,
+      .resource-grid {
+        display: grid;
+        gap: 16px;
+      }
+
+      .hero-grid { position: relative; z-index: 1; }
+
+      .chips,
+      .pill-row,
+      .action-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .eyebrow {
+        margin: 0 0 8px;
+        font-size: 12px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      h1, h2, h3 {
+        margin: 0;
+        line-height: 1.02;
+      }
+
+      h1 {
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: clamp(2.35rem, 8vw, 5.2rem);
+        max-width: 9ch;
+      }
+
+      h2 {
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: clamp(1.6rem, 4vw, 2.35rem);
+      }
+
+      h3 {
+        font-size: 1.02rem;
+      }
+
+      p {
+        margin: 0;
+        color: var(--ink);
+        line-height: 1.55;
+      }
+
+      .lede {
+        max-width: 58ch;
+        font-size: 1.04rem;
+        margin-top: 14px;
+      }
+
+      .badge,
+      .pill-link,
+      .jump-link,
+      .primary-link,
+      .ghost-link,
+      .copy-button {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        padding: 0 16px;
+        text-decoration: none;
+        font-weight: 700;
+        font-size: 0.95rem;
+      }
+
+      .badge {
+        background: rgba(255,255,255,0.74);
+        border: 1px solid rgba(22,22,22,0.1);
+        color: var(--ink);
+      }
+
+      .primary-link,
+      .copy-button {
+        background: var(--ink);
+        color: white;
+        border: 0;
+        cursor: pointer;
+        box-shadow: var(--hard-shadow);
+      }
+
+      .primary-link:hover,
+      .copy-button:hover { transform: translate(-1px, -1px); }
+
+      .ghost-link,
+      .pill-link,
+      .jump-link {
+        color: var(--ink);
+        border: 1px solid rgba(22,22,22,0.14);
+        background: rgba(255,255,255,0.74);
+      }
+
+      .jump-link {
+        background: color-mix(in srgb, var(--primary) 16%, white);
+      }
+
+      section {
+        margin-top: 18px;
+      }
+
+      .panel,
+      .step,
+      .resource-card,
+      .angle-card,
+      .check-card {
+        border-radius: var(--radius);
+        border: 1px solid var(--line);
+        background: var(--panel);
+        backdrop-filter: blur(10px);
+        box-shadow: var(--shadow);
+      }
+
+      .panel,
+      .step,
+      .resource-card,
+      .angle-card,
+      .check-card {
+        padding: 18px;
+      }
+
+      .section-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: end;
+        gap: 16px;
+        margin-bottom: 12px;
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
+      .hero-side {
+        display: grid;
+        gap: 16px;
+      }
+
+      .links-panel,
+      .brain-panel {
+        display: grid;
+        gap: 12px;
+      }
+
+      .brain-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .brain-item strong {
+        display: block;
+        font-size: 0.82rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin-bottom: 3px;
+      }
+
+      .step {
+        display: grid;
+        gap: 14px;
+      }
+
+      .step-top {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: start;
+      }
+
+      .step-num {
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+        background: var(--ink);
+        color: white;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
+        flex: 0 0 auto;
+      }
+
+      .resource-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .card-top {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: start;
+      }
+
+      .card-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        justify-content: end;
+      }
+
+      .card-description {
+        color: var(--muted);
+        margin: 10px 0 12px;
+      }
+
+      textarea {
+        width: 100%;
+        min-height: 196px;
+        border-radius: 18px;
+        border: 1px solid rgba(22,22,22,0.14);
+        padding: 16px;
+        resize: vertical;
+        background: rgba(255,255,255,0.94);
+        color: var(--ink);
+        font: 500 16px/1.5 "SFMono-Regular", Menlo, Consolas, monospace;
+      }
+
+      .wide textarea { min-height: 280px; }
+      .short textarea { min-height: 120px; }
+
+      .og-card-preview {
+        width: 100%;
+        border-radius: 22px;
+        border: 1px solid rgba(22,22,22,0.12);
+        overflow: hidden;
+        background: white;
+        box-shadow: var(--shadow);
+      }
+
+      .og-card-preview img {
+        display: block;
+        width: 100%;
+        height: auto;
+      }
+
+      .angle-card {
+        display: grid;
+        gap: 8px;
+      }
+
+      .check-list {
+        display: grid;
+        gap: 12px;
+      }
+
+      .check-row {
+        display: flex;
+        gap: 12px;
+        align-items: start;
+        min-height: 44px;
+      }
+
+      .check-row input {
+        width: 22px;
+        height: 22px;
+        margin-top: 2px;
+        accent-color: var(--ink);
+      }
+
+      .footer-note {
+        margin-top: 18px;
+        padding: 16px 18px;
+        border-radius: 20px;
+        background: color-mix(in srgb, var(--accent) 10%, white);
+        border: 1px solid rgba(22,22,22,0.12);
+      }
+
+      @media (max-width: 779px) {
+        main {
+          width: min(100vw - 18px, 1180px);
+        }
+
+        .section-head,
+        .card-top,
+        .step-top {
+          flex-direction: column;
+          align-items: start;
+        }
+
+        .action-row {
+          display: grid;
+          grid-template-columns: 1fr;
+        }
+
+        .primary-link,
+        .jump-link {
+          width: 100%;
+        }
+
+        .card-actions {
+          justify-content: start;
+        }
+      }
+
+      @media (min-width: 780px) {
+        .hero-grid {
+          grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.85fr);
+          align-items: start;
+        }
+
+        .grid.two {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .resource-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .resource-card.wide {
+          grid-column: span 2;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero">
+        <div class="hero-grid">
+          <div>
+            <p class="eyebrow">Launch board / deterministic</p>
+            <h1>TalkType for Mac</h1>
+            <p class="lede">instant on-device dictation and transcription with a friendly pastel-punk ghost mascot</p>
+            <div class="chips" style="margin-top:16px;">
+              <span class="badge">mac app</span>
+              <span class="badge">for writers, ADHD thinkers, creators, and anyone who talks faster than they type</span>
+              <span class="badge">problem: subscription-trapped transcription tools that upload private voice audio to distant cloud servers</span>
+            </div>
+            <div class="action-row" style="margin-top:18px;">
+              <a class="primary-link" href="#resources">Start with the resources</a>
+              <a class="jump-link" href="#sequence">Jump to launch order</a>
+            </div>
+          </div>
+          <div class="hero-side">
+            <div class="panel links-panel">
+              <div class="section-head">
+                <div>
+                  <p class="eyebrow">App links</p>
+                  <h2>What this launch points at</h2>
+                </div>
+              </div>
+              <div class="pill-row">
+                <a class="pill-link" href="https://talktype.app" target="_blank" rel="noreferrer">website</a>
+              </div>
+            </div>
+            <div class="panel brain-panel">
+              <div class="section-head">
+                <div>
+                  <p class="eyebrow">Message spine</p>
+                  <h2>What this launch is really saying</h2>
+                </div>
+              </div>
+              <div class="brain-list">
+                <div class="brain-item"><strong>Promise</strong><p>instant on-device dictation and transcription with a friendly pastel-punk ghost mascot</p></div>
+                <div class="brain-item"><strong>Why now</strong><p>Subscription-trapped transcription tools that upload private voice audio to distant cloud servers.</p></div>
+                <div class="brain-item"><strong>Proof</strong><p>Apple on-device — free, offline, private. No key, no network. / No subscription, no login wall, no account required</p></div>
+                <div class="brain-item"><strong>CTA</strong><p>Download TalkType for Mac at https://talktype.app</p></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="sequence">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Launch order</p>
+            <h2>Do this, then that</h2>
+          </div>
+          <p class="muted">Short version: destination first, warm people second, wide rooms after that.</p>
+        </div>
+        <div class="grid two">
+          <article class="step">
+            <div class="step-top">
+              <div class="step-num">1</div>
+              <div>
+                <p class="eyebrow">Step 1</p>
+                <h3>Tune the destination first</h3>
+              </div>
+            </div>
+            <p>Use the hero and metadata before you send anyone to the page. If the page feels foggy, every later post feels foggy too.</p>
+            <p class="muted">This is the source page every other surface points back to. Tight page copy makes every later click less fragile.</p>
+            <div class="pill-row"><a class="pill-link file-pill" href="./website/hero.md">Hero copy</a><a class="pill-link file-pill" href="./website/meta.json">Metadata</a><a class="pill-link file-pill" href="./assets/og-card.png">OG card</a></div>
+            
+          </article><article class="step">
+            <div class="step-top">
+              <div class="step-num">2</div>
+              <div>
+                <p class="eyebrow">Step 2</p>
+                <h3>Start with warm humans</h3>
+              </div>
+            </div>
+            <p>Send the email first to people who already know your work, opted in, or will give honest replies instead of drive-by vibes.</p>
+            <p class="muted">Warm replies tell you which line is landing before you spray the wider internet.</p>
+            <div class="pill-row"><a class="pill-link file-pill" href="./angles.md">Angle pack</a><a class="pill-link file-pill" href="./email/subject.txt">Email subject</a><a class="pill-link file-pill" href="./email/launch.txt">Email body</a><a class="pill-link file-pill" href="./email/launch.html">Email HTML</a></div>
+            
+          </article><article class="step">
+            <div class="step-top">
+              <div class="step-num">3</div>
+              <div>
+                <p class="eyebrow">Step 3</p>
+                <h3>Ship the short version</h3>
+              </div>
+            </div>
+            <p>Post the thread and pair it with the OG card. If the thread feels long, steal one caption option and go lighter.</p>
+            <p class="muted">Short surfaces test the hook fast. They tell you which framing survives first contact.</p>
+            <div class="pill-row"><a class="pill-link file-pill" href="./angles.md">Angle pack</a><a class="pill-link file-pill" href="./social/thread.txt">Thread</a><a class="pill-link file-pill" href="./social/caption-options.txt">Caption options</a><a class="pill-link file-pill" href="./assets/og-card.png">OG card</a></div>
+            
+          </article><article class="step">
+            <div class="step-top">
+              <div class="step-num">4</div>
+              <div>
+                <p class="eyebrow">Step 4</p>
+                <h3>Post the fuller story</h3>
+              </div>
+            </div>
+            <p>Use the community post as the base for Indie Hackers, DEV, Product Hunt prep notes, or a Show HN style write-up. Rewrite the opener to match the room.</p>
+            <p class="muted">Longer posts convert curiosity into understanding. They are where the honest backstory and proof actually land.</p>
+            <div class="pill-row"><a class="pill-link file-pill" href="./angles.md">Angle pack</a><a class="pill-link file-pill" href="./community/post.md">Community post</a><a class="pill-link file-pill" href="./release/changelog.md">Launch notes</a></div>
+            <div class="pill-row"><a class="pill-link" href="https://www.indiehackers.com/" target="_blank" rel="noreferrer">Indie Hackers</a><a class="pill-link" href="https://www.indiehackers.com/post/how-do-you-make-a-successful-post-on-indie-hackers-f6745260fd" target="_blank" rel="noreferrer">IH post tips</a><a class="pill-link" href="https://dev.to/new/writing" target="_blank" rel="noreferrer">DEV new post</a><a class="pill-link" href="https://news.ycombinator.com/submit" target="_blank" rel="noreferrer">Hacker News submit</a><a class="pill-link" href="https://news.ycombinator.com/newsguidelines.html" target="_blank" rel="noreferrer">HN guidelines</a><a class="pill-link" href="https://www.producthunt.com/launch/preparing-for-launch" target="_blank" rel="noreferrer">Product Hunt launch guide</a><a class="pill-link" href="https://www.producthunt.com/launch" target="_blank" rel="noreferrer">Product Hunt launch hub</a></div>
+          </article><article class="step">
+            <div class="step-top">
+              <div class="step-num">5</div>
+              <div>
+                <p class="eyebrow">Step 5</p>
+                <h3>Close the loop</h3>
+              </div>
+            </div>
+            <p>Update the changelog, make sure the visual matches the copy, and keep one clean CTA everywhere instead of five soft asks.</p>
+            <p class="muted">A launch feels real when the page, image, and release note agree with each other.</p>
+            <div class="pill-row"><a class="pill-link file-pill" href="./release/changelog.md">Changelog</a><a class="pill-link file-pill" href="./messaging-core.json">Messaging core</a><a class="pill-link file-pill" href="./run.json">Run data</a></div>
+            
+          </article>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Angle pack</p>
+            <h2>Four ways in</h2>
+          </div>
+          <p class="muted">If the copy feels flat, switch the entry point before you rewrite the whole launch.</p>
+        </div>
+        <div class="grid two">
+          <article class="angle-card">
+            <p class="eyebrow">Plain description</p>
+            <p><strong>Hook</strong><br />TalkType for Mac is a mac app for mac productivity writers ADHD thinkers. Runs 100% on-device using Apple speech recognition — zero audio leaves your Mac.</p>
+            <p><strong>Use when</strong><br />When a form or post needs a straightforward product description.</p>
+            <p><strong>Why it lands</strong><br />It tells people what the app is, who it is for, and what it does.</p>
+            <p><strong>Social lead</strong><br />TalkType for Mac is a mac app for mac productivity writers ADHD thinkers. Runs 100% on-device using Apple speech recognition — zero audio leaves your Mac.</p>
+            <p><strong>Email subject</strong><br />TalkType for Mac</p>
+          </article><article class="angle-card">
+            <p class="eyebrow">Problem note</p>
+            <p><strong>Hook</strong><br />Subscription-trapped transcription tools that upload private voice audio to distant cloud servers. Instant on-device dictation and transcription with a friendly pastel-punk ghost mascot.</p>
+            <p><strong>Use when</strong><br />When the audience already recognizes the problem.</p>
+            <p><strong>Why it lands</strong><br />It explains the reason for the app without overselling it.</p>
+            <p><strong>Social lead</strong><br />Subscription-trapped transcription tools that upload private voice audio to distant cloud servers. Instant on-device dictation and transcription with a friendly pastel-punk ghost mascot.</p>
+            <p><strong>Email subject</strong><br />TalkType for Mac: Apple on-device — free, offline, private. No key, no network</p>
+          </article><article class="angle-card">
+            <p class="eyebrow">Feature note</p>
+            <p><strong>Hook</strong><br />TalkType for Mac includes: Apple on-device — free, offline, private. No key, no network. No subscription, no login wall, no account required.</p>
+            <p><strong>Use when</strong><br />When a directory, forum, or reply needs quick proof of what works.</p>
+            <p><strong>Why it lands</strong><br />It gives concrete product details instead of a slogan.</p>
+            <p><strong>Social lead</strong><br />TalkType for Mac includes:
+- Apple on-device — free, offline, private. No key, no network.
+- No subscription, no login wall, no account required
+- subscription-trapped transcription tools that upload private voice audio to distant cloud servers</p>
+            <p><strong>Email subject</strong><br />TalkType for Mac details</p>
+          </article><article class="angle-card">
+            <p class="eyebrow">Feedback ask</p>
+            <p><strong>Hook</strong><br />I would be interested in feedback on whether TalkType for Mac is clear enough on first use, especially on mobile.</p>
+            <p><strong>Use when</strong><br />When posting in maker communities or sending a warm note.</p>
+            <p><strong>Why it lands</strong><br />It asks for useful feedback instead of acting like a finished campaign.</p>
+            <p><strong>Social lead</strong><br />I would be interested in feedback on whether TalkType for Mac is clear enough on first use, especially on mobile.</p>
+            <p><strong>Email subject</strong><br />Feedback on TalkType for Mac</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="resources">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Resources</p>
+            <h2>Paste this here</h2>
+          </div>
+          <p class="muted">These are the actual drafts. Edit in place, copy, then post.</p>
+        </div>
+        <div class="resource-grid">
+          <article class="resource-card wide">
+    <div class="card-top">
+      <div>
+        <p class="eyebrow">Message options</p>
+        <h3>Angle pack</h3>
+      </div>
+      <div class="card-actions">
+        <button class="copy-button" type="button" data-copy-target="angle-pack">Copy</button>
+        <a class="ghost-link" href="./angles.md">Open raw</a>
+      </div>
+    </div>
+    <p class="card-description">Four different ways into the same launch. Pick one before you start editing individual surfaces.</p>
+    <textarea id="angle-pack" spellcheck="false">## Plain description
+
+Hook: TalkType for Mac is a mac app for mac productivity writers ADHD thinkers. Runs 100% on-device using Apple speech recognition — zero audio leaves your Mac.
+Use when: When a form or post needs a straightforward product description.
+Why it lands: It tells people what the app is, who it is for, and what it does.
+Social lead: TalkType for Mac is a mac app for mac productivity writers ADHD thinkers. Runs 100% on-device using Apple speech recognition — zero audio leaves your Mac.
+Email subject: TalkType for Mac
+
+## Problem note
+
+Hook: Subscription-trapped transcription tools that upload private voice audio to distant cloud servers. Instant on-device dictation and transcription with a friendly pastel-punk ghost mascot.
+Use when: When the audience already recognizes the problem.
+Why it lands: It explains the reason for the app without overselling it.
+Social lead: Subscription-trapped transcription tools that upload private voice audio to distant cloud servers. Instant on-device dictation and transcription with a friendly pastel-punk ghost mascot.
+Email subject: TalkType for Mac: Apple on-device — free, offline, private. No key, no network
+
+## Feature note
+
+Hook: TalkType for Mac includes: Apple on-device — free, offline, private. No key, no network. No subscription, no login wall, no account required.
+Use when: When a directory, forum, or reply needs quick proof of what works.
+Why it lands: It gives concrete product details instead of a slogan.
+Social lead: TalkType for Mac includes:
+- Apple on-device — free, offline, private. No key, no network.
+- No subscription, no login wall, no account required
+- subscription-trapped transcription tools that upload private voice audio to distant cloud servers
+Email subject: TalkType for Mac details
+
+## Feedback ask
+
+Hook: I would be interested in feedback on whether TalkType for Mac is clear enough on first use, especially on mobile.
+Use when: When posting in maker communities or sending a warm note.
+Why it lands: It asks for useful feedback instead of acting like a finished campaign.
+Social lead: I would be interested in feedback on whether TalkType for Mac is clear enough on first use, especially on mobile.
+Email subject: Feedback on TalkType for Mac</textarea>
+  </article>
+          <article class="resource-card">
+    <div class="card-top">
+      <div>
+        <p class="eyebrow">Destination copy</p>
+        <h3>Website hero</h3>
+      </div>
+      <div class="card-actions">
+        <button class="copy-button" type="button" data-copy-target="hero-copy">Copy</button>
+        <a class="ghost-link" href="./website/hero.md">Open raw</a>
+      </div>
+    </div>
+    <p class="card-description">Use this on the page everyone lands on after the click.</p>
+    <textarea id="hero-copy" spellcheck="false"># instant on-device dictation and transcription with a friendly pastel-punk ghost mascot
+
+TalkType for Mac is a mac app for mac productivity writers ADHD thinkers. Runs 100% on-device using Apple speech recognition — zero audio leaves your Mac. Subscription-trapped transcription tools that upload private voice audio to distant cloud servers.
+
+CTA: Download TalkType for Mac at https://talktype.app
+
+## Proof Bullets
+- Apple on-device — free, offline, private. No key, no network.
+- No subscription, no login wall, no account required
+- subscription-trapped transcription tools that upload private voice audio to distant cloud servers</textarea>
+  </article>
+          <article class="resource-card">
+    <div class="card-top">
+      <div>
+        <p class="eyebrow">Search + share</p>
+        <h3>Website metadata</h3>
+      </div>
+      <div class="card-actions">
+        <button class="copy-button" type="button" data-copy-target="meta-copy">Copy</button>
+        <a class="ghost-link" href="./website/meta.json">Open raw</a>
+      </div>
+    </div>
+    <p class="card-description">Paste into your site head, page config, or whatever owns title and OG fields.</p>
+    <textarea id="meta-copy" spellcheck="false">{
+  "title": "TalkType for Mac | Apple on-device — free, offline, private. No key,...",
+  "description": "TalkType for Mac is a mac app for mac productivity writers ADHD thinkers. Runs 100% on-device using Apple speech recognition — zero audio leaves your...",
+  "ogTitle": "TalkType for Mac - Apple on-device — free, offline, private. No key, no network",
+  "ogDescription": "TalkType for Mac is a mac app for mac productivity writers ADHD thinkers. Runs 100% on-device using Apple speech recognition — zero audio leaves your Mac. Subscription-trapped..."
+}</textarea>
+  </article>
+          <article class="resource-card">
+    <div class="card-top">
+      <div>
+        <p class="eyebrow">Warm send</p>
+        <h3>Email subject</h3>
+      </div>
+      <div class="card-actions">
+        <button class="copy-button" type="button" data-copy-target="email-subject">Copy</button>
+        <a class="ghost-link" href="./email/subject.txt">Open raw</a>
+      </div>
+    </div>
+    <p class="card-description">Short, human, and clear. Tighten this before the body if anything feels off.</p>
+    <textarea id="email-subject" spellcheck="false">A small app: TalkType for Mac</textarea>
+  </article>
+          <article class="resource-card">
+    <div class="card-top">
+      <div>
+        <p class="eyebrow">Warm send</p>
+        <h3>Launch email</h3>
+      </div>
+      <div class="card-actions">
+        <button class="copy-button" type="button" data-copy-target="email-body">Copy</button>
+        <a class="ghost-link" href="./email/launch.txt">Open raw</a>
+      </div>
+    </div>
+    <p class="card-description">Send this to people who already know your work or will give useful replies.</p>
+    <textarea id="email-body" spellcheck="false">Hey,
+
+I made TalkType for Mac because subscription-trapped transcription tools that upload private voice audio to distant cloud servers.
+
+It is a mac app for mac productivity writers ADHD thinkers.
+
+What it does:
+
+- Apple on-device — free, offline, private. No key, no network.
+- No subscription, no login wall, no account required
+- subscription-trapped transcription tools that upload private voice audio to distant cloud servers
+- Global Push-to-Talk shortcut inserts clean text right into whatever app you are typing in
+
+It is still small, but the core flow is working.
+
+I would be interested in feedback on whether TalkType for Mac is clear enough on first use, especially on mobile.
+
+Download TalkType for Mac at https://talktype.app
+
+Pablo</textarea>
+  </article>
+          <article class="resource-card">
+    <div class="card-top">
+      <div>
+        <p class="eyebrow">Short surface</p>
+        <h3>Social thread</h3>
+      </div>
+      <div class="card-actions">
+        <button class="copy-button" type="button" data-copy-target="social-thread">Copy</button>
+        <a class="ghost-link" href="./social/thread.txt">Open raw</a>
+      </div>
+    </div>
+    <p class="card-description">Use this for the fast version. Cut harder if the room hates longer posts.</p>
+    <textarea id="social-thread" spellcheck="false">1/ I made TalkType for Mac, a mac app for mac productivity writers ADHD thinkers.
+
+2/ Subscription-trapped transcription tools that upload private voice audio to distant cloud servers. TalkType for Mac is a mac app for mac productivity writers ADHD thinkers. Runs 100% on-device using Apple speech recognition — zero audio leaves your Mac.
+
+3/ What it does:
+- Apple on-device — free, offline, private. No key, no network.
+- No subscription, no login wall, no account required
+- subscription-trapped transcription tools that upload private voice audio to distant cloud servers
+
+4/ Download TalkType for Mac at https://talktype.app</textarea>
+  </article>
+          <article class="resource-card">
+    <div class="card-top">
+      <div>
+        <p class="eyebrow">Short surface</p>
+        <h3>Caption options</h3>
+      </div>
+      <div class="card-actions">
+        <button class="copy-button" type="button" data-copy-target="caption-options">Copy</button>
+        <a class="ghost-link" href="./social/caption-options.txt">Open raw</a>
+      </div>
+    </div>
+    <p class="card-description">Steal one of these when the thread is too much or you just need the sharp line.</p>
+    <textarea id="caption-options" spellcheck="false">1. I made TalkType for Mac, a mac app for mac productivity writers ADHD thinkers.
+
+2. instant on-device dictation and transcription with a friendly pastel-punk ghost mascot
+
+3. TalkType for Mac turns subscription-trapped transcription tools that upload private voice audio to distant cloud servers into instant on-device dictation and transcription with a friendly pastel-punk ghost mascot.
+
+4. TalkType for Mac: Apple on-device — free, offline, private. No key, no network. No subscription, no login wall, no account required.
+
+5. I would be interested in feedback on whether TalkType for Mac is clear enough on first use, especially on mobile.</textarea>
+  </article>
+          <article class="resource-card wide">
+    <div class="card-top">
+      <div>
+        <p class="eyebrow">Longer room</p>
+        <h3>Community post</h3>
+      </div>
+      <div class="card-actions">
+        <button class="copy-button" type="button" data-copy-target="community-post">Copy</button>
+        <a class="ghost-link" href="./community/post.md">Open raw</a>
+      </div>
+    </div>
+    <p class="card-description">Use this as the base for Indie Hackers, DEV, or a more considered founder post.</p>
+    <textarea id="community-post" spellcheck="false"># TalkType for Mac
+
+TalkType for Mac is a mac app for mac productivity writers ADHD thinkers. Runs 100% on-device using Apple speech recognition — zero audio leaves your Mac.
+
+## Why I made it
+Subscription-trapped transcription tools that upload private voice audio to distant cloud servers.
+
+## What it does
+instant on-device dictation and transcription with a friendly pastel-punk ghost mascot
+
+## Current features
+- Apple on-device — free, offline, private. No key, no network.
+- No subscription, no login wall, no account required
+- subscription-trapped transcription tools that upload private voice audio to distant cloud servers
+- Global Push-to-Talk shortcut inserts clean text right into whatever app you are typing in
+
+## Who it is for
+Mac productivity writers ADHD thinkers.
+
+## Feedback
+I would be interested in feedback on whether TalkType for Mac is clear enough on first use, especially on mobile.
+
+## Link
+Download TalkType for Mac at https://talktype.app</textarea>
+  </article>
+          <article class="resource-card">
+    <div class="card-top">
+      <div>
+        <p class="eyebrow">Release note</p>
+        <h3>Changelog</h3>
+      </div>
+      <div class="card-actions">
+        <button class="copy-button" type="button" data-copy-target="changelog-note">Copy</button>
+        <a class="ghost-link" href="./release/changelog.md">Open raw</a>
+      </div>
+    </div>
+    <p class="card-description">This keeps the launch honest. Update the page and the release note together.</p>
+    <textarea id="changelog-note" spellcheck="false">## TalkType for Mac — 2026-09-19
+instant on-device dictation and transcription with a friendly pastel-punk ghost mascot
+
+Shipped this:
+- Apple on-device — free, offline, private. No key, no network.
+- No subscription, no login wall, no account required
+- subscription-trapped transcription tools that upload private voice audio to distant cloud servers
+- Global Push-to-Talk shortcut inserts clean text right into whatever app you are typing in
+
+Built for writers, ADHD thinkers, creators, and anyone who talks faster than they type.
+Why now: Subscription-trapped transcription tools that upload private voice audio to distant cloud servers.
+Honest bit: Still wants a human pass on audience, proof, and the sharpest angle.
+CTA: Download TalkType for Mac at https://talktype.app</textarea>
+  </article>
+          <article class="resource-card">
+    <div class="card-top">
+      <div>
+        <p class="eyebrow">Internal brain</p>
+        <h3>Messaging core</h3>
+      </div>
+      <div class="card-actions">
+        <button class="copy-button" type="button" data-copy-target="messaging-core">Copy</button>
+        <a class="ghost-link" href="./messaging-core.json">Open raw</a>
+      </div>
+    </div>
+    <p class="card-description">This is the spine. If the launch feels off, fix this before you fix the surfaces.</p>
+    <textarea id="messaging-core" spellcheck="false">{
+  "name": "TalkType for Mac",
+  "slug": "talktype-mac",
+  "appType": "mac app",
+  "audience": "writers, ADHD thinkers, creators, and anyone who talks faster than they type",
+  "problem": "subscription-trapped transcription tools that upload private voice audio to distant cloud servers",
+  "promise": "instant on-device dictation and transcription with a friendly pastel-punk ghost mascot",
+  "differentiators": [
+    "Runs 100% on-device using Apple speech recognition — zero audio leaves your Mac",
+    "No subscription, no login wall, no account required",
+    "Global Push-to-Talk shortcut inserts clean text right into whatever app you are typing in",
+    "Friendly peach ghost mascot with personality, live floating HUD, and clipboard fallback"
+  ],
+  "proofPoints": [
+    "Apple on-device — free, offline, private. No key, no network.",
+    "No subscription, no login wall, no account required",
+    "subscription-trapped transcription tools that upload private voice audio to distant cloud servers",
+    "Global Push-to-Talk shortcut inserts clean text right into whatever app you are typing in"
+  ],
+  "objections": [
+    "Still wants a human pass on audience, proof, and the sharpest angle."
+  ],
+  "callToAction": "Download TalkType for Mac at https://talktype.app",
+  "primaryLink": "https://talktype.app",
+  "hashtags": [
+    "#talktypemac",
+    "#voicetotextmac",
+    "#offlinedictationmac",
+    "#pushtotalkdictationmac"
+  ],
+  "notes": "Launch hints: ../../mac/talktype-mac/.launch-hints.yaml | Bootstrapped from repo: ../../mac/talktype-mac | Bootstrapped from site: https://talktype.app"
+}</textarea>
+  </article>
+          <article class="resource-card">
+            <div class="card-top">
+              <div>
+                <p class="eyebrow">Visual asset</p>
+                <h3>OG card</h3>
+              </div>
+              <div class="card-actions">
+                <a class="ghost-link" href="./assets/og-card.png">Open raw</a>
+              </div>
+            </div>
+            <p class="card-description">Use this on social, launch pages, and anywhere the pack needs visual proof fast.</p>
+            <div class="og-card-preview">
+              <img src="./assets/og-card.png" alt="Generated OG card preview" />
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Human pass</p>
+            <h2>What to fix before you hit send</h2>
+          </div>
+          <p class="muted">These keep the launch from sounding like a generated intern.</p>
+        </div>
+        <div class="grid two">
+          <article class="check-card">
+            <div class="check-list">
+              <label class="check-row">
+                <input type="checkbox" data-check-id="human-0" />
+                <span>Swap one bullet for an oddly specific detail only this app can claim.</span>
+              </label><label class="check-row">
+                <input type="checkbox" data-check-id="human-1" />
+                <span>Cut any line you cannot prove in one click, one screenshot, or one sentence.</span>
+              </label><label class="check-row">
+                <input type="checkbox" data-check-id="human-2" />
+                <span>Keep one CTA per surface. Do not ask for five things at once.</span>
+              </label><label class="check-row">
+                <input type="checkbox" data-check-id="human-3" />
+                <span>Make the mac app listing read clean before you push traffic anywhere.</span>
+              </label><label class="check-row">
+                <input type="checkbox" data-check-id="human-4" />
+                <span>If posting to Hacker News, lead with usefulness. Save the launch theater for somewhere else.</span>
+              </label>
+            </div>
+          </article>
+          <article class="check-card">
+            <p class="eyebrow">Useful terms</p>
+            <h3>Metadata + search hints</h3>
+            <div class="pill-row" style="margin-top:12px;">
+              <span class="badge">voice to text mac</span><span class="badge">offline dictation mac</span><span class="badge">push to talk dictation mac</span><span class="badge">privacy voice recognition</span>
+            </div>
+            <div class="footer-note">
+              <strong>Why this works</strong>
+              <p style="margin-top:8px;">Short surfaces test the hook. Longer rooms explain the story. The page catches the click. The changelog makes it real. Keep those in sync and the launch suddenly stops feeling fake.</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <script>
+        const slug = "talktype-mac";
+        const storageKey = "launch-arsenal-board:" + slug;
+
+        function copyFromTextarea(id) {
+          const el = document.getElementById(id);
+          if (!el) return;
+          const value = el.value;
+          if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(value).catch(() => {
+              el.focus();
+              el.select();
+            });
+            return;
+          }
+          el.focus();
+          el.select();
+          try { document.execCommand("copy"); } catch (_) {}
+        }
+
+        document.querySelectorAll("[data-copy-target]").forEach((button) => {
+          button.addEventListener("click", () => {
+            copyFromTextarea(button.getAttribute("data-copy-target"));
+          });
+        });
+
+        const checks = Array.from(document.querySelectorAll("[data-check-id]"));
+        let saved = {};
+        try {
+          saved = JSON.parse(localStorage.getItem(storageKey) || "{}");
+        } catch (_) {
+          saved = {};
+        }
+
+        checks.forEach((check) => {
+          const id = check.getAttribute("data-check-id");
+          check.checked = Boolean(saved[id]);
+          check.addEventListener("change", () => {
+            saved[id] = check.checked;
+            localStorage.setItem(storageKey, JSON.stringify(saved));
+          });
+        });
+      </script>
+    </main>
+  </body>
+</html>
