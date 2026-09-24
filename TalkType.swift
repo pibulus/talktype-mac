@@ -1873,6 +1873,8 @@ struct ContentView: View {
                     Button(action: { selectedTab = 1 }) {
                         HStack(spacing: 3) {
                             Text(L10n.t("history"))
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
                             if !history.records.isEmpty {
                                 Text("\(history.records.count)")
                                     .font(.system(size: 9, weight: .bold))
@@ -1907,7 +1909,7 @@ struct ContentView: View {
             }
         }
         .padding(18)
-        .frame(width: 330, height: 440, alignment: .top)
+        .frame(width: 346, height: 440, alignment: .top)
         .background(p.shell)
     }
 
