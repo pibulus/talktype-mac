@@ -5,8 +5,8 @@ set -e
 # Builds Direct Distribution (Unlocked DMG with Notarization readiness) or Mac App Store (Sandboxed PKG)
 
 APP_NAME="TalkType"
-VERSION="1.0"
-BUILD_NUMBER="1"
+VERSION="${VERSION:-1.0}"
+BUILD_NUMBER="${BUILD_NUMBER:-1}"
 SRC_FILE="TalkType.swift"
 BUILD_DIR="build"
 DIST_DIR="dist"
@@ -15,19 +15,35 @@ BIN_DIR="${APP_DIR}/Contents/MacOS"
 RES_DIR="${APP_DIR}/Contents/Resources"
 
 TARGET_MODE="${1:-direct}" # "direct" or "mas"
+UNIVERSAL="${UNIVERSAL:-0}"  # UNIVERSAL=1 builds a fat arm64 + x86_64 binary
 
-echo "🎨 Building ${APP_NAME} v${VERSION} (${TARGET_MODE} target)..."
+echo "🎨 Building ${APP_NAME} v${VERSION} (${BUILD_NUMBER}) (${TARGET_MODE} target)..."
+
+# Toolchain facts App Store validation likes to see in Info.plist
+SDK_VERSION=$(xcrun --sdk macosx --show-sdk-version 2>/dev/null || echo "13.0")
+SDK_BUILD=$(xcrun --sdk macosx --show-sdk-build-version 2>/dev/null || echo "")
+XCODE_VERSION=$(xcodebuild -version 2>/dev/null | awk '/Xcode/ {print $2}' || echo "")
+XCODE_BUILD=$(xcodebuild -version 2>/dev/null | awk '/Build version/ {print $3}' || echo "")
+MACHINE_BUILD=$(sw_vers -buildVersion 2>/dev/null || echo "")
 
 # Clean previous build artifacts
 rm -rf "${BUILD_DIR}" "${DIST_DIR}"
 mkdir -p "${BIN_DIR}" "${RES_DIR}" "${DIST_DIR}"
 
-# 1. Compile Swift executable (Apple Silicon optimized)
-SWIFT_FLAGS="-parse-as-library -O -target arm64-apple-macos13.0"
+# 1. Compile Swift executable (Apple Silicon by default, universal with UNIVERSAL=1)
+SWIFT_FLAGS="-parse-as-library -O"
 if [ "${TARGET_MODE}" = "mas" ]; then
     SWIFT_FLAGS="${SWIFT_FLAGS} -D MAS_BUILD"
 fi
-swiftc ${SWIFT_FLAGS} "${SRC_FILE}" -o "${BIN_DIR}/${APP_NAME}"
+if [ "${UNIVERSAL}" = "1" ]; then
+    swiftc ${SWIFT_FLAGS} -target arm64-apple-macos13.0 "${SRC_FILE}" -o "${BUILD_DIR}/${APP_NAME}-arm64"
+    swiftc ${SWIFT_FLAGS} -target x86_64-apple-macos13.0 "${SRC_FILE}" -o "${BUILD_DIR}/${APP_NAME}-x86_64"
+    lipo -create "${BUILD_DIR}/${APP_NAME}-arm64" "${BUILD_DIR}/${APP_NAME}-x86_64" -output "${BIN_DIR}/${APP_NAME}"
+    rm -f "${BUILD_DIR}/${APP_NAME}-arm64" "${BUILD_DIR}/${APP_NAME}-x86_64"
+    echo "🧬 Universal binary (arm64 + x86_64)"
+else
+    swiftc ${SWIFT_FLAGS} -target arm64-apple-macos13.0 "${SRC_FILE}" -o "${BIN_DIR}/${APP_NAME}"
+fi
 
 # 2. Generate Production Info.plist
 cat > "${APP_DIR}/Contents/Info.plist" << PLIST
@@ -59,6 +75,43 @@ cat > "${APP_DIR}/Contents/Info.plist" << PLIST
     <string>13.0</string>
     <key>NSHumanReadableCopyright</key>
     <string>Copyright © 2026 Pablo Alvarado. All rights reserved.</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleLocalizations</key>
+    <array>
+        <string>en</string>
+        <string>es</string>
+    </array>
+    <key>CFBundleSupportedPlatforms</key>
+    <array>
+        <string>MacOSX</string>
+    </array>
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSSupportsAutomaticTermination</key>
+    <false/>
+    <key>NSSupportsSuddenTermination</key>
+    <false/>
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
+    <key>DTPlatformName</key>
+    <string>macosx</string>
+    <key>DTSDKName</key>
+    <string>macosx${SDK_VERSION}</string>
+    <key>DTSDKBuild</key>
+    <string>${SDK_BUILD}</string>
+    <key>DTPlatformVersion</key>
+    <string>${SDK_VERSION}</string>
+    <key>DTXcode</key>
+    <string>${XCODE_VERSION}</string>
+    <key>DTXcodeBuild</key>
+    <string>${XCODE_BUILD}</string>
+    <key>BuildMachineOSBuild</key>
+    <string>${MACHINE_BUILD}</string>
     <key>NSSpeechRecognitionUsageDescription</key>
     <string>TalkType uses on-device speech recognition to transcribe your voice into text accurately.</string>
     <key>NSMicrophoneUsageDescription</key>
@@ -77,6 +130,15 @@ if [ -f "PrivacyInfo.xcprivacy" ]; then
 fi
 
 chmod +x "${BIN_DIR}/${APP_NAME}"
+
+# App Store builds must carry a provisioning profile (App Store Connect → Profiles →
+# "Mac App Store Connect" type, bundle id com.pibulus.talktype). Drop it next to build.sh.
+if [ "${TARGET_MODE}" = "mas" ] && [ -f "TalkType.provisionprofile" ]; then
+    cp "TalkType.provisionprofile" "${APP_DIR}/Contents/embedded.provisionprofile"
+    echo "📎 Embedded provisioning profile"
+elif [ "${TARGET_MODE}" = "mas" ]; then
+    echo "⚠️  No TalkType.provisionprofile found — App Store upload will be rejected without one."
+fi
 
 # 4. Code Signing & Entitlements (Secure Timestamp enabled)
 if [ "${TARGET_MODE}" = "mas" ]; then
@@ -115,6 +177,10 @@ if [ "${TARGET_MODE}" = "mas" ]; then
                      --sign "${INSTALLER_ID}" \
                      "${DIST_DIR}/${APP_NAME}-${VERSION}.pkg"
         echo "✨ Mac App Store PKG ready at ${DIST_DIR}/${APP_NAME}-${VERSION}.pkg"
+        echo "    Validate:  xcrun altool --validate-app -f ${DIST_DIR}/${APP_NAME}-${VERSION}.pkg -t macos --apiKey <key-id> --apiIssuer <issuer>"
+        echo "    Upload:    open -a Transporter ${DIST_DIR}/${APP_NAME}-${VERSION}.pkg"
+    else
+        echo "⚠️  No '3rd Party Mac Developer Installer' certificate — skipping .pkg (needed for App Store upload)."
     fi
 
 else
