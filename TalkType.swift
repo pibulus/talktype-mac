@@ -221,7 +221,6 @@ enum L10n {
         "onbWelcomeBody": ["en": "Hold a key, talk, let go. Your words land wherever your cursor is. No account, no cloud, nothing leaves your Mac.", "es": "Mantén una tecla, habla, suelta. Tus palabras aparecen donde esté tu cursor. Sin cuenta, sin nube, nada sale de tu Mac."],
         "onbPickKey": ["en": "Pick your push-to-talk key", "es": "Elige tu tecla de pulsar para hablar"],
         "onbFnTip": ["en": "Tip: set System Settings → Keyboard → “Press 🌐 key to” → Do Nothing.", "es": "Consejo: en Ajustes del Sistema → Teclado → “Al pulsar 🌐” elige No hacer nada."],
-        "onbPermsTitle": ["en": "Two quick permissions", "es": "Dos permisos rápidos"],
         "onbPermsTitleThree": ["en": "Three quick permissions", "es": "Tres permisos rápidos"],
         "onbPermsBody": ["en": "TalkType only listens while you hold the key. Everything is processed on your Mac.", "es": "TalkType solo escucha mientras mantienes la tecla. Todo se procesa en tu Mac."],
         "onbMic": ["en": "Microphone", "es": "Micrófono"],
@@ -231,7 +230,6 @@ enum L10n {
         "onbAX": ["en": "Accessibility", "es": "Accesibilidad"],
         "onbAXWhy": ["en": "Modifier hotkeys + pasting into apps", "es": "Atajos de modificador + pegar en apps"],
         "onbAXNote": ["en": "Skip it and TalkType still works: text goes to your clipboard, ⌘V to paste. ⌃⌥ Space needs no permission.", "es": "Si lo omites, TalkType igual funciona: el texto va al portapapeles, ⌘V para pegar. ⌃⌥ Espacio no necesita permiso."],
-        "onbMASNote": ["en": "Transcripts are copied to your clipboard — press ⌘V to paste them anywhere.", "es": "Las transcripciones se copian al portapapeles — pulsa ⌘V para pegarlas donde quieras."],
         "onbGranted": ["en": "Granted", "es": "Concedido"],
         "onbDenied": ["en": "Denied", "es": "Denegado"],
         "onbAllow": ["en": "Allow", "es": "Permitir"],
@@ -305,8 +303,9 @@ enum TalkTypeConfig {
         return UserDefaults.standard.string(forKey: hudPositionStorageKey) ?? "bottom"
     }
     
-    /// Sandboxed App Store builds can't be granted Accessibility, so modifier-only keys never
-    /// arrive there. The Carbon hot key works with zero permissions, so it is the MAS default.
+    /// Accessibility is optional everywhere. The store build defaults to the Carbon hot key
+    /// because it works before any permission is granted; grant Accessibility and the
+    /// modifier-only keys plus auto-paste light up there too.
     static var defaultTrigger: PTTTrigger {
         #if MAS_BUILD
         return .ctrlOptionSpace
@@ -1037,22 +1036,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let targetIsSelf = dictationStartedInOnboarding
         dictationStartedInOnboarding = false
 
-        #if MAS_BUILD
-        // Sandboxed App Store build: no Accessibility/auto-paste. Clipboard only.
-        engine.transcript = L10n.t("copiedToClipboard")
-        liveHUDController?.hide(after: 0.6)
-        dictationTargetApp = nil
-        #else
+        // Accessibility is optional in every build (sandbox included): granted → ⌘V into the
+        // target app; not granted → clipboard with an explicit reminder in the HUD.
         if AXIsProcessTrusted() && !targetIsSelf {
             liveHUDController?.hide()
             pasteToActiveApp(text: text)
         } else {
-            // Clipboard fallback with explicit visual feedback
             engine.transcript = L10n.t("copiedToClipboard")
             liveHUDController?.hide(after: 0.6)
             dictationTargetApp = nil
         }
-        #endif
     }
 
     /// Popover ghost button: start, or stop-and-paste.
@@ -1104,10 +1097,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Permissions & Onboarding
 
     func checkAccessibilityPermissions() {
-        #if !MAS_BUILD
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
         let _ = AXIsProcessTrustedWithOptions(options)
-        #endif
     }
 
     @objc func showOnboarding() {
@@ -1172,15 +1163,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(titleItem)
         menu.addItem(NSMenuItem.separator())
         
-        // Accessibility Status Alert if not trusted (direct distribution only)
-        #if !MAS_BUILD
+        // Accessibility nudge if not trusted (optional in every build)
         if !AXIsProcessTrusted() {
             let permItem = NSMenuItem(title: L10n.t("accessibilityDisabled"), action: #selector(openAccessibilitySettings), keyEquivalent: "")
             permItem.target = self
             menu.addItem(permItem)
             menu.addItem(NSMenuItem.separator())
         }
-        #endif
         
         // Quick Recovery: Copy Last Transcript
         if let last = history.records.first {
@@ -1626,9 +1615,6 @@ final class LiveHUDWindowController: NSWindowController {
     }
 
     private static func focusedWindowScreen() -> NSScreen? {
-        #if MAS_BUILD
-        return nil
-        #else
         guard AXIsProcessTrusted(),
               let app = NSWorkspace.shared.frontmostApplication,
               app.processIdentifier != NSRunningApplication.current.processIdentifier else { return nil }
@@ -1651,7 +1637,6 @@ final class LiveHUDWindowController: NSWindowController {
         let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
         let center = NSPoint(x: point.x + windowSize.width / 2, y: primaryHeight - (point.y + windowSize.height / 2))
         return NSScreen.screens.first(where: { NSMouseInRect(center, $0.frame, false) })
-        #endif
     }
 
     private static func origin(for size: NSSize, on screen: NSScreen?) -> NSPoint {
@@ -2695,11 +2680,7 @@ struct ContentView: View {
     }
 
     private var needsAccessibilityNudge: Bool {
-        #if MAS_BUILD
-        return false
-        #else
-        return !isRec && !AXIsProcessTrusted() && TalkTypeConfig.pttTrigger.needsAccessibility
-        #endif
+        !isRec && !AXIsProcessTrusted() && TalkTypeConfig.pttTrigger.needsAccessibility
     }
 
     private var statusLine: some View {
@@ -2964,15 +2945,9 @@ struct OnboardingView: View {
 
     private var permissionsStep: some View {
         VStack(alignment: .leading, spacing: 14) {
-            #if MAS_BUILD
-            Text(L10n.t("onbPermsTitle"))
-                .font(.system(size: 24, weight: .heavy, design: .rounded))
-                .foregroundStyle(p.ink)
-            #else
             Text(L10n.t("onbPermsTitleThree"))
                 .font(.system(size: 24, weight: .heavy, design: .rounded))
                 .foregroundStyle(p.ink)
-            #endif
 
             Text(L10n.t("onbPermsBody"))
                 .font(.system(size: 13, weight: .medium, design: .rounded))
@@ -3000,14 +2975,6 @@ struct OnboardingView: View {
                 settings: { openPrivacyPane("Privacy_SpeechRecognition") }
             )
 
-            #if MAS_BUILD
-            Text(L10n.t("onbMASNote"))
-                .font(.system(size: 11.5, weight: .medium, design: .rounded))
-                .foregroundStyle(p.inkSoft.opacity(0.8))
-                .lineSpacing(2)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 4)
-            #else
             permissionRow(
                 icon: "hand.raised.fill",
                 title: L10n.t("onbAX"),
@@ -3026,7 +2993,6 @@ struct OnboardingView: View {
                 .lineSpacing(2)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 4)
-            #endif
         }
     }
 
@@ -3198,9 +3164,7 @@ struct OnboardingView: View {
     private func refreshPermissions() {
         micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
         speechStatus = SFSpeechRecognizer.authorizationStatus()
-        #if !MAS_BUILD
         axTrusted = AXIsProcessTrusted()
-        #endif
     }
 
     private func openPrivacyPane(_ anchor: String) {

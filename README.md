@@ -85,8 +85,12 @@ The welcome guide asks for Microphone and Speech Recognition one at a time. Acce
 must be granted by hand in System Settings → Privacy & Security → Accessibility — it covers
 the modifier-key push-to-talk monitor, the Cmd+V paste and the "show the HUD on the screen
 where the focused window is" trick. Without it, TalkType still works: ⌃⌥ Space as the key,
-and text lands on the clipboard with a ⌘V reminder in the HUD. The App Store build compiles
-the Accessibility path out (clipboard-only).
+and text lands on the clipboard with a ⌘V reminder in the HUD.
+
+This is the same in the App Store build. The sandbox does not stop a user granting
+Accessibility (Magnet, on the store, requires it outright); what App Review wants is that the
+app still works without it, which it does. So the store build defaults to ⌃⌥ Space and
+clipboard, and lights up modifier keys + auto-paste the moment Accessibility is granted.
 
 ## App Store checklist
 
@@ -111,8 +115,10 @@ Still on you, in order:
 5. **Screenshots.** 2880×1800 (or 1440×900) PNGs, `screenshots/appstore-2880x1800.png` is one.
    Show the HUD over a real app, the popover, and the welcome guide.
 6. **Review notes.** Say it is a menu bar app (no Dock icon, `LSUIElement`), that the
-   default shortcut is ⌃⌥ Space, that text is copied to the clipboard in this build, and
-   how to test: open TextEdit, hold ⌃⌥ Space, speak, release, ⌘V.
+   default shortcut is ⌃⌥ Space, that Accessibility is *optional* (without it: text is
+   copied to the clipboard; with it: modifier-key shortcut and automatic paste into the
+   focused app), and how to test both: open TextEdit, hold ⌃⌥ Space, speak, release, ⌘V;
+   then grant Accessibility and repeat, the text appears on its own.
 7. **Intel.** The default build is Apple Silicon only, which the store allows. Ship
    `UNIVERSAL=1` if you want Intel Macs too.
 
