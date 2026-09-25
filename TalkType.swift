@@ -1886,6 +1886,10 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
     private var finalizeTimeoutItem: DispatchWorkItem?
     private let appleFinalizeTimeout: TimeInterval = 1.8
     private let deepgramFinalizeTimeout: TimeInterval = 1.2
+    /// People let go of the key while the last syllable is still leaving their mouth.
+    /// Keep the mic open this long after release before asking for the final.
+    private let releaseTail: TimeInterval = 0.4
+    private var releaseTailItem: DispatchWorkItem?
 
     @Published var transcript = ""
     @Published var isRecording = false
@@ -2020,12 +2024,22 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
         guard !isFinishing else { return }
         isFinishing = true
         let session = sessionID
-        switch backend {
-        case .apple:
-            stopAppleSpeechRecognition(session: session)
-        case .deepgram:
-            stopDeepgramStreaming(session: session)
+        // Outer bound for the whole stop: tail + backend finalize.
+        let finalizeSeconds = (backend == .apple ? appleFinalizeTimeout : deepgramFinalizeTimeout) + releaseTail
+        armFinalizeTimeout(session: session, seconds: finalizeSeconds)
+
+        releaseTailItem?.cancel()
+        let tail = DispatchWorkItem { [weak self] in
+            guard let self = self, session == self.sessionID else { return }
+            switch backend {
+            case .apple:
+                self.stopAppleSpeechRecognition(session: session)
+            case .deepgram:
+                self.stopDeepgramStreaming(session: session)
+            }
         }
+        releaseTailItem = tail
+        DispatchQueue.main.asyncAfter(deadline: .now() + releaseTail, execute: tail)
     }
 
     /// Discard the take: no final result, no paste. Safe to call in any state.
@@ -2034,6 +2048,8 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
         sessionID += 1 // orphan every in-flight callback
         finalizeTimeoutItem?.cancel()
         finalizeTimeoutItem = nil
+        releaseTailItem?.cancel()
+        releaseTailItem = nil
         teardownAudio()
         recognitionTask?.cancel()
         recognitionTask = nil
@@ -2083,6 +2099,8 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
         guard session == sessionID, activeBackend != nil else { return }
         finalizeTimeoutItem?.cancel()
         finalizeTimeoutItem = nil
+        releaseTailItem?.cancel()
+        releaseTailItem = nil
         teardownAudio()
         recognitionTask?.cancel()
         recognitionTask = nil
@@ -2276,7 +2294,6 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
         teardownAudio()
         // Ask for the buffered audio to be transcribed now, then wait (briefly) for it.
         webSocketTask?.send(.string("{\"type\":\"Finalize\"}")) { _ in }
-        armFinalizeTimeout(session: session, seconds: deepgramFinalizeTimeout)
     }
 
     // MARK: - Apple Speech (on-device)
@@ -2361,9 +2378,8 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
     private func stopAppleSpeechRecognition(session: Int) {
         teardownAudio()
         recognitionRequest?.endAudio()
-        // The recognizer normally answers within a few hundred ms. If it doesn't, we deliver
-        // the last partial ourselves rather than leave the user hanging.
-        armFinalizeTimeout(session: session, seconds: appleFinalizeTimeout)
+        // The recognizer normally answers within a few hundred ms; the outer finalize
+        // timeout delivers the last partial if it doesn't.
     }
 }
 
