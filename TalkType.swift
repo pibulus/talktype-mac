@@ -204,6 +204,7 @@ enum L10n {
         "permissionMicDetail": ["en": "Allow TalkType in System Settings to dictate.", "es": "Permite TalkType en Ajustes del Sistema para dictar."],
         "permissionSpeechTitle": ["en": "Speech Recognition is off", "es": "El reconocimiento de voz está desactivado"],
         "permissionSpeechDetail": ["en": "Turn it on to use Apple Speech.", "es": "Actívalo para usar Voz de Apple."],
+        "permissionsReadyShortcut": ["en": "All set. Press your shortcut again to talk.", "es": "Todo listo. Pulsa el atajo otra vez para hablar."],
         "permissionPasteTitle": ["en": "Automatic paste is off", "es": "El pegado automático está desactivado"],
         "permissionPasteDetail": ["en": "Text still copies. Allow access to paste it for you.", "es": "El texto se copia. Permite el acceso para pegarlo automáticamente."],
         "fixPermission": ["en": "Fix", "es": "Ajustes"],
@@ -547,9 +548,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
-        SFSpeechRecognizer.requestAuthorization { _ in }
-        AVCaptureDevice.requestAccess(for: .audio) { _ in }
-
         // Setup Menu Bar Item
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
@@ -727,7 +725,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             pttHeld = true
             dictationTargetApp = NSWorkspace.shared.frontmostApplication
             liveHUDController?.show()
-            engine.startRecording()
+            engine.startRecording(resumeAfterPermission: false)
         } else if !down, pttHeld {
             pttHeld = false
 
@@ -1604,6 +1602,7 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
     private var urlSession: URLSession?
     private var confirmedTranscript = ""
     private var interimTranscript = ""
+    private var permissionRequestInProgress = false
     
     @Published var transcript = ""
     @Published var isRecording = false
@@ -1692,29 +1691,70 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
         }
     }
     
-    func startRecording() {
+    func startRecording(resumeAfterPermission: Bool = true) {
         guard phase != .processing else { return }
 
         if audioEngine.isRunning {
             stopRecording()
             return
         }
+        guard !permissionRequestInProgress else { return }
 
         phase = .idle
 
-        let micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
-        if micStatus == .denied || micStatus == .restricted {
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized:
+            continueAfterMicrophonePermission(resumeAfterPermission: resumeAfterPermission, requestedPermission: false)
+        case .notDetermined:
+            permissionRequestInProgress = true
+            AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in
+                DispatchQueue.main.async {
+                    guard let self = self else { return }
+                    self.permissionRequestInProgress = false
+                    guard granted else {
+                        self.transcript = L10n.t("permissionMicTitle")
+                        return
+                    }
+                    self.continueAfterMicrophonePermission(resumeAfterPermission: resumeAfterPermission, requestedPermission: true)
+                }
+            }
+        default:
             transcript = L10n.t("permissionMicTitle")
+        }
+    }
+
+    private func continueAfterMicrophonePermission(resumeAfterPermission: Bool, requestedPermission: Bool) {
+        if !TalkTypeConfig.isUsingDeepgram {
+            switch SFSpeechRecognizer.authorizationStatus() {
+            case .authorized:
+                beginAuthorizedRecording(resumeAfterPermission: resumeAfterPermission, requestedPermission: requestedPermission)
+            case .notDetermined:
+                permissionRequestInProgress = true
+                SFSpeechRecognizer.requestAuthorization { [weak self] status in
+                    DispatchQueue.main.async {
+                        guard let self = self else { return }
+                        self.permissionRequestInProgress = false
+                        guard status == .authorized else {
+                            self.transcript = L10n.t("permissionSpeechTitle")
+                            return
+                        }
+                        self.beginAuthorizedRecording(resumeAfterPermission: resumeAfterPermission, requestedPermission: true)
+                    }
+                }
+            default:
+                transcript = L10n.t("permissionSpeechTitle")
+            }
+        } else {
+            beginAuthorizedRecording(resumeAfterPermission: resumeAfterPermission, requestedPermission: requestedPermission)
+        }
+    }
+
+    private func beginAuthorizedRecording(resumeAfterPermission: Bool, requestedPermission: Bool) {
+        if requestedPermission && !resumeAfterPermission {
+            transcript = L10n.t("permissionsReadyShortcut")
             return
         }
 
-        if !TalkTypeConfig.isUsingDeepgram {
-            let speechStatus = SFSpeechRecognizer.authorizationStatus()
-            if speechStatus == .denied || speechStatus == .restricted {
-                transcript = L10n.t("permissionSpeechTitle")
-                return
-            }
-        }
         
         transcript = ""
         confirmedTranscript = ""
