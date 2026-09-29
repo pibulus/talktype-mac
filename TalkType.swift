@@ -1,9 +1,53 @@
 import Cocoa
 import SwiftUI
+import Combine
 import Speech
 import AVFoundation
 import ApplicationServices
 import Security
+
+/// Short-lived state for the dictation loop; processing blocks a second take
+/// until the current transcript has been delivered.
+enum SpeechPhase: Equatable {
+    case idle
+    case listening
+    case processing
+    case ready
+}
+
+final class AudioLevelMeter: ObservableObject {
+    @Published var level: Double = 0
+}
+
+enum PermissionHelpIssue: Equatable {
+    case microphone
+    case speechRecognition
+    case accessibility
+
+    var titleKey: String {
+        switch self {
+        case .microphone: return "permissionMicTitle"
+        case .speechRecognition: return "permissionSpeechTitle"
+        case .accessibility: return "permissionPasteTitle"
+        }
+    }
+
+    var detailKey: String {
+        switch self {
+        case .microphone: return "permissionMicDetail"
+        case .speechRecognition: return "permissionSpeechDetail"
+        case .accessibility: return "permissionPasteDetail"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .microphone: return "mic.slash.fill"
+        case .speechRecognition: return "waveform"
+        case .accessibility: return "keyboard"
+        }
+    }
+}
 
 // MARK: - PTT Shortcut Trigger Options (Full Keyboard & Mobility Accessibility)
 enum PTTTrigger: String, CaseIterable, Identifiable {
@@ -154,7 +198,15 @@ enum L10n {
         "privacyPolicy": ["en": "Privacy Policy…", "es": "Política de privacidad…"],
         "micDisabled": ["en": "⚠️ Microphone Denied (Click to Fix)", "es": "⚠️ Micrófono denegado (Clic para activar)"],
         "speechDisabled": ["en": "⚠️ Speech Recognition Denied (Click to Fix)", "es": "⚠️ Reconocimiento de voz denegado (Clic para activar)"],
-        "micDeniedAlert": ["en": "Microphone permission required in System Settings", "es": "Se requiere permiso de micrófono en Ajustes del Sistema"],
+        "thinking": ["en": "Finishing…", "es": "Terminando…"],
+        "ready": ["en": "Done", "es": "Listo"],
+        "permissionMicTitle": ["en": "Microphone access is off", "es": "El acceso al micrófono está desactivado"],
+        "permissionMicDetail": ["en": "Allow TalkType in System Settings to dictate.", "es": "Permite TalkType en Ajustes del Sistema para dictar."],
+        "permissionSpeechTitle": ["en": "Speech Recognition is off", "es": "El reconocimiento de voz está desactivado"],
+        "permissionSpeechDetail": ["en": "Turn it on to use Apple Speech.", "es": "Actívalo para usar Voz de Apple."],
+        "permissionPasteTitle": ["en": "Automatic paste is off", "es": "El pegado automático está desactivado"],
+        "permissionPasteDetail": ["en": "Text still copies. Allow access to paste it for you.", "es": "El texto se copia. Permite el acceso para pegarlo automáticamente."],
+        "fixPermission": ["en": "Fix", "es": "Ajustes"],
         "delete": ["en": "Delete", "es": "Eliminar"]
     ]
 }
@@ -530,7 +582,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self.pasteWatchdogItem = nil
             
             guard self.pendingPaste else {
-                if !self.engine.isRecording {
+                if !self.engine.isRecording && self.engine.phase != .ready {
+                    self.engine.phase = .idle
                     self.liveHUDController?.hide()
                 }
                 return
@@ -539,6 +592,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self.stopMenubarBounce()
             
             guard !text.isEmpty else {
+                self.engine.phase = .idle
                 self.liveHUDController?.hide()
                 return
             }
@@ -565,7 +619,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 } else {
                     self?.stopMenubarBounce()
                     NSSound(named: "Pop")?.play()
-                    if !(self?.pendingPaste ?? false) {
+                    if !(self?.pendingPaste ?? false), self?.engine.phase != .ready {
+                        self?.engine.phase = .idle
                         self?.liveHUDController?.hide()
                     }
                 }
@@ -573,7 +628,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         setupPushToTalk()
-        checkAccessibilityPermissions()
     }
     
     // MARK: - Menu Bar Icon (Serene When Idle, Living & Blinking While Dictating)
@@ -667,12 +721,27 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guard let down = trigger.matches(event: event) else { return }
         
         if down, !pttHeld {
+            // A second shortcut press must not replace text while the first
+            // transcript is still being finalized or polished.
+            guard !pendingPaste, engine.phase != .processing else { return }
             pttHeld = true
             dictationTargetApp = NSWorkspace.shared.frontmostApplication
             liveHUDController?.show()
             engine.startRecording()
         } else if !down, pttHeld {
             pttHeld = false
+
+            // A permission failure or a very short press can end before audio
+            // capture starts. Never treat its status text as dictated words.
+            guard engine.hasActiveCapture else {
+                pendingPaste = false
+                pasteWatchdogItem?.cancel()
+                pasteWatchdogItem = nil
+                stopMenubarBounce()
+                liveHUDController?.hide()
+                return
+            }
+
             pendingPaste = true
             engine.stopRecording()
             
@@ -697,28 +766,36 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func deliver(text: String) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in self?.deliver(text: text) }
+            return
+        }
+
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
-        
+        engine.phase = .ready
+
         if AXIsProcessTrusted() {
-            self.liveHUDController?.hide()
+            engine.transcript = text
             self.pasteToActiveApp(text: text)
+            self.liveHUDController?.hide(after: 0.9)
         } else {
             // Clipboard fallback with explicit visual feedback
             self.engine.transcript = L10n.t("copiedToClipboard")
-            self.liveHUDController?.hide(after: 0.6)
+            self.liveHUDController?.hide(after: 1.5)
         }
+
+        let resetReadyState = DispatchWorkItem { [weak self] in
+            guard let self = self, self.engine.phase == .ready else { return }
+            self.engine.phase = .idle
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6, execute: resetReadyState)
     }
 
     func requestPaste() {
         pendingPaste = true
         engine.stopRecording()
-    }
-
-    func checkAccessibilityPermissions() {
-        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-        let _ = AXIsProcessTrustedWithOptions(options)
     }
 
     @objc func statusItemClicked(_ sender: NSStatusBarButton) {
@@ -1214,7 +1291,10 @@ final class LiveHUDWindowController: NSWindowController {
         isVisibleTarget = true
         if !(window.contentView is NSHostingView<LiveTranscriptHUDView>) {
             window.contentView = NSHostingView(
-                rootView: LiveTranscriptHUDView(speechEngine: speechEngine))
+                rootView: LiveTranscriptHUDView(
+                    speechEngine: speechEngine,
+                    audioMeter: speechEngine.audioMeter
+                ))
         }
         updatePosition()
         window.orderFrontRegardless()
@@ -1268,12 +1348,89 @@ final class LiveHUDWindowController: NSWindowController {
 // MARK: - Live Transcript HUD View (Pure Crisp Rounded Capsule, 4.5px Chunky Neon Glow Border)
 struct LiveTranscriptHUDView: View {
     @ObservedObject var speechEngine: SpeechEngine
+    @ObservedObject var audioMeter: AudioLevelMeter
     @State private var wavePhase: Double = 0
     @State private var borderAngle: Double = 0
     @State private var ghostBounce: CGFloat = 1.0
     
     private var displayedText: String {
-        speechEngine.transcript.isEmpty ? L10n.t("listeningSpeak") : speechEngine.transcript
+        if !speechEngine.transcript.isEmpty { return speechEngine.transcript }
+        switch speechEngine.phase {
+        case .idle: return L10n.t("holdGhost")
+        case .listening: return L10n.t("listeningSpeak")
+        case .processing: return L10n.t("thinking")
+        case .ready: return L10n.t("ready")
+        }
+    }
+
+    private var phaseLabel: String {
+        switch speechEngine.phase {
+        case .idle: return L10n.t("holdGhost")
+        case .listening: return L10n.t("listening")
+        case .processing: return L10n.t("thinking")
+        case .ready: return L10n.t("ready")
+        }
+    }
+
+    @ViewBuilder
+    private var activityIndicator: some View {
+        switch speechEngine.phase {
+        case .idle:
+            Circle()
+                .fill(TT.tangerine.opacity(0.7))
+                .frame(width: 10, height: 10)
+                .frame(width: 42, height: 34)
+        case .listening:
+            ZStack {
+                Circle()
+                    .stroke(TT.pink.opacity(0.45), lineWidth: 1.5)
+                    .scaleEffect(1.0 + CGFloat(sin(wavePhase)) * 0.25 + CGFloat(audioMeter.level) * 0.4)
+                    .opacity(0.72 + CGFloat(audioMeter.level) * 0.22)
+                    .frame(width: 24, height: 24)
+
+                Circle()
+                    .fill(TT.hot)
+                    .frame(width: 11, height: 11)
+                    .shadow(color: TT.pink.opacity(0.85), radius: 6)
+            }
+            .frame(width: 42, height: 34)
+            .accessibilityLabel(L10n.t("listening"))
+        case .processing:
+            VStack(spacing: 3) {
+                ProcessingWaveform()
+                    .frame(height: 20)
+                Text(L10n.t("thinking"))
+                    .font(.system(size: 9, weight: .semibold, design: .rounded))
+                    .foregroundStyle(TT.tangerine)
+            }
+            .frame(width: 54, height: 34)
+        case .ready:
+            VStack(spacing: 2) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                Text(L10n.t("ready"))
+                    .font(.system(size: 9, weight: .semibold, design: .rounded))
+            }
+            .foregroundStyle(TT.hot)
+            .frame(width: 46, height: 34)
+            .accessibilityLabel(L10n.t("ready"))
+        }
+    }
+
+    private func updateMotion(for phase: SpeechPhase) {
+        if phase == .listening {
+            withAnimation(.easeInOut(duration: 0.75).repeatForever(autoreverses: true)) {
+                wavePhase = .pi * 2
+            }
+            withAnimation(.linear(duration: 4.5).repeatForever(autoreverses: false)) {
+                borderAngle = 360
+            }
+        } else {
+            withAnimation(.easeOut(duration: 0.2)) {
+                wavePhase = 0
+                borderAngle = 0
+            }
+        }
     }
     
     var body: some View {
@@ -1293,7 +1450,7 @@ struct LiveTranscriptHUDView: View {
                 
                 GhostMark(isRecording: speechEngine.isRecording)
                     .frame(width: 32, height: 32)
-                    .scaleEffect(ghostBounce)
+                    .scaleEffect(ghostBounce * (1.0 + CGFloat(audioMeter.level) * 0.07))
             }
             .shadow(color: TT.pink.opacity(0.35), radius: 6, x: 0, y: 2)
             
@@ -1345,20 +1502,7 @@ struct LiveTranscriptHUDView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             
-            // Live pulsing soundwave radar dot
-            ZStack {
-                Circle()
-                    .stroke(TT.pink.opacity(0.45), lineWidth: 1.5)
-                    .scaleEffect(1.0 + CGFloat(sin(wavePhase)) * 0.45)
-                    .opacity(0.85 - sin(wavePhase) * 0.35)
-                    .frame(width: 24, height: 24)
-                
-                Circle()
-                    .fill(TT.hot)
-                    .frame(width: 11, height: 11)
-                    .shadow(color: TT.pink.opacity(0.85), radius: 6)
-            }
-            .frame(width: 28, height: 28)
+            activityIndicator
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
@@ -1397,14 +1541,16 @@ struct LiveTranscriptHUDView: View {
         .shadow(color: TT.pink.opacity(0.35), radius: 16, x: 0, y: 6)
         .shadow(color: Color(red: 0.12, green: 0.09, blue: 0.08).opacity(0.12), radius: 8, x: 0, y: 3)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("TalkType live speech: \(displayedText)")
+        .accessibilityLabel(
+            speechEngine.transcript.isEmpty
+                ? "TalkType \(phaseLabel)"
+                : "TalkType \(phaseLabel): \(displayedText)"
+        )
         .onAppear {
-            withAnimation(.easeInOut(duration: 0.75).repeatForever(autoreverses: true)) {
-                wavePhase = .pi * 2
-            }
-            withAnimation(.linear(duration: 4.5).repeatForever(autoreverses: false)) {
-                borderAngle = 360
-            }
+            updateMotion(for: speechEngine.phase)
+        }
+        .onChange(of: speechEngine.phase) { phase in
+            updateMotion(for: phase)
         }
         .onDisappear {
             // A repeatForever animation keeps driving frames until something
@@ -1417,6 +1563,30 @@ struct LiveTranscriptHUDView: View {
     }
 }
 
+private struct ProcessingWaveform: View {
+    @State private var isAnimating = false
+    private let heights: [CGFloat] = [10, 17, 13, 19, 12]
+
+    var body: some View {
+        HStack(spacing: 3) {
+            ForEach(heights.indices, id: \.self) { index in
+                Capsule()
+                    .fill(index.isMultiple(of: 2) ? TT.hot : TT.tangerine)
+                    .frame(width: 3, height: isAnimating ? heights[index] : 6)
+                    .animation(
+                        .easeInOut(duration: 0.34)
+                            .repeatForever(autoreverses: true)
+                            .delay(Double(index) * 0.06),
+                        value: isAnimating
+                    )
+            }
+        }
+        .onAppear { isAnimating = true }
+        .onDisappear { isAnimating = false }
+        .accessibilityHidden(true)
+    }
+}
+
 // MARK: - Speech Engine (Deepgram Nova-3 WebSocket + Apple Fallback)
 class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
     private var speechRecognizer: SFSpeechRecognizer? {
@@ -1426,6 +1596,8 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
     private var recognitionTask: SFSpeechRecognitionTask?
     private let audioEngine = AVAudioEngine()
     private var hasInstalledAudioTap = false
+    private var lastMeterPublishTime: TimeInterval = 0
+    let audioMeter = AudioLevelMeter()
     
     // Deepgram WebSocket
     private var webSocketTask: URLSessionWebSocketTask?
@@ -1435,6 +1607,11 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
     
     @Published var transcript = ""
     @Published var isRecording = false
+    @Published var phase: SpeechPhase = .idle
+
+    var hasActiveCapture: Bool {
+        isRecording || audioEngine.isRunning
+    }
 
     var onFinal: ((String) -> Void)?
     var onStateChange: ((Bool) -> Void)?
@@ -1475,29 +1652,66 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
             hasInstalledAudioTap = false
         }
     }
+
+    private func publishInputLevel(from buffer: AVAudioPCMBuffer) {
+        let frameCount = Int(buffer.frameLength)
+        let channelCount = Int(buffer.format.channelCount)
+        guard frameCount > 0, channelCount > 0 else { return }
+
+        let now = ProcessInfo.processInfo.systemUptime
+        guard now - lastMeterPublishTime >= 0.04 else { return }
+        lastMeterPublishTime = now
+
+        var sumOfSquares = 0.0
+        if let channels = buffer.floatChannelData {
+            for channel in 0..<channelCount {
+                let samples = channels[channel]
+                for frame in 0..<frameCount {
+                    let sample = Double(samples[frame])
+                    sumOfSquares += sample * sample
+                }
+            }
+        } else if let channels = buffer.int16ChannelData {
+            for channel in 0..<channelCount {
+                let samples = channels[channel]
+                for frame in 0..<frameCount {
+                    let sample = Double(samples[frame]) / 32768.0
+                    sumOfSquares += sample * sample
+                }
+            }
+        } else {
+            return
+        }
+
+        let sampleCount = Double(frameCount * channelCount)
+        let level = min(1.0, max(0.0, sqrt(sumOfSquares / sampleCount) * 5.0))
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.audioMeter.level = self.isRecording ? level : 0
+        }
+    }
     
     func startRecording() {
+        guard phase != .processing else { return }
+
         if audioEngine.isRunning {
             stopRecording()
             return
         }
 
+        phase = .idle
+
         let micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
         if micStatus == .denied || micStatus == .restricted {
-            transcript = L10n.t("micDeniedAlert")
-            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
-                NSWorkspace.shared.open(url)
-            }
+            transcript = L10n.t("permissionMicTitle")
             return
         }
 
         if !TalkTypeConfig.isUsingDeepgram {
             let speechStatus = SFSpeechRecognizer.authorizationStatus()
             if speechStatus == .denied || speechStatus == .restricted {
-                transcript = L10n.t("speechDisabled")
-                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_SpeechRecognition") {
-                    NSWorkspace.shared.open(url)
-                }
+                transcript = L10n.t("permissionSpeechTitle")
                 return
             }
         }
@@ -1514,6 +1728,8 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
     }
     
     func stopRecording() {
+        guard isRecording || audioEngine.isRunning || webSocketTask != nil else { return }
+
         if TalkTypeConfig.isUsingDeepgram {
             stopDeepgramStreaming()
         } else {
@@ -1554,6 +1770,7 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
         safeRemoveTap()
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: nativeFormat) { [weak self] buffer, _ in
             guard let self = self, self.isRecording else { return }
+            self.publishInputLevel(from: buffer)
             
             let frameCount = AVAudioFrameCount(ceil(Double(buffer.frameLength) * 16000.0 / nativeFormat.sampleRate) + 2)
             guard let convertedBuffer = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: frameCount) else { return }
@@ -1583,6 +1800,7 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
             try audioEngine.start()
             DispatchQueue.main.async {
                 self.isRecording = true
+                self.phase = .listening
                 self.onStateChange?(true)
             }
         } catch {
@@ -1653,6 +1871,10 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
     private func stopDeepgramStreaming() {
         audioEngine.stop()
         safeRemoveTap()
+        DispatchQueue.main.async { [weak self] in
+            self?.audioMeter.level = 0
+            self?.phase = .processing
+        }
         
         let closeData = Data()
         webSocketTask?.send(.data(closeData)) { _ in }
@@ -1662,6 +1884,8 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
             self.webSocketTask?.cancel(with: .normalClosure, reason: nil)
             self.webSocketTask = nil
             self.isRecording = false
+            self.audioMeter.level = 0
+            self.phase = .processing
             self.onStateChange?(false)
             
             let finalOutput = self.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1687,7 +1911,9 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
         
         safeRemoveTap()
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
-            self?.recognitionRequest?.append(buffer)
+            guard let self = self else { return }
+            self.publishInputLevel(from: buffer)
+            self.recognitionRequest?.append(buffer)
         }
         hasInstalledAudioTap = true
         
@@ -1696,6 +1922,7 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
             try audioEngine.start()
             DispatchQueue.main.async {
                 self.isRecording = true
+                self.phase = .listening
                 self.onStateChange?(true)
             }
             
@@ -1717,6 +1944,7 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
                         self.recognitionRequest = nil
                         self.recognitionTask = nil
                         self.isRecording = false
+                        self.phase = .processing
                         self.onStateChange?(false)
                         self.onFinal?(self.transcript)
                     }
@@ -1735,6 +1963,8 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
             self.recognitionRequest?.endAudio()
             self.safeRemoveTap()
             self.isRecording = false
+            self.audioMeter.level = 0
+            self.phase = .processing
             self.onStateChange?(false)
         }
     }
@@ -1894,14 +2124,32 @@ struct ContentView: View {
     @State private var selectedTab: Int = 0 // 0: Dictate, 1: History
     @State private var copiedId: UUID? = nil
     @State private var liveCopied: Bool = false
+    @State private var permissionRefreshVersion = 0
     var appDelegate: AppDelegate
 
     private var p: Palette { scheme == .dark ? .dark : .light }
     private var isRec: Bool { speechEngine.isRecording }
     private var pttKeyName: String { TalkTypeConfig.pttTrigger.shortTitle }
 
+    private var permissionHelpIssue: PermissionHelpIssue? {
+        _ = permissionRefreshVersion
+        let microphoneStatus = AVCaptureDevice.authorizationStatus(for: .audio)
+        if microphoneStatus == .denied || microphoneStatus == .restricted {
+            return .microphone
+        }
+
+        if !TalkTypeConfig.isUsingDeepgram {
+            let speechStatus = SFSpeechRecognizer.authorizationStatus()
+            if speechStatus == .denied || speechStatus == .restricted {
+                return .speechRecognition
+            }
+        }
+
+        return AXIsProcessTrusted() ? nil : .accessibility
+    }
+
     var body: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: permissionHelpIssue == nil ? 14 : 9) {
             // Header with Wordmark + Tab Picker (Rock-Solid Top Locked)
             HStack {
                 HStack(spacing: 0) {
@@ -1957,6 +2205,10 @@ struct ContentView: View {
             if selectedTab == 0 {
                 // Live View
                 transcriptCard
+                if permissionHelpIssue != nil {
+                    permissionHelper
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
                 ghostButton
                 statusLine
             } else {
@@ -1967,6 +2219,71 @@ struct ContentView: View {
         .padding(18)
         .frame(width: 346, height: 440, alignment: .top)
         .background(p.shell)
+        .animation(.easeOut(duration: 0.18), value: permissionHelpIssue)
+        .onAppear { refreshPermissionStatus() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            refreshPermissionStatus()
+        }
+    }
+
+    @ViewBuilder
+    private var permissionHelper: some View {
+        if let issue = permissionHelpIssue {
+            HStack(spacing: 9) {
+                Image(systemName: issue.symbol)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(TT.hot)
+                    .frame(width: 20)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(L10n.t(issue.titleKey))
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundStyle(p.ink)
+                    Text(L10n.t(issue.detailKey))
+                        .font(.system(size: 10, weight: .medium, design: .rounded))
+                        .foregroundStyle(p.inkSoft.opacity(0.8))
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 2)
+
+                Button(L10n.t("fixPermission")) {
+                    openSystemSettings(for: issue)
+                }
+                .font(.system(size: 10, weight: .bold, design: .rounded))
+                .foregroundStyle(p.ink)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(TT.pink.opacity(0.22))
+                .clipShape(Capsule())
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(p.card.opacity(0.96))
+            .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    .strokeBorder(p.border.opacity(0.7), lineWidth: 1)
+            )
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+    private func openSystemSettings(for issue: PermissionHelpIssue) {
+        switch issue {
+        case .microphone:
+            appDelegate.openMicrophoneSettings()
+        case .speechRecognition:
+            appDelegate.openSpeechRecognitionSettings()
+        case .accessibility:
+            appDelegate.openAccessibilitySettings()
+        }
+    }
+
+    private func refreshPermissionStatus() {
+        permissionRefreshVersion &+= 1
     }
 
     private var transcriptCard: some View {
@@ -2044,6 +2361,7 @@ struct ContentView: View {
                         x: 0, y: isRec ? 0 : p.ghostLiftY)
         }
         .buttonStyle(.plain)
+        .disabled(speechEngine.phase == .processing)
         .onChange(of: isRec) { rec in
             withAnimation(rec ? .easeInOut(duration: 0.9).repeatForever(autoreverses: true)
                               : .easeOut(duration: 0.2)) {
@@ -2053,9 +2371,26 @@ struct ContentView: View {
     }
 
     private var statusLine: some View {
-        Text(isRec ? L10n.t("listening") : L10n.t("clickGhostHold") + pttKeyName)
+        let label: String
+        let color: Color
+        switch speechEngine.phase {
+        case .idle:
+            label = L10n.t("clickGhostHold") + pttKeyName
+            color = p.inkSoft.opacity(0.75)
+        case .listening:
+            label = L10n.t("listening")
+            color = TT.hot
+        case .processing:
+            label = L10n.t("thinking")
+            color = TT.tangerine
+        case .ready:
+            label = L10n.t("ready")
+            color = TT.hot
+        }
+
+        return Text(label)
             .font(.system(size: 12, weight: .semibold, design: .rounded))
-            .foregroundStyle(isRec ? AnyShapeStyle(TT.hot) : AnyShapeStyle(p.inkSoft.opacity(0.75)))
+            .foregroundStyle(color)
             .frame(height: 20)
     }
 
