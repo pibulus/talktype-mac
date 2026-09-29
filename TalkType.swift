@@ -126,7 +126,7 @@ enum L10n {
         "deepgramApiKey": ["en": "Deepgram API Key…", "es": "Clave de API de Deepgram…"],
         "quit": ["en": "Quit TalkType", "es": "Salir de TalkType"],
         "dgAlertTitle": ["en": "Deepgram API Key (Optional BYOK)", "es": "Clave de API de Deepgram (BYOK Opcional)"],
-        "dgAlertInfo": ["en": "TalkType uses on-device Apple Speech by default (100% private, zero setup). Optionally add a Deepgram API key for cloud streaming Nova-3 transcription. Free tier available at console.deepgram.com.", "es": "TalkType usa la voz en el dispositivo de Apple por defecto (100% privada, sin configuración). Opcionalmente añade una clave de Deepgram para transcripción Nova-3 en la nube. Nivel gratuito en console.deepgram.com."],
+        "dgAlertInfo": ["en": "TalkType uses on-device Apple Speech by default (100% private, zero setup). Optionally add a Deepgram API key for cloud streaming Nova-3 transcription. TalkType passes mip_opt_out=true so audio is never used for training. Free tier at console.deepgram.com.", "es": "TalkType usa la voz en el dispositivo de Apple por defecto (100% privada, sin configuración). Opcionalmente añade una clave de Deepgram para transcripción Nova-3 en la nube. TalkType activa mip_opt_out=true para que el audio nunca se use para entrenamiento. Nivel gratuito en console.deepgram.com."],
         "save": ["en": "Save", "es": "Guardar"],
         "getKey": ["en": "Get a Deepgram Key…", "es": "Obtener clave de Deepgram…"],
         "cancel": ["en": "Cancel", "es": "Cancelar"],
@@ -151,6 +151,10 @@ enum L10n {
         "customKeywords": ["en": "Custom Vocabulary…", "es": "Vocabulario personalizado…"],
         "keywordsAlertTitle": ["en": "Custom Vocabulary & Keywords", "es": "Vocabulario y palabras clave"],
         "keywordsAlertInfo": ["en": "Add words or names speech recognition should prioritize (comma-separated, e.g. TalkType, pibulus, NoteBro). You can also use 'wrong -> right' rules (e.g. doctype -> TalkType).", "es": "Añade palabras que el reconocimiento de voz deba priorizar (separadas por comas, ej. TalkType, pibulus). También puedes usar reglas 'error -> corrección'."],
+        "privacyPolicy": ["en": "Privacy Policy…", "es": "Política de privacidad…"],
+        "micDisabled": ["en": "⚠️ Microphone Denied (Click to Fix)", "es": "⚠️ Micrófono denegado (Clic para activar)"],
+        "speechDisabled": ["en": "⚠️ Speech Recognition Denied (Click to Fix)", "es": "⚠️ Reconocimiento de voz denegado (Clic para activar)"],
+        "micDeniedAlert": ["en": "Microphone permission required in System Settings", "es": "Se requiere permiso de micrófono en Ajustes del Sistema"],
         "delete": ["en": "Delete", "es": "Eliminar"]
     ]
 }
@@ -319,12 +323,13 @@ enum Polisher {
         guard !key.isEmpty else { completion(text); return }
         let model = TalkTypeConfig.geminiModel
         let prompt = "Rewrite this dictation into clean, natural prose. Fix grammar, punctuation, and repeated words. Keep the meaning and voice exactly. Return only the rewritten text, no preamble or quotes:\n\n\(text)"
-        guard let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(model):generateContent?key=\(key)") else {
+        guard let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(model):generateContent") else {
             completion(text); return
         }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(key, forHTTPHeaderField: "x-goog-api-key")
         let body: [String: Any] = [
             "contents": [["parts": [["text": prompt]]]],
             "generationConfig": ["thinkingConfig": ["thinkingBudget": 0]]
@@ -696,11 +701,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
         
-        #if MAS_BUILD
-        // Sandboxed App Store build: no Accessibility/auto-paste. Clipboard only.
-        self.engine.transcript = L10n.t("copiedToClipboard")
-        self.liveHUDController?.hide(after: 0.6)
-        #else
         if AXIsProcessTrusted() {
             self.liveHUDController?.hide()
             self.pasteToActiveApp(text: text)
@@ -709,7 +709,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self.engine.transcript = L10n.t("copiedToClipboard")
             self.liveHUDController?.hide(after: 0.6)
         }
-        #endif
     }
 
     func requestPaste() {
@@ -718,10 +717,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func checkAccessibilityPermissions() {
-        #if !MAS_BUILD
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
         let _ = AXIsProcessTrustedWithOptions(options)
-        #endif
     }
 
     @objc func statusItemClicked(_ sender: NSStatusBarButton) {
@@ -745,15 +742,33 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(titleItem)
         menu.addItem(NSMenuItem.separator())
         
-        // Accessibility Status Alert if not trusted (direct distribution only)
-        #if !MAS_BUILD
+        // Accessibility Status Alert if not trusted
         if !AXIsProcessTrusted() {
             let permItem = NSMenuItem(title: L10n.t("accessibilityDisabled"), action: #selector(openAccessibilitySettings), keyEquivalent: "")
             permItem.target = self
             menu.addItem(permItem)
             menu.addItem(NSMenuItem.separator())
         }
-        #endif
+
+        // Microphone Status Alert if denied/restricted
+        let micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
+        if micStatus == .denied || micStatus == .restricted {
+            let micItem = NSMenuItem(title: L10n.t("micDisabled"), action: #selector(openMicrophoneSettings), keyEquivalent: "")
+            micItem.target = self
+            menu.addItem(micItem)
+            menu.addItem(NSMenuItem.separator())
+        }
+
+        // Speech Recognition Status Alert if denied/restricted (when using Apple Speech)
+        if !TalkTypeConfig.isUsingDeepgram {
+            let speechStatus = SFSpeechRecognizer.authorizationStatus()
+            if speechStatus == .denied || speechStatus == .restricted {
+                let speechItem = NSMenuItem(title: L10n.t("speechDisabled"), action: #selector(openSpeechRecognitionSettings), keyEquivalent: "")
+                speechItem.target = self
+                menu.addItem(speechItem)
+                menu.addItem(NSMenuItem.separator())
+            }
+        }
         
         // Quick Recovery: Copy Last Transcript
         if let last = history.records.first {
@@ -880,6 +895,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         webItem.target = self
         menu.addItem(webItem)
         
+        let privacyItem = NSMenuItem(title: L10n.t("privacyPolicy"), action: #selector(openPrivacyPolicy), keyEquivalent: "")
+        privacyItem.target = self
+        menu.addItem(privacyItem)
+        
         menu.addItem(NSMenuItem.separator())
         
         let quitItem = NSMenuItem(title: L10n.t("quit"), action: #selector(quitApp), keyEquivalent: "q")
@@ -893,6 +912,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func openAccessibilitySettings() {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    @objc func openMicrophoneSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    @objc func openSpeechRecognitionSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_SpeechRecognition") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    @objc func openPrivacyPolicy() {
+        if let url = URL(string: "https://talktype.app/privacy") {
             NSWorkspace.shared.open(url)
         }
     }
@@ -1444,6 +1481,26 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
             stopRecording()
             return
         }
+
+        let micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
+        if micStatus == .denied || micStatus == .restricted {
+            transcript = L10n.t("micDeniedAlert")
+            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
+                NSWorkspace.shared.open(url)
+            }
+            return
+        }
+
+        if !TalkTypeConfig.isUsingDeepgram {
+            let speechStatus = SFSpeechRecognizer.authorizationStatus()
+            if speechStatus == .denied || speechStatus == .restricted {
+                transcript = L10n.t("speechDisabled")
+                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_SpeechRecognition") {
+                    NSWorkspace.shared.open(url)
+                }
+                return
+            }
+        }
         
         transcript = ""
         confirmedTranscript = ""
@@ -1469,7 +1526,7 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
         let apiKey = TalkTypeConfig.deepgramApiKey
         let keywordsParam = VocabularyManager.deepgramKeywordsParam
         guard !apiKey.isEmpty,
-              let url = URL(string: "wss://api.deepgram.com/v1/listen?model=nova-3&smart_format=true&interim_results=true&encoding=linear16&sample_rate=16000&channels=1&language=\(TalkTypeConfig.language.deepgramLanguage)\(keywordsParam)") else {
+              let url = URL(string: "wss://api.deepgram.com/v1/listen?model=nova-3&smart_format=true&interim_results=true&encoding=linear16&sample_rate=16000&channels=1&mip_opt_out=true&language=\(TalkTypeConfig.language.deepgramLanguage)\(keywordsParam)") else {
             startAppleSpeechRecognition()
             return
         }
@@ -1622,9 +1679,8 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
         if #available(macOS 13.0, *) {
             recognitionRequest.addsPunctuation = true
         }
-        if speechRecognizer?.supportsOnDeviceRecognition == true {
-            recognitionRequest.requiresOnDeviceRecognition = true
-        }
+        // Strictly require on-device recognition: zero audio leaves this Mac
+        recognitionRequest.requiresOnDeviceRecognition = true
         
         let inputNode = audioEngine.inputNode
         let recordingFormat = inputNode.outputFormat(forBus: 0)
@@ -2098,6 +2154,13 @@ struct ContentView: View {
                     .buttonStyle(.plain)
                     
                     Spacer()
+
+                    Button(L10n.t("privacyPolicy")) {
+                        appDelegate.openPrivacyPolicy()
+                    }
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(p.inkSoft.opacity(0.5))
+                    .buttonStyle(.plain)
                 }
                 .padding(.horizontal, 4)
             }
