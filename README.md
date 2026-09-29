@@ -51,8 +51,10 @@ The App Store target uses the sandbox entitlements instead.
 
 ## Permissions
 
-Microphone and Speech Recognition prompt on first launch. Accessibility must be granted
-by hand in System Settings → Privacy & Security → Accessibility — it covers the ⌥
+Microphone access is requested the first time you start dictation. Speech Recognition
+is requested then too when Apple Speech is selected; Deepgram needs microphone access
+but does not use Apple's Speech Recognition service. Accessibility must be granted by
+hand in System Settings → Privacy & Security → Accessibility — it covers the ⌥
 push-to-talk global monitor and the Cmd+V paste. The App Store build compiles that path
 out (clipboard-only), since sandboxed apps can't be granted Accessibility.
 

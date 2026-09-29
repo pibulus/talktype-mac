@@ -80,7 +80,7 @@ cat > "${APP_DIR}/Contents/Info.plist" << PLIST
     <key>NSSpeechRecognitionUsageDescription</key>
     <string>TalkType uses on-device speech recognition to transcribe your voice into text accurately.</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>TalkType needs microphone access to listen to your voice when you hold the dictate shortcut.</string>
+    <string>TalkType uses your microphone when you start a dictation.</string>
 </dict>
 </plist>
 PLIST
