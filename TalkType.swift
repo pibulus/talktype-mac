@@ -179,8 +179,9 @@ enum L10n {
         "listening": ["en": "Listening…", "es": "Escuchando…"],
         "live": ["en": "Live", "es": "En vivo"],
         "history": ["en": "History", "es": "Historial"],
-        "holdGhost": ["en": "Hold the ghost to start talking…", "es": "Mantén el fantasma para empezar a hablar…"],
+        "holdGhost": ["en": "Click the ghost to start talking…", "es": "Haz clic en el fantasma para empezar a hablar…"],
         "clickGhostHold": ["en": "Click ghost or hold ", "es": "Haz clic en el fantasma o mantén "],
+        "clickAgainToFinish": ["en": "Click again to finish", "es": "Haz clic otra vez para terminar"],
         "noTranscriptsSaved": ["en": "No transcripts saved yet.", "es": "Aún no hay transcripciones guardadas."],
         "copy": ["en": "Copy", "es": "Copiar"],
         "copied": ["en": "Copied!", "es": "¡Copiado!"],
@@ -625,7 +626,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
+        #if !MAS_BUILD
         setupPushToTalk()
+        #endif
     }
     
     // MARK: - Menu Bar Icon (Serene When Idle, Living & Blinking While Dictating)
@@ -703,6 +706,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         resetMenuBarIcon()
     }
 
+    #if !MAS_BUILD
     /// Hold designated shortcut anywhere to dictate; release to paste into whatever has focus.
     func setupPushToTalk() {
         let handler: (NSEvent) -> Void = { [weak self] event in self?.handleFlags(event) }
@@ -762,6 +766,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: watchdog)
         }
     }
+    #endif
 
     private func deliver(text: String) {
         guard Thread.isMainThread else {
@@ -774,6 +779,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         pasteboard.setString(text, forType: .string)
         engine.phase = .ready
 
+#if MAS_BUILD
+        // The sandboxed App Store build stays click-to-dictate and clipboard-only.
+        engine.transcript = text
+        self.liveHUDController?.hide(after: 1.5)
+#else
         if AXIsProcessTrusted() {
             engine.transcript = text
             self.pasteToActiveApp(text: text)
@@ -783,6 +793,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self.engine.transcript = L10n.t("copiedToClipboard")
             self.liveHUDController?.hide(after: 1.5)
         }
+#endif
 
         let resetReadyState = DispatchWorkItem { [weak self] in
             guard let self = self, self.engine.phase == .ready else { return }
@@ -817,6 +828,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(titleItem)
         menu.addItem(NSMenuItem.separator())
         
+        #if !MAS_BUILD
         // Accessibility Status Alert if not trusted
         if !AXIsProcessTrusted() {
             let permItem = NSMenuItem(title: L10n.t("accessibilityDisabled"), action: #selector(openAccessibilitySettings), keyEquivalent: "")
@@ -824,6 +836,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             menu.addItem(permItem)
             menu.addItem(NSMenuItem.separator())
         }
+        #endif
 
         // Microphone Status Alert if denied/restricted
         let micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
@@ -878,6 +891,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         menu.addItem(NSMenuItem.separator())
         
+        #if !MAS_BUILD
         // Push-to-Talk Shortcut Submenu (Accessibility)
         let shortcutMenu = NSMenu(title: "Shortcut")
         let activeTrigger = TalkTypeConfig.pttTrigger
@@ -893,6 +907,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let shortcutParent = NSMenuItem(title: L10n.t("pushToTalkKey"), action: nil, keyEquivalent: "")
         shortcutParent.submenu = shortcutMenu
         menu.addItem(shortcutParent)
+        #endif
         
         // Model Selection Submenu
         let modelMenu = NSMenu(title: "Model")
@@ -985,11 +1000,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.menu = nil
     }
 
+    #if !MAS_BUILD
     @objc func openAccessibilitySettings() {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
             NSWorkspace.shared.open(url)
         }
     }
+    #endif
 
     @objc func openMicrophoneSettings() {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
@@ -1185,6 +1202,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
     
+    #if !MAS_BUILD
     // Simulates Cmd+V to paste into the active app
     func pasteToActiveApp(text: String) {
         let targetApp = self.dictationTargetApp
@@ -1224,6 +1242,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             keyUp.post(tap: .cghidEventTap)
         }
     }
+    #endif
 }
 
 // MARK: - Live Transcript Floating HUD Window Controller
@@ -2185,7 +2204,11 @@ struct ContentView: View {
             }
         }
 
+#if MAS_BUILD
+        return nil
+#else
         return AXIsProcessTrusted() ? nil : .accessibility
+#endif
     }
 
     var body: some View {
@@ -2318,7 +2341,11 @@ struct ContentView: View {
         case .speechRecognition:
             appDelegate.openSpeechRecognitionSettings()
         case .accessibility:
+#if !MAS_BUILD
             appDelegate.openAccessibilitySettings()
+#else
+            break
+#endif
         }
     }
 
@@ -2415,10 +2442,18 @@ struct ContentView: View {
         let color: Color
         switch speechEngine.phase {
         case .idle:
+#if MAS_BUILD
+            label = L10n.t("holdGhost")
+#else
             label = L10n.t("clickGhostHold") + pttKeyName
+#endif
             color = p.inkSoft.opacity(0.75)
         case .listening:
+#if MAS_BUILD
+            label = L10n.t("clickAgainToFinish")
+#else
             label = L10n.t("listening")
+#endif
             color = TT.hot
         case .processing:
             label = L10n.t("thinking")
