@@ -18,6 +18,24 @@ TARGET_MODE="${1:-direct}" # "direct" or "mas"
 
 echo "🎨 Building ${APP_NAME} v${VERSION} (${TARGET_MODE} target)..."
 
+# MAS release needs BOTH Apple certs. Check before wiping build/ and dist/ so a
+# doomed run can't take the last good DMG down with it.
+if [ "${TARGET_MODE}" = "mas" ]; then
+    MAS_IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null \
+                   | grep "3rd Party Mac Developer Application\|Apple Distribution" | head -1 | sed 's/.*"\(.*\)"/\1/' || true)
+    INSTALLER_ID=$(security find-identity -v -p basic 2>/dev/null \
+                   | grep "3rd Party Mac Developer Installer\|Mac Installer Distribution" | head -1 | sed 's/.*"\(.*\)"/\1/' || true)
+    if [ "${ALLOW_ADHOC_MAS:-0}" != "1" ] && { [ -z "${MAS_IDENTITY}" ] || [ -z "${INSTALLER_ID}" ]; }; then
+        echo "❌ Cannot build a Mac App Store release — missing certificate(s):"
+        [ -z "${MAS_IDENTITY}" ] && echo "   • App signing: 'Apple Distribution' or '3rd Party Mac Developer Application'"
+        [ -z "${INSTALLER_ID}" ] && echo "   • Installer:   '3rd Party Mac Developer Installer' (Mac Installer Distribution)"
+        echo "   Create them at developer.apple.com → Certificates, or Xcode → Settings → Accounts → Manage Certificates."
+        echo "   ALLOW_ADHOC_MAS=1 ./build.sh mas  builds an ad-hoc sandboxed binary for local testing only."
+        echo "   Nothing was touched: build/ and dist/ are as you left them."
+        exit 1
+    fi
+fi
+
 # Clean previous build artifacts
 rm -rf "${BUILD_DIR}" "${DIST_DIR}"
 mkdir -p "${BIN_DIR}" "${RES_DIR}" "${DIST_DIR}"
@@ -82,10 +100,7 @@ chmod +x "${BIN_DIR}/${APP_NAME}"
 if [ "${TARGET_MODE}" = "mas" ]; then
     ENTITLEMENTS="TalkType.sandbox.entitlements"
     echo "📦 Sandboxed App Store mode enabled with ${ENTITLEMENTS}"
-    
-    MAS_IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null \
-                   | grep "3rd Party Mac Developer Application\|Apple Distribution" | head -1 | sed 's/.*"\(.*\)"/\1/' || true)
-    
+
     if [ -n "${MAS_IDENTITY}" ]; then
         codesign --force --sign "${MAS_IDENTITY}" \
                  --entitlements "${ENTITLEMENTS}" \
@@ -97,24 +112,23 @@ if [ "${TARGET_MODE}" = "mas" ]; then
                  --identifier com.pibulus.talktype "${APP_DIR}"
         echo "🔏 Signed with MAS certificate: ${MAS_IDENTITY}"
     else
-        echo "⚠️ No Mac App Store Application certificate found. Signing ad-hoc for local testing..."
+        # Only reachable with ALLOW_ADHOC_MAS=1 (preflight exits otherwise)
         codesign --force --sign - \
                  --entitlements "${ENTITLEMENTS}" \
                  --identifier com.pibulus.talktype "${BIN_DIR}/${APP_NAME}"
         codesign --force --sign - \
                  --entitlements "${ENTITLEMENTS}" \
                  --identifier com.pibulus.talktype "${APP_DIR}"
-        echo "🔏 Ad-hoc signed for local testing"
+        echo "🔏 Ad-hoc signed (ALLOW_ADHOC_MAS=1)"
     fi
 
-    # Check for Installer certificate to package .pkg
-    INSTALLER_ID=$(security find-identity -v -p basic 2>/dev/null \
-                   | grep "3rd Party Mac Developer Installer\|Mac Developer Installer" | head -1 | sed 's/.*"\(.*\)"/\1/' || true)
-    if [ -n "${INSTALLER_ID}" ]; then
+    if [ -n "${MAS_IDENTITY}" ] && [ -n "${INSTALLER_ID}" ]; then
         productbuild --component "${APP_DIR}" /Applications \
                      --sign "${INSTALLER_ID}" \
                      "${DIST_DIR}/${APP_NAME}-${VERSION}.pkg"
         echo "✨ Mac App Store PKG ready at ${DIST_DIR}/${APP_NAME}-${VERSION}.pkg"
+    else
+        echo "🚧 LOCAL TEST BUILD ONLY — no .pkg, not submittable to App Store Connect."
     fi
 
 else
