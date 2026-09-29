@@ -143,23 +143,63 @@ else
         echo "🔏 Ad-hoc signed"
     fi
     
-    # 5. Build DMG for Direct Distribution
-    echo "💿 Creating DMG disk image..."
-    DMG_STAGE="${BUILD_DIR}/dmg_stage"
-    mkdir -p "${DMG_STAGE}"
-    cp -R "${APP_DIR}" "${DMG_STAGE}/"
-    ln -s /Applications "${DMG_STAGE}/Applications"
-    
-    hdiutil create -volname "${APP_NAME}" \
-            -srcfolder "${DMG_STAGE}" \
-            -ov -format UDZO \
-            "${DIST_DIR}/${APP_NAME}-${VERSION}.dmg" > /dev/null
-            
-    rm -rf "${DMG_STAGE}"
+    # 5. Build Styled DMG for Direct Distribution
+    DMG_PATH="${DIST_DIR}/${APP_NAME}-${VERSION}.dmg"
+    rm -f "${DMG_PATH}"
+
+    if command -v create-dmg >/dev/null 2>&1; then
+        echo "🎨 Building styled DMG with custom volume icon and background..."
+        DMG_STAGE="${BUILD_DIR}/dmg_stage"
+        rm -rf "${DMG_STAGE}"
+        mkdir -p "${DMG_STAGE}"
+        cp -R "${APP_DIR}" "${DMG_STAGE}/"
+
+        # Background art (1x+2x TIFF) comes from `swift Assets/make-art.swift`.
+        # It is 660x400; the window is 28pt taller because Finder counts the title bar.
+        CREATE_DMG_ARGS=(
+            --volname "${APP_NAME}"
+            --volicon "Assets/AppIcon.icns"
+            --background "Assets/dmg-background.tiff"
+            --window-pos 200 120
+            --window-size 660 428
+            --text-size 13
+            --icon-size 112
+            --icon "${APP_NAME}.app" 165 190
+            --hide-extension "${APP_NAME}.app"
+            --app-drop-link 495 190
+            --no-internet-enable
+            --format UDZO
+            --overwrite
+        )
+
+        create-dmg "${CREATE_DMG_ARGS[@]}" "${DMG_PATH}" "${DMG_STAGE}" || true
+        rm -rf "${DMG_STAGE}"
+    fi
+
+    # Fallback to hdiutil if create-dmg was missing or failed
+    if [ ! -f "${DMG_PATH}" ]; then
+        echo "💿 Fallback: Creating DMG with hdiutil..."
+        DMG_STAGE="${BUILD_DIR}/dmg_stage"
+        mkdir -p "${DMG_STAGE}"
+        cp -R "${APP_DIR}" "${DMG_STAGE}/"
+        ln -s /Applications "${DMG_STAGE}/Applications"
+        if [ -f "Assets/AppIcon.icns" ]; then
+            cp "Assets/AppIcon.icns" "${DMG_STAGE}/.VolumeIcon.icns"
+            SetFile -c icnC "${DMG_STAGE}/.VolumeIcon.icns" 2>/dev/null || true
+        fi
+        hdiutil create -volname "${APP_NAME}" \
+                -srcfolder "${DMG_STAGE}" \
+                -ov -format UDZO \
+                "${DMG_PATH}" > /dev/null
+        if [ -f "Assets/AppIcon.icns" ]; then
+            SetFile -a C "${DMG_PATH}" 2>/dev/null || true
+        fi
+        rm -rf "${DMG_STAGE}"
+    fi
 
     # Sign the DMG disk image container
     if [ -n "${IDENTITY}" ]; then
-        codesign --force --sign "${IDENTITY}" --timestamp "${DIST_DIR}/${APP_NAME}-${VERSION}.dmg"
+        codesign --force --sign "${IDENTITY}" --timestamp "${DMG_PATH}"
         echo "🔏 Signed DMG container with Developer ID: ${IDENTITY}"
     fi
 
@@ -170,12 +210,13 @@ else
         echo "⏭️  Skipping notarization (SKIP_NOTARIZE=1)."
     elif xcrun notarytool history --keychain-profile "${NOTARY_PROFILE}" >/dev/null 2>&1; then
         echo "🔐 Submitting DMG for notarization (profile: ${NOTARY_PROFILE})…"
-        if xcrun notarytool submit "${DMG_PATH}" --keychain-profile "${NOTARY_PROFILE}" --wait; then
-            echo "📎 Stapling notarization ticket…"
-            xcrun stapler staple "${DMG_PATH}"
+        # Stapling only succeeds if Apple issued a ticket, so it's the real pass/fail.
+        xcrun notarytool submit "${DMG_PATH}" --keychain-profile "${NOTARY_PROFILE}" --wait || true
+        if xcrun stapler staple "${DMG_PATH}"; then
             echo "✅ Notarized & stapled: ${DMG_PATH}"
         else
-            echo "❌ Notarization failed. DMG is signed but not notarized."
+            echo "❌ Notarization failed — see: xcrun notarytool log <submission-id> --keychain-profile ${NOTARY_PROFILE}"
+            exit 1
         fi
     else
         echo "⚠️  Notary profile '${NOTARY_PROFILE}' not found — skipping notarization."
@@ -184,7 +225,13 @@ else
         echo "        --apple-id <apple-id-email> --team-id V433H655PN --password <app-specific-password>"
         echo "    (or an App Store Connect API key via --key / --key-id / --issuer)"
     fi
-    echo "✨ Direct DMG ready at ${DMG_PATH}"
+
+    # Gatekeeper is the only judge that matters for a download.
+    if spctl -a -t open --context context:primary-signature "${DMG_PATH}" 2>/dev/null; then
+        echo "✨ Direct DMG ready to ship: ${DMG_PATH}"
+    else
+        echo "🚧 ${DMG_PATH} is LOCAL-ONLY: Gatekeeper rejects it (not notarized). Do not upload it."
+    fi
 fi
 
 echo "✨ Built successfully at ${APP_DIR}"
