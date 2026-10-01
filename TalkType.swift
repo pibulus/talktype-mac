@@ -1621,7 +1621,19 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
     private var urlSession: URLSession?
     private var confirmedTranscript = ""
     private var interimTranscript = ""
+    private var lastSegmentStart: Double = -1
     private var permissionRequestInProgress = false
+    
+    private func commitInterim() {
+        guard !interimTranscript.isEmpty else { return }
+        if confirmedTranscript.isEmpty {
+            confirmedTranscript = interimTranscript
+        } else {
+            confirmedTranscript += " " + interimTranscript
+        }
+        interimTranscript = ""
+        transcript = confirmedTranscript
+    }
     
     @Published var transcript = ""
     @Published var isRecording = false
@@ -1778,6 +1790,7 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
         transcript = ""
         confirmedTranscript = ""
         interimTranscript = ""
+        lastSegmentStart = -1
         
         if TalkTypeConfig.isUsingDeepgram {
             startDeepgramStreaming()
@@ -1801,7 +1814,7 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
         let apiKey = TalkTypeConfig.deepgramApiKey
         let keywordsParam = VocabularyManager.deepgramKeywordsParam
         guard !apiKey.isEmpty,
-              let url = URL(string: "wss://api.deepgram.com/v1/listen?model=nova-3&smart_format=true&interim_results=true&encoding=linear16&sample_rate=16000&channels=1&mip_opt_out=true&language=\(TalkTypeConfig.language.deepgramLanguage)\(keywordsParam)") else {
+              let url = URL(string: "wss://api.deepgram.com/v1/listen?model=nova-3&smart_format=true&interim_results=true&encoding=linear16&sample_rate=16000&channels=1&mip_opt_out=true&endpointing=500&language=\(TalkTypeConfig.language.deepgramLanguage)\(keywordsParam)") else {
             startAppleSpeechRecognition()
             return
         }
@@ -1888,12 +1901,13 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
                 
             case .failure(let error):
                 NSLog("⚠️ TalkType Deepgram WebSocket error: %@", error.localizedDescription)
-                // If Deepgram WebSocket fails mid-recording, seamlessly fallback
+                // If Deepgram WebSocket fails mid-recording, seamlessly fallback without losing prior words
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self, self.isRecording else { return }
+                    self.commitInterim()
                     self.safeRemoveTap()
                     self.audioEngine.stop()
-                    self.startAppleSpeechRecognition()
+                    self.startAppleSpeechRecognition(appendingToExisting: true)
                 }
             }
         }
@@ -1909,14 +1923,26 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
               let chunk = firstAlt["transcript"] as? String else { return }
         
         let isFinal = (json["is_final"] as? Bool) ?? false
+        let speechFinal = (json["speech_final"] as? Bool) ?? false
+        let start = (json["start"] as? Double) ?? 0.0
         let trimmedChunk = VocabularyManager.clean(chunk.trimmingCharacters(in: .whitespacesAndNewlines))
         
         DispatchQueue.main.async {
-            if isFinal && !trimmedChunk.isEmpty {
-                if self.confirmedTranscript.isEmpty {
-                    self.confirmedTranscript = trimmedChunk
-                } else {
-                    self.confirmedTranscript += " " + trimmedChunk
+            // If the segment timestamp shifted forward to a new utterance while interim text was pending,
+            // commit the interim text so it is never dropped or overwritten!
+            if self.lastSegmentStart >= 0 && start > (self.lastSegmentStart + 0.05) && !self.interimTranscript.isEmpty {
+                self.commitInterim()
+            }
+            self.lastSegmentStart = start
+            
+            if isFinal || speechFinal {
+                let toCommit = !trimmedChunk.isEmpty ? trimmedChunk : self.interimTranscript
+                if !toCommit.isEmpty {
+                    if self.confirmedTranscript.isEmpty {
+                        self.confirmedTranscript = toCommit
+                    } else {
+                        self.confirmedTranscript += " " + toCommit
+                    }
                 }
                 self.interimTranscript = ""
                 self.transcript = self.confirmedTranscript
@@ -1933,13 +1959,16 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
         DispatchQueue.main.async { [weak self] in
             self?.audioMeter.level = 0
             self?.phase = .processing
+            self?.commitInterim()
         }
         
         let closeData = Data()
         webSocketTask?.send(.data(closeData)) { _ in }
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+        // Give Deepgram time to return final flushed transcription segment before disconnecting
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
             guard let self = self else { return }
+            self.commitInterim()
             self.webSocketTask?.cancel(with: .normalClosure, reason: nil)
             self.webSocketTask = nil
             self.isRecording = false
@@ -1953,7 +1982,14 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
     }
     
     // MARK: - Apple Speech Fallback
-    private func startAppleSpeechRecognition() {
+    private func startAppleSpeechRecognition(appendingToExisting: Bool = false) {
+        if !appendingToExisting {
+            confirmedTranscript = ""
+            interimTranscript = ""
+            transcript = ""
+        }
+        let baseText = confirmedTranscript
+        
         recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
         guard let recognitionRequest = recognitionRequest else { return }
         recognitionRequest.shouldReportPartialResults = true
@@ -1991,7 +2027,13 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
                 if let result = result {
                     let cleaned = VocabularyManager.clean(result.bestTranscription.formattedString)
                     DispatchQueue.main.async {
-                        self.transcript = cleaned
+                        if baseText.isEmpty {
+                            self.transcript = cleaned
+                        } else if cleaned.isEmpty {
+                            self.transcript = baseText
+                        } else {
+                            self.transcript = baseText + " " + cleaned
+                        }
                     }
                     isFinal = result.isFinal
                 }
