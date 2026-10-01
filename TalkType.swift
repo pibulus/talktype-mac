@@ -1588,7 +1588,7 @@ private struct ProcessingWaveform: View {
         HStack(spacing: 3) {
             ForEach(heights.indices, id: \.self) { index in
                 Capsule()
-                    .fill(index.isMultiple(of: 2) ? TT.hot : TT.tangerine)
+                    .fill(index.isMultiple(of: 2) ? TT.pink : TT.tangerine)
                     .frame(width: 3, height: isAnimating ? heights[index] : 6)
                     .animation(
                         .easeInOut(duration: 0.34)
@@ -2439,7 +2439,7 @@ struct ContentView: View {
 
     private var statusLine: some View {
         let label: String
-        let color: Color
+        let style: AnyShapeStyle
         switch speechEngine.phase {
         case .idle:
 #if MAS_BUILD
@@ -2447,25 +2447,25 @@ struct ContentView: View {
 #else
             label = L10n.t("clickGhostHold") + pttKeyName
 #endif
-            color = p.inkSoft.opacity(0.75)
+            style = AnyShapeStyle(p.inkSoft.opacity(0.75))
         case .listening:
 #if MAS_BUILD
             label = L10n.t("clickAgainToFinish")
 #else
             label = L10n.t("listening")
 #endif
-            color = TT.hot
+            style = AnyShapeStyle(TT.hot)
         case .processing:
             label = L10n.t("thinking")
-            color = TT.tangerine
+            style = AnyShapeStyle(TT.tangerine)
         case .ready:
             label = L10n.t("ready")
-            color = TT.hot
+            style = AnyShapeStyle(TT.hot)
         }
 
         return Text(label)
             .font(.system(size: 12, weight: .semibold, design: .rounded))
-            .foregroundStyle(color)
+            .foregroundStyle(style)
             .frame(height: 20)
     }
 
