@@ -723,9 +723,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guard let down = trigger.matches(event: event) else { return }
         
         if down, !pttHeld {
-            // A second shortcut press must not replace text while the first
-            // transcript is still being finalized or polished.
-            guard !pendingPaste, engine.phase != .processing else { return }
+            // If previous dictation got stuck in processing or pendingPaste,
+            // break the deadlock immediately so user can dictate without friction!
+            if pendingPaste || engine.phase == .processing {
+                pendingPaste = false
+                pasteWatchdogItem?.cancel()
+                pasteWatchdogItem = nil
+                engine.phase = .idle
+            }
             pttHeld = true
             dictationTargetApp = NSWorkspace.shared.frontmostApplication
             liveHUDController?.show()
@@ -759,6 +764,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     self.history.add(text: fallbackText, engine: TalkTypeConfig.isUsingDeepgram ? "Nova-3" : "Apple")
                     self.deliver(text: fallbackText)
                 } else {
+                    self.engine.phase = .idle
                     self.liveHUDController?.hide()
                 }
             }
@@ -1256,7 +1262,7 @@ final class LiveHUDWindowController: NSWindowController {
         self.speechEngine = speechEngine
         let mouseLoc = NSEvent.mouseLocation
         let screenWithMouse = NSScreen.screens.first(where: { NSMouseInRect(mouseLoc, $0.frame, false) })
-        let screen = screenWithMouse ?? NSScreen.main ?? NSScreen.screens.first
+        let screen = NSScreen.main ?? screenWithMouse ?? NSScreen.screens.first
         let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1280, height: 800)
         let isTop = TalkTypeConfig.hudPosition == "top"
         let y = isTop ? (screenFrame.maxY - size.height - 32) : (screenFrame.minY + 68)
@@ -1277,8 +1283,14 @@ final class LiveHUDWindowController: NSWindowController {
         window.ignoresMouseEvents = true
         window.canHide = false
         window.hidesOnDeactivate = false
-        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
         window.isReleasedWhenClosed = false
+
+        window.contentView = NSHostingView(
+            rootView: LiveTranscriptHUDView(
+                speechEngine: speechEngine,
+                audioMeter: speechEngine.audioMeter
+            ))
 
         super.init(window: window)
     }
@@ -1291,7 +1303,7 @@ final class LiveHUDWindowController: NSWindowController {
         guard let window = self.window else { return }
         let mouseLoc = NSEvent.mouseLocation
         let screenWithMouse = NSScreen.screens.first(where: { NSMouseInRect(mouseLoc, $0.frame, false) })
-        let screen = screenWithMouse ?? NSScreen.main ?? NSScreen.screens.first
+        let screen = NSScreen.main ?? screenWithMouse ?? NSScreen.screens.first
         let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1280, height: 800)
         let isTop = TalkTypeConfig.hudPosition == "top"
         let y = isTop ? (screenFrame.maxY - size.height - 32) : (screenFrame.minY + 68)
@@ -1306,13 +1318,6 @@ final class LiveHUDWindowController: NSWindowController {
         pendingHideItem = nil
 
         isVisibleTarget = true
-        if !(window.contentView is NSHostingView<LiveTranscriptHUDView>) {
-            window.contentView = NSHostingView(
-                rootView: LiveTranscriptHUDView(
-                    speechEngine: speechEngine,
-                    audioMeter: speechEngine.audioMeter
-                ))
-        }
         updatePosition()
         window.orderFrontRegardless()
         
@@ -1334,7 +1339,6 @@ final class LiveHUDWindowController: NSWindowController {
                 // Instant zero-lag dismissal
                 window.alphaValue = 0
                 window.orderOut(nil)
-                window.contentView = NSView()
             } else {
                 NSAnimationContext.runAnimationGroup({ context in
                     context.duration = 0.08
@@ -1343,7 +1347,6 @@ final class LiveHUDWindowController: NSWindowController {
                     guard let self = self else { return }
                     if !self.isVisibleTarget {
                         window.orderOut(nil)
-                        window.contentView = NSView()
                     }
                 })
             }
@@ -1637,7 +1640,18 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
     
     @Published var transcript = ""
     @Published var isRecording = false
-    @Published var phase: SpeechPhase = .idle
+    @Published var phase: SpeechPhase = .idle {
+        didSet {
+            if phase == .processing {
+                // Safety watchdog: never stay stuck in .processing for longer than 2.5s
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
+                    guard let self = self, self.phase == .processing else { return }
+                    NSLog("⚠️ TalkType: Force-resetting stuck .processing phase to .idle")
+                    self.phase = .idle
+                }
+            }
+        }
+    }
 
     var hasActiveCapture: Bool {
         isRecording || audioEngine.isRunning
@@ -1668,11 +1682,15 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
     @objc private func handleAudioEngineConfigChange(_ notification: Notification) {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
-            // CoreAudio has already invalidated the tap on hardware switch
+            NSLog("🔄 TalkType: Audio engine route changed (e.g. AirPods connected/disconnected)")
             self.hasInstalledAudioTap = false
             if self.isRecording {
                 self.stopRecording()
             }
+            self.safeRemoveTap()
+            self.audioEngine.stop()
+            self.audioEngine.reset()
+            self.phase = .idle
         }
     }
     
@@ -1827,7 +1845,11 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
         listenWebSocket()
         
         let inputNode = audioEngine.inputNode
-        let nativeFormat = inputNode.outputFormat(forBus: 0)
+        var nativeFormat = inputNode.outputFormat(forBus: 0)
+        if nativeFormat.sampleRate == 0 || nativeFormat.channelCount == 0 {
+            audioEngine.reset()
+            nativeFormat = inputNode.outputFormat(forBus: 0)
+        }
         
         guard let targetFormat = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 16000, channels: 1, interleaved: false) else {
             startAppleSpeechRecognition()
@@ -1876,8 +1898,14 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
                 self.onStateChange?(true)
             }
         } catch {
+            NSLog("⚠️ TalkType: Failed to start audioEngine: %@", error.localizedDescription)
             safeRemoveTap()
-            stopRecording()
+            audioEngine.reset()
+            DispatchQueue.main.async {
+                self.isRecording = false
+                self.phase = .idle
+                self.onStateChange?(false)
+            }
         }
     }
     
@@ -2002,7 +2030,11 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
         recognitionRequest.requiresOnDeviceRecognition = true
         
         let inputNode = audioEngine.inputNode
-        let recordingFormat = inputNode.outputFormat(forBus: 0)
+        var recordingFormat = inputNode.outputFormat(forBus: 0)
+        if recordingFormat.sampleRate == 0 || recordingFormat.channelCount == 0 {
+            audioEngine.reset()
+            recordingFormat = inputNode.outputFormat(forBus: 0)
+        }
         
         safeRemoveTap()
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
@@ -2052,8 +2084,14 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
                 }
             }
         } catch {
+            NSLog("⚠️ TalkType: Failed to start Apple Speech audio engine: %@", error.localizedDescription)
             safeRemoveTap()
-            print("Could not start audio engine: \(error)")
+            audioEngine.reset()
+            DispatchQueue.main.async {
+                self.isRecording = false
+                self.phase = .idle
+                self.onStateChange?(false)
+            }
         }
     }
     
