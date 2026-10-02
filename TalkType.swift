@@ -381,6 +381,7 @@ enum Polisher {
             completion(text); return
         }
         var request = URLRequest(url: url)
+        request.timeoutInterval = 4.0
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(key, forHTTPHeaderField: "x-goog-api-key")
@@ -787,7 +788,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
 #if MAS_BUILD
         // The sandboxed App Store build stays click-to-dictate and clipboard-only.
-        engine.transcript = text
+        engine.transcript = L10n.t("copiedToClipboard")
         self.liveHUDController?.hide(after: 1.5)
 #else
         if AXIsProcessTrusted() {
@@ -811,11 +812,30 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func requestPaste() {
         pendingPaste = true
         engine.stopRecording()
+        
+        #if MAS_BUILD
+        pasteWatchdogItem?.cancel()
+        let watchdog = DispatchWorkItem { [weak self] in
+            guard let self = self, self.pendingPaste else { return }
+            self.pendingPaste = false
+            self.stopMenubarBounce()
+            let fallbackText = VocabularyManager.clean(self.engine.transcript.trimmingCharacters(in: .whitespacesAndNewlines))
+            if !fallbackText.isEmpty {
+                self.history.add(text: fallbackText, engine: TalkTypeConfig.isUsingDeepgram ? "Nova-3" : "Apple")
+                self.deliver(text: fallbackText)
+            } else {
+                self.engine.phase = .idle
+                self.liveHUDController?.hide()
+            }
+        }
+        self.pasteWatchdogItem = watchdog
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: watchdog)
+        #endif
     }
 
     @objc func statusItemClicked(_ sender: NSStatusBarButton) {
         guard let event = NSApp.currentEvent else { return }
-        if event.type == .rightMouseUp {
+        if event.type == .rightMouseUp || event.modifierFlags.contains(.control) {
             showContextMenu(sender)
         } else {
             togglePopover(sender)
@@ -1683,7 +1703,6 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             NSLog("🔄 TalkType: Audio engine route changed (e.g. AirPods connected/disconnected)")
-            self.hasInstalledAudioTap = false
             if self.isRecording {
                 self.stopRecording()
             }
@@ -1892,20 +1911,16 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
         audioEngine.prepare()
         do {
             try audioEngine.start()
-            DispatchQueue.main.async {
-                self.isRecording = true
-                self.phase = .listening
-                self.onStateChange?(true)
-            }
+            self.isRecording = true
+            self.phase = .listening
+            self.onStateChange?(true)
         } catch {
             NSLog("⚠️ TalkType: Failed to start audioEngine: %@", error.localizedDescription)
             safeRemoveTap()
             audioEngine.reset()
-            DispatchQueue.main.async {
-                self.isRecording = false
-                self.phase = .idle
-                self.onStateChange?(false)
-            }
+            self.isRecording = false
+            self.phase = .idle
+            self.onStateChange?(false)
         }
     }
     
@@ -2047,11 +2062,9 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
         audioEngine.prepare()
         do {
             try audioEngine.start()
-            DispatchQueue.main.async {
-                self.isRecording = true
-                self.phase = .listening
-                self.onStateChange?(true)
-            }
+            self.isRecording = true
+            self.phase = .listening
+            self.onStateChange?(true)
             
             recognitionTask = speechRecognizer?.recognitionTask(with: recognitionRequest) { [weak self] result, error in
                 guard let self = self else { return }
@@ -2087,11 +2100,9 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
             NSLog("⚠️ TalkType: Failed to start Apple Speech audio engine: %@", error.localizedDescription)
             safeRemoveTap()
             audioEngine.reset()
-            DispatchQueue.main.async {
-                self.isRecording = false
-                self.phase = .idle
-                self.onStateChange?(false)
-            }
+            self.isRecording = false
+            self.phase = .idle
+            self.onStateChange?(false)
         }
     }
     
@@ -2354,6 +2365,27 @@ struct ContentView: View {
                 }
                 ghostButton
                 statusLine
+                
+                Spacer(minLength: 0)
+
+                HStack {
+                    Button(L10n.t("privacyPolicy")) {
+                        appDelegate.openPrivacyPolicy()
+                    }
+                    .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(p.inkSoft.opacity(0.5))
+                    .buttonStyle(.plain)
+
+                    Spacer()
+
+                    Button(L10n.t("quit")) {
+                        NSApplication.shared.terminate(nil)
+                    }
+                    .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(p.inkSoft.opacity(0.5))
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 4)
             } else {
                 // History View (Never lose text again)
                 historyCard
@@ -2647,6 +2679,17 @@ struct ContentView: View {
 
                     Button(L10n.t("privacyPolicy")) {
                         appDelegate.openPrivacyPolicy()
+                    }
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(p.inkSoft.opacity(0.5))
+                    .buttonStyle(.plain)
+
+                    Text("•")
+                        .font(.system(size: 10))
+                        .foregroundStyle(p.inkSoft.opacity(0.3))
+
+                    Button(L10n.t("quit")) {
+                        NSApplication.shared.terminate(nil)
                     }
                     .font(.system(size: 11, weight: .medium, design: .rounded))
                     .foregroundStyle(p.inkSoft.opacity(0.5))

@@ -75,12 +75,18 @@ cat > "${APP_DIR}/Contents/Info.plist" << PLIST
     <string>public.app-category.productivity</string>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
+    <key>CFBundleSupportedPlatforms</key>
+    <array>
+        <string>MacOSX</string>
+    </array>
     <key>NSHumanReadableCopyright</key>
     <string>Copyright © 2026 Pablo Alvarado. All rights reserved.</string>
     <key>NSSpeechRecognitionUsageDescription</key>
     <string>TalkType uses on-device speech recognition to transcribe your voice into text accurately.</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>TalkType uses your microphone when you start a dictation.</string>
+    <string>TalkType uses your microphone exclusively to capture your voice for speech-to-text dictation.</string>
 </dict>
 </plist>
 PLIST
