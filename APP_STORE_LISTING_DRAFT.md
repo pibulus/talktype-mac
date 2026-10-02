@@ -33,19 +33,19 @@ Tap to start, speak naturally, and keep recent transcripts close at hand. Add na
 - Optional Deepgram live transcription
 - Optional Gemini text polish
 
-Try 10 dictations free, then unlock unlimited TalkType with one purchase. No TalkType account or subscription.
+Try 50 dictations free, then unlock unlimited TalkType with one purchase. No TalkType account or subscription.
 
 Optional cloud engines use your own API keys; provider terms and usage charges may apply.
 
 **Keywords**
 
-dictation,speech to text,voice typing,transcription,menu bar,writing
+dictation,voice to text,speech to text,transcribe,voice typing,transcription,notes,whisper,memo,microphone,writing
 
 ## Purchase plan to validate
 
-- Free download with 10 complete dictations, including the normal end-to-end flow.
-- One non-consumable lifetime unlock for unlimited use.
-- Initial price hypothesis: US$9.99, with App Store Connect’s local storefront price points reviewed before release.
+- Free download with 50 complete dictations, including the normal end-to-end flow.
+- One non-consumable lifetime unlock for unlimited use ($12.99).
+- Price: US$12.99 (Tier 13).
 - No subscription and no TalkType-hosted transcription charges. Optional provider usage remains on the user’s provider account.
 - Explain the free limit before download and before the limit is reached. Provide purchase restore controls.
 
