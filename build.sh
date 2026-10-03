@@ -224,7 +224,15 @@ else
     fi
 
     # 6. Notarize & staple (direct distribution). Gracefully skipped without a profile.
-    NOTARY_PROFILE="${NOTARY_PROFILE:-talktype-notary}"
+    if [ -z "${NOTARY_PROFILE:-}" ]; then
+        if xcrun notarytool history --keychain-profile "AC_PASSWORD" >/dev/null 2>&1; then
+            NOTARY_PROFILE="AC_PASSWORD"
+        elif xcrun notarytool history --keychain-profile "talktype-notary" >/dev/null 2>&1; then
+            NOTARY_PROFILE="talktype-notary"
+        else
+            NOTARY_PROFILE="AC_PASSWORD"
+        fi
+    fi
     DMG_PATH="${DIST_DIR}/${APP_NAME}-${VERSION}.dmg"
     if [ "${SKIP_NOTARIZE:-0}" = "1" ]; then
         echo "⏭️  Skipping notarization (SKIP_NOTARIZE=1)."
