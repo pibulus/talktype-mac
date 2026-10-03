@@ -3297,9 +3297,41 @@ struct ContentView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ScrollView {
+                HStack {
+                    Text("\(history.records.count) \(history.records.count == 1 ? "take" : "takes")")
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .foregroundStyle(p.inkSoft.opacity(0.55))
+
+                    Spacer()
+
+                    Button(action: {
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            sortNewestFirst.toggle()
+                        }
+                    }) {
+                        HStack(spacing: 3) {
+                            Image(systemName: sortNewestFirst ? "arrow.down" : "arrow.up")
+                                .font(.system(size: 8.5, weight: .bold))
+                            Text(sortNewestFirst ? L10n.t("newest") : L10n.t("oldest"))
+                                .font(.system(size: 10, weight: .bold, design: .rounded))
+                        }
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(p.card.opacity(0.85))
+                        .foregroundStyle(p.inkSoft.opacity(0.85))
+                        .clipShape(Capsule())
+                        .overlay(
+                            Capsule()
+                                .strokeBorder(p.border.opacity(0.4), lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 4)
+
+                ScrollView(.vertical, showsIndicators: false) {
                     LazyVStack(spacing: 10) {
-                        ForEach(history.records) { record in
+                        ForEach(sortedRecords) { record in
                             HistoryRecordCard(
                                 record: record,
                                 isCopied: copiedId == record.id,
@@ -3323,30 +3355,74 @@ struct ContentView: View {
                     }
                     .padding(4)
                 }
-                .frame(height: 330)
-                
+                .frame(maxHeight: .infinity)
+
                 HStack {
-                    HoverButton(title: L10n.t("clearHistory"), p: p) {
-                        history.clear()
+                    if isConfirmingClear {
+                        HStack(spacing: 8) {
+                            Button(action: {
+                                withAnimation(.easeInOut(duration: 0.15)) {
+                                    isConfirmingClear = false
+                                }
+                            }) {
+                                Text(L10n.t("cancel"))
+                                    .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(p.inkSoft.opacity(0.7))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 3.5)
+                                    .background(p.card.opacity(0.8))
+                                    .clipShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+
+                            Button(action: {
+                                withAnimation(.easeOut(duration: 0.2)) {
+                                    history.clear()
+                                    isConfirmingClear = false
+                                }
+                            }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "trash")
+                                        .font(.system(size: 9, weight: .bold))
+                                    Text(L10n.t("clearAll"))
+                                        .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                                }
+                                .padding(.horizontal, 9)
+                                .padding(.vertical, 3.5)
+                                .background(TT.hot.opacity(0.18))
+                                .foregroundStyle(TT.hot)
+                                .clipShape(Capsule())
+                                .overlay(
+                                    Capsule()
+                                        .strokeBorder(TT.hot.opacity(0.35), lineWidth: 1)
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                    } else {
+                        HoverButton(title: L10n.t("clearHistory"), p: p) {
+                            withAnimation(.easeInOut(duration: 0.15)) {
+                                isConfirmingClear = true
+                            }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
+                                if isConfirmingClear {
+                                    withAnimation(.easeInOut(duration: 0.15)) {
+                                        isConfirmingClear = false
+                                    }
+                                }
+                            }
+                        }
+                        .transition(.opacity)
                     }
-                    
+
                     Spacer()
-
-                    HoverButton(title: L10n.t("privacyPolicy"), p: p) {
-                        appDelegate.openPrivacyPolicy()
-                    }
-
-                    Text("•")
-                        .font(.system(size: 10))
-                        .foregroundStyle(p.inkSoft.opacity(0.3))
-
-                    HoverButton(title: L10n.t("quit"), p: p) {
-                        NSApplication.shared.terminate(nil)
-                    }
                 }
                 .padding(.horizontal, 4)
+                .frame(height: 22)
             }
         }
+        .frame(maxHeight: .infinity)
     }
 
     private func toggle() {
