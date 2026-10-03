@@ -813,7 +813,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         pendingPaste = true
         engine.stopRecording()
         
-        #if MAS_BUILD
         pasteWatchdogItem?.cancel()
         let watchdog = DispatchWorkItem { [weak self] in
             guard let self = self, self.pendingPaste else { return }
@@ -830,7 +829,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         self.pasteWatchdogItem = watchdog
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: watchdog)
-        #endif
     }
 
     @objc func statusItemClicked(_ sender: NSStatusBarButton) {
@@ -1644,7 +1642,7 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
     private var urlSession: URLSession?
     private var confirmedTranscript = ""
     private var interimTranscript = ""
-    private var lastSegmentStart: Double = -1
+    private var isStopping = false
     private var permissionRequestInProgress = false
     
     private func commitInterim() {
@@ -1762,9 +1760,11 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
     func startRecording(resumeAfterPermission: Bool = true) {
         guard phase != .processing else { return }
 
+        isStopping = false
         if audioEngine.isRunning {
-            stopRecording()
-            return
+            safeRemoveTap()
+            audioEngine.stop()
+            audioEngine.reset()
         }
         guard !permissionRequestInProgress else { return }
 
@@ -1823,11 +1823,10 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
             return
         }
 
-        
+        isStopping = false
         transcript = ""
         confirmedTranscript = ""
         interimTranscript = ""
-        lastSegmentStart = -1
         
         if TalkTypeConfig.isUsingDeepgram {
             startDeepgramStreaming()
@@ -1848,10 +1847,11 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
     
     // MARK: - Deepgram WebSocket Streaming
     private func startDeepgramStreaming() {
+        isStopping = false
         let apiKey = TalkTypeConfig.deepgramApiKey
         let keywordsParam = VocabularyManager.deepgramKeywordsParam
         guard !apiKey.isEmpty,
-              let url = URL(string: "wss://api.deepgram.com/v1/listen?model=nova-3&smart_format=true&interim_results=true&encoding=linear16&sample_rate=16000&channels=1&mip_opt_out=true&endpointing=500&language=\(TalkTypeConfig.language.deepgramLanguage)\(keywordsParam)") else {
+              let url = URL(string: "wss://api.deepgram.com/v1/listen?model=nova-3&smart_format=true&interim_results=true&encoding=linear16&sample_rate=16000&channels=1&mip_opt_out=true&language=\(TalkTypeConfig.language.deepgramLanguage)\(keywordsParam)") else {
             startAppleSpeechRecognition()
             return
         }
@@ -1943,10 +1943,16 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
                 self.listenWebSocket()
                 
             case .failure(let error):
-                NSLog("⚠️ TalkType Deepgram WebSocket error: %@", error.localizedDescription)
+                // If stream was intentionally stopped, this closure error is expected
+                if self.isStopping {
+                    return
+                }
+                guard self.isRecording else { return }
+                
+                NSLog("⚠️ TalkType Deepgram WebSocket error during recording: %@", error.localizedDescription)
                 // If Deepgram WebSocket fails mid-recording, seamlessly fallback without losing prior words
                 DispatchQueue.main.async { [weak self] in
-                    guard let self = self, self.isRecording else { return }
+                    guard let self = self, self.isRecording, !self.isStopping else { return }
                     self.commitInterim()
                     self.safeRemoveTap()
                     self.audioEngine.stop()
@@ -1967,16 +1973,10 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
         
         let isFinal = (json["is_final"] as? Bool) ?? false
         let speechFinal = (json["speech_final"] as? Bool) ?? false
-        let start = (json["start"] as? Double) ?? 0.0
         let trimmedChunk = VocabularyManager.clean(chunk.trimmingCharacters(in: .whitespacesAndNewlines))
         
         DispatchQueue.main.async {
-            // If the segment timestamp shifted forward to a new utterance while interim text was pending,
-            // commit the interim text so it is never dropped or overwritten!
-            if self.lastSegmentStart >= 0 && start > (self.lastSegmentStart + 0.05) && !self.interimTranscript.isEmpty {
-                self.commitInterim()
-            }
-            self.lastSegmentStart = start
+            guard self.isRecording || self.isStopping else { return }
             
             if isFinal || speechFinal {
                 let toCommit = !trimmedChunk.isEmpty ? trimmedChunk : self.interimTranscript
@@ -1997,6 +1997,7 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
     }
     
     private func stopDeepgramStreaming() {
+        isStopping = true
         audioEngine.stop()
         safeRemoveTap()
         DispatchQueue.main.async { [weak self] in
@@ -2015,6 +2016,7 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
             self.webSocketTask?.cancel(with: .normalClosure, reason: nil)
             self.webSocketTask = nil
             self.isRecording = false
+            self.isStopping = false
             self.audioMeter.level = 0
             self.phase = .processing
             self.onStateChange?(false)
@@ -2026,6 +2028,7 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
     
     // MARK: - Apple Speech Fallback
     private func startAppleSpeechRecognition(appendingToExisting: Bool = false) {
+        isStopping = false
         if !appendingToExisting {
             confirmedTranscript = ""
             interimTranscript = ""
@@ -2090,6 +2093,7 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
                         self.recognitionRequest = nil
                         self.recognitionTask = nil
                         self.isRecording = false
+                        self.isStopping = false
                         self.phase = .processing
                         self.onStateChange?(false)
                         self.onFinal?(self.transcript)
@@ -2101,12 +2105,14 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
             safeRemoveTap()
             audioEngine.reset()
             self.isRecording = false
+            self.isStopping = false
             self.phase = .idle
             self.onStateChange?(false)
         }
     }
     
     private func stopAppleSpeechRecognition() {
+        isStopping = true
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             self.audioEngine.stop()
@@ -2116,6 +2122,18 @@ class SpeechEngine: NSObject, ObservableObject, URLSessionWebSocketDelegate {
             self.audioMeter.level = 0
             self.phase = .processing
             self.onStateChange?(false)
+            
+            // Safety timeout: if Apple Speech hangs on silence, finalize with current buffer
+            let current = self.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                guard let self = self, self.recognitionTask != nil else { return }
+                self.recognitionTask?.cancel()
+                self.recognitionTask = nil
+                self.recognitionRequest = nil
+                self.isStopping = false
+                let finalOut = self.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+                self.onFinal?(finalOut.isEmpty ? current : finalOut)
+            }
         }
     }
 }
