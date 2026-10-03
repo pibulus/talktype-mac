@@ -5,6 +5,7 @@ import Speech
 import AVFoundation
 import ApplicationServices
 import Security
+import Carbon
 
 /// Short-lived state for the dictation loop; processing blocks a second take
 /// until the current transcript has been delivered.
@@ -564,6 +565,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var pttHeld = false
     private var pttPressTime: Date?
     private var isHandsFreeMode = false
+    private var lastFlagsEventTime: TimeInterval = 0
     private var pendingPaste = false
     private var pasteWatchdogItem: DispatchWorkItem?
     private var deliverySessionId = UUID()
@@ -762,6 +764,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handleFlags(_ event: NSEvent) {
+        let now = ProcessInfo.processInfo.systemUptime
+        guard now - lastFlagsEventTime > 0.04 else { return } // Debounce 40ms contact chatter
+        lastFlagsEventTime = now
         let trigger = TalkTypeConfig.pttTrigger
         guard let down = trigger.matches(event: event) else { return }
         
@@ -1404,14 +1409,41 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     #if !MAS_BUILD
+    private func resolvePasteKeyCode() -> CGKeyCode {
+        guard let inputSource = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue(),
+              let layoutData = TISGetInputSourceProperty(inputSource, kTISPropertyUnicodeKeyLayoutData) else {
+            return 9 // ANSI 'v' fallback
+        }
+        let header = unsafeBitCast(layoutData, to: CFData.self)
+        guard let uchrHeader = CFDataGetBytePtr(header) else { return 9 }
+        let keyboardType = UInt32(LMGetKbdType())
+        for code in 0..<128 {
+            var deadKeyState: UInt32 = 0
+            var actualStringLength: Int = 0
+            var unicodeString = [UniChar](repeating: 0, count: 4)
+            let status = UCKeyTranslate(
+                uchrHeader.withMemoryRebound(to: UCKeyboardLayout.self, capacity: 1) { $0 },
+                UInt16(code),
+                UInt16(kUCKeyActionDown),
+                0,
+                keyboardType,
+                OptionBits(kUCKeyTranslateNoDeadKeysBit),
+                &deadKeyState,
+                unicodeString.count,
+                &actualStringLength,
+                &unicodeString
+            )
+            if status == noErr && actualStringLength > 0 && unicodeString[0] == 0x76 /* 'v' */ {
+                return CGKeyCode(code)
+            }
+        }
+        return 9
+    }
+
     // Simulates Cmd+V to paste into the active app
     func pasteToActiveApp(text: String) {
         let targetApp = self.dictationTargetApp ?? self.lastExternalApp
         self.dictationTargetApp = nil
-
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(text, forType: .string)
         
         let wasPopoverShown = popover.isShown
         if wasPopoverShown {
@@ -1426,9 +1458,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         // Allow time for target app to gain focus and pasteboard propagation
         let delay: TimeInterval = (wasPopoverShown || targetApp != nil) ? 0.18 : 0.08
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self = self else { return }
             let src = CGEventSource(stateID: .combinedSessionState)
-            let vKeyCode: CGKeyCode = 9 // 'v' key
+            let vKeyCode: CGKeyCode = self.resolvePasteKeyCode()
             
             guard let keyDown = CGEvent(keyboardEventSource: src, virtualKey: vKeyCode, keyDown: true),
                   let keyUp = CGEvent(keyboardEventSource: src, virtualKey: vKeyCode, keyDown: false) else {
@@ -1459,7 +1492,7 @@ final class LiveHUDWindowController: NSWindowController {
         self.speechEngine = speechEngine
         let mouseLoc = NSEvent.mouseLocation
         let screenWithMouse = NSScreen.screens.first(where: { NSMouseInRect(mouseLoc, $0.frame, false) })
-        let screen = NSScreen.main ?? screenWithMouse ?? NSScreen.screens.first
+        let screen = screenWithMouse ?? NSScreen.main ?? NSScreen.screens.first
         let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1280, height: 800)
         let isTop = TalkTypeConfig.hudPosition == "top"
         let y = isTop ? (screenFrame.maxY - size.height - 32) : (screenFrame.minY + 68)
@@ -1500,7 +1533,7 @@ final class LiveHUDWindowController: NSWindowController {
         guard let window = self.window else { return }
         let mouseLoc = NSEvent.mouseLocation
         let screenWithMouse = NSScreen.screens.first(where: { NSMouseInRect(mouseLoc, $0.frame, false) })
-        let screen = NSScreen.main ?? screenWithMouse ?? NSScreen.screens.first
+        let screen = screenWithMouse ?? NSScreen.main ?? NSScreen.screens.first
         let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1280, height: 800)
         let isTop = TalkTypeConfig.hudPosition == "top"
         let y = isTop ? (screenFrame.maxY - size.height - 32) : (screenFrame.minY + 68)
@@ -1872,10 +1905,23 @@ class SpeechEngine: NSObject, ObservableObject {
             name: .AVAudioEngineConfigurationChange,
             object: audioEngine
         )
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(handleSystemSleep),
+            name: NSWorkspace.willSleepNotification,
+            object: nil
+        )
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(handleSystemWake),
+            name: NSWorkspace.didWakeNotification,
+            object: nil
+        )
     }
     
     deinit {
         NotificationCenter.default.removeObserver(self)
+        NSWorkspace.shared.notificationCenter.removeObserver(self)
         urlSession?.invalidateAndCancel()
         safeRemoveTap()
     }
@@ -1893,6 +1939,29 @@ class SpeechEngine: NSObject, ObservableObject {
             self.phase = .idle
         }
     }
+
+    @objc private func handleSystemSleep(_ notification: Notification) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            NSLog("💤 TalkType: System going to sleep, resetting audio engine")
+            if self.isRecording {
+                self.stopRecording()
+            }
+            self.safeRemoveTap()
+            self.audioEngine.stop()
+            self.audioEngine.reset()
+            self.phase = .idle
+        }
+    }
+
+    @objc private func handleSystemWake(_ notification: Notification) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            NSLog("☀️ TalkType: System woke up, resetting engine state to idle")
+            self.audioEngine.reset()
+            self.phase = .idle
+        }
+    }
     
     private func safeRemoveTap() {
         guard hasInstalledAudioTap else { return }
@@ -1901,6 +1970,10 @@ class SpeechEngine: NSObject, ObservableObject {
     }
 
     private func resolveInputFormat() -> AVAudioFormat? {
+        guard AVCaptureDevice.default(for: .audio) != nil else {
+            NSLog("⚠️ TalkType: No hardware audio input device found")
+            return nil
+        }
         let inputNode = audioEngine.inputNode
         var format = inputNode.outputFormat(forBus: 0)
         if format.sampleRate <= 0 || format.channelCount == 0 {
@@ -1925,28 +1998,36 @@ class SpeechEngine: NSObject, ObservableObject {
         lastMeterPublishTime = now
 
         var sumOfSquares = 0.0
+        var totalSamples = 0
+        let step = max(1, frameCount / 64)
         if let channels = buffer.floatChannelData {
             for channel in 0..<channelCount {
                 let samples = channels[channel]
-                for frame in 0..<frameCount {
+                var frame = 0
+                while frame < frameCount {
                     let sample = Double(samples[frame])
                     sumOfSquares += sample * sample
+                    totalSamples += 1
+                    frame += step
                 }
             }
         } else if let channels = buffer.int16ChannelData {
             for channel in 0..<channelCount {
                 let samples = channels[channel]
-                for frame in 0..<frameCount {
+                var frame = 0
+                while frame < frameCount {
                     let sample = Double(samples[frame]) / 32768.0
                     sumOfSquares += sample * sample
+                    totalSamples += 1
+                    frame += step
                 }
             }
         } else {
             return
         }
 
-        let sampleCount = Double(frameCount * channelCount)
-        let level = min(1.0, max(0.0, sqrt(sumOfSquares / sampleCount) * 5.0))
+        guard totalSamples > 0 else { return }
+        let level = min(1.0, max(0.0, sqrt(sumOfSquares / Double(totalSamples)) * 5.0))
 
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
@@ -1955,7 +2036,14 @@ class SpeechEngine: NSObject, ObservableObject {
     }
     
     func startRecording(resumeAfterPermission: Bool = true) {
-        guard phase != .processing else { return }
+        if phase == .processing || isStopping {
+            // User re-triggered dictation while flushing prior take: force-finalize immediately
+            webSocketTask?.cancel(with: .normalClosure, reason: nil)
+            webSocketTask = nil
+            recognitionTask?.cancel()
+            recognitionTask = nil
+            isStopping = false
+        }
 
         isStopping = false
         if audioEngine.isRunning {
@@ -2086,10 +2174,24 @@ class SpeechEngine: NSObject, ObservableObject {
             guard let self = self, self.isRecording else { return }
             self.publishInputLevel(from: buffer)
             
+            // Deep-copy audio frame data before CoreAudio driver recycles the underlying buffer
+            guard let bufferCopy = AVAudioPCMBuffer(pcmFormat: buffer.format, frameCapacity: buffer.frameCapacity) else { return }
+            bufferCopy.frameLength = buffer.frameLength
+            let channelCount = Int(buffer.format.channelCount)
+            if let srcChannels = buffer.floatChannelData, let dstChannels = bufferCopy.floatChannelData {
+                for channel in 0..<channelCount {
+                    dstChannels[channel].update(from: srcChannels[channel], count: Int(buffer.frameLength))
+                }
+            } else if let srcChannels = buffer.int16ChannelData, let dstChannels = bufferCopy.int16ChannelData {
+                for channel in 0..<channelCount {
+                    dstChannels[channel].update(from: srcChannels[channel], count: Int(buffer.frameLength))
+                }
+            }
+            
             // Offload buffer allocation, conversion, and websocket send from real-time CoreAudio thread
-            self.audioProcessingQueue.async { [weak self] in
+            self.audioProcessingQueue.async { [weak self, bufferCopy] in
                 guard let self = self, self.isRecording else { return }
-                let frameCount = AVAudioFrameCount(ceil(Double(buffer.frameLength) * 16000.0 / sampleRate) + 2)
+                let frameCount = AVAudioFrameCount(ceil(Double(bufferCopy.frameLength) * 16000.0 / sampleRate) + 2)
                 guard let convertedBuffer = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: frameCount) else { return }
                 
                 var error: NSError?
@@ -2101,7 +2203,7 @@ class SpeechEngine: NSObject, ObservableObject {
                     }
                     allRead = true
                     outStatus.pointee = .haveData
-                    return buffer
+                    return bufferCopy
                 }
                 
                 if let channelData = convertedBuffer.int16ChannelData {
