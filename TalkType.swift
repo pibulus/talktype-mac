@@ -161,20 +161,28 @@ enum L10n {
         "recentTranscripts": ["en": "Recent Transcripts", "es": "Transcripciones recientes"],
         "historyEmpty": ["en": "History empty", "es": "Historial vacío"],
         "pushToTalkKey": ["en": "Push to Talk Key", "es": "Tecla pulsar para hablar"],
-        "transcriptionEngine": ["en": "Transcription Engine", "es": "Motor de transcripción"],
-        "appleSpeech": ["en": "Apple Speech (On-Device, Offline)", "es": "Voz de Apple (en el dispositivo, sin conexión)"],
-        "deepgramNova": ["en": "Deepgram Nova-3 (Live Streaming)", "es": "Deepgram Nova-3 (transmisión en vivo)"],
+        "transcriptionEngine": ["en": "Voice Mode", "es": "Modo de voz"],
+        "appleSpeech": ["en": "Mac Built-in (Offline · Private)", "es": "Integrado en Mac (sin conexión · privado)"],
+        "deepgramNova": ["en": "⚡ Supercharged (Nova-3 · Real-Time)", "es": "⚡ Sobrealimentado (Nova-3 · en vivo)"],
         "hudPosition": ["en": "HUD Position", "es": "Posición del HUD"],
         "bottomOfScreen": ["en": "Bottom of Screen", "es": "Parte inferior de la pantalla"],
         "topOfScreen": ["en": "Top of Screen", "es": "Parte superior de la pantalla"],
-        "deepgramApiKey": ["en": "Deepgram API Key…", "es": "Clave de API de Deepgram…"],
+        "deepgramApiKey": ["en": "🎁 Unlock Supercharged Voice (Free $200 Pass)…", "es": "🎁 Desbloquear voz sobrealimentada (Pase de $200 gratis)…"],
+        "unlockSupercharged": ["en": "🎁 Unlock Supercharged Voice (Free $200 Pass)…", "es": "🎁 Desbloquear voz sobrealimentada (Pase de $200 gratis)…"],
+        "superchargedConnected": ["en": "⚡ Supercharged Connected (Change Code…)", "es": "⚡ Voz sobrealimentada conectada (cambiar código…)"],
+        "trySuperchargedBadge": ["en": "✨ Try Supercharged Voice (Free)", "es": "✨ Probar voz sobrealimentada (Gratis)"],
+        "superchargedActiveBadge": ["en": "⚡ Supercharged Voice Active", "es": "⚡ Voz sobrealimentada activa"],
+        "trySuperchargedHelp": ["en": "Get $200 free credit (~45,000 mins) for ultra-accurate streaming transcription", "es": "Consigue $200 de crédito gratis (~45.000 mins) para transcripción ultraprecisa"],
+        "superchargedHelp": ["en": "Supercharged voice active (Deepgram Nova-3). Click to manage pass.", "es": "Voz sobrealimentada activa (Deepgram Nova-3). Clic para gestionar pase."],
         "quit": ["en": "Quit TalkType", "es": "Salir de TalkType"],
-        "dgAlertTitle": ["en": "Deepgram API Key (Optional BYOK)", "es": "Clave de API de Deepgram (BYOK Opcional)"],
-        "dgAlertInfo": ["en": "TalkType uses on-device Apple Speech by default (100% private, zero setup). Optionally add a Deepgram API key for cloud streaming Nova-3 transcription. TalkType passes mip_opt_out=true so audio is never used for training. Free tier at console.deepgram.com.", "es": "TalkType usa la voz en el dispositivo de Apple por defecto (100% privada, sin configuración). Opcionalmente añade una clave de Deepgram para transcripción Nova-3 en la nube. TalkType activa mip_opt_out=true para que el audio nunca se use para entrenamiento. Nivel gratuito en console.deepgram.com."],
-        "save": ["en": "Save", "es": "Guardar"],
-        "getKey": ["en": "Get a Deepgram Key…", "es": "Obtener clave de Deepgram…"],
+        "dgAlertTitle": ["en": "Unlock Supercharged Voice (100% Free)", "es": "Desbloquear voz sobrealimentada (100% gratis)"],
+        "dgAlertInfo": ["en": "TalkType uses your Mac's built-in voice by default (works offline, completely private).\n\nWant mind-blowing accuracy and instant real-time streaming? Deepgram gives everyone a free $200 pass (~45,000 minutes of speech, no credit card required).\n\n1. Click 'Get Free Pass' to grab your code on their site.\n2. Paste it below to activate.", "es": "TalkType usa la voz integrada de tu Mac por defecto (funciona sin conexión y es 100% privada).\n\n¿Quieres una precisión asombrosa y transcripción en tiempo real? Deepgram regala un pase de $200 a todo el mundo (~45.000 minutos de voz, sin tarjeta de crédito).\n\n1. Haz clic en 'Obtener pase gratis' para conseguir tu código.\n2. Pégalo a continuación para activarlo."],
+        "save": ["en": "Activate Pass", "es": "Activar pase"],
+        "updatePass": ["en": "Update Pass", "es": "Actualizar pase"],
+        "getKey": ["en": "Get Free Pass ↗", "es": "Obtener pase gratis ↗"],
         "cancel": ["en": "Cancel", "es": "Cancelar"],
-        "pasteKey": ["en": "Paste Deepgram API key", "es": "Pegar clave de API de Deepgram"],
+        "pasteKey": ["en": "Paste your code here", "es": "Pega tu código aquí"],
+        "pasteKeyOrClear": ["en": "Paste new code, or leave blank to remove", "es": "Pega un código nuevo, o déjalo vacío para eliminarlo"],
         "listeningSpeak": ["en": "Listening… speak freely", "es": "Escuchando… habla con libertad"],
         "listening": ["en": "Listening…", "es": "Escuchando…"],
         "live": ["en": "Live", "es": "En vivo"],
@@ -189,10 +197,10 @@ enum L10n {
         "copiedToClipboard": ["en": "Copied to clipboard — Press ⌘V to paste! 📋", "es": "Copiado al portapapeles — ¡Pulsa ⌘V para pegar! 📋"],
         "polishing": ["en": "Polishing…", "es": "Puliendo…"],
         "polishOutput": ["en": "Polish Output (Gemini)", "es": "Pulir texto (Gemini)"],
-        "geminiApiKey": ["en": "Gemini API Key…", "es": "Clave de API de Gemini…"],
-        "pasteGeminiKey": ["en": "Paste Gemini API key", "es": "Pegar clave de API de Gemini"],
-        "geminiAlertTitle": ["en": "Gemini API Key (Optional BYOK)", "es": "Clave de API de Gemini (BYOK Opcional)"],
-        "geminiAlertInfo": ["en": "TalkType operates completely standalone. Optionally add a Gemini API key to polish transcripts into clean prose. Free keys available at aistudio.google.com.", "es": "TalkType funciona de forma completamente independiente. Opcionalmente añade una clave de Gemini para pulir transcripciones. Claves gratuitas en aistudio.google.com."],
+        "geminiApiKey": ["en": "Gemini AI Pass…", "es": "Pase de IA Gemini…"],
+        "pasteGeminiKey": ["en": "Paste your Gemini code here", "es": "Pega tu código de Gemini aquí"],
+        "geminiAlertTitle": ["en": "Polish with AI (Free Gemini Pass)", "es": "Pulir con IA (Pase de Gemini gratis)"],
+        "geminiAlertInfo": ["en": "TalkType operates completely standalone. Optionally add a free Gemini pass from Google AI Studio (no credit card required) to automatically format and polish your transcripts into clean prose.", "es": "TalkType funciona de forma completamente independiente. Opcionalmente añade un pase gratuito de Google AI Studio (sin tarjeta de crédito) para dar formato y pulir tus transcripciones."],
         "customKeywords": ["en": "Custom Vocabulary…", "es": "Vocabulario personalizado…"],
         "keywordsAlertTitle": ["en": "Custom Vocabulary & Keywords", "es": "Vocabulario y palabras clave"],
         "keywordsAlertInfo": ["en": "Add words or names speech recognition should prioritize (comma-separated, e.g. TalkType, pibulus, NoteBro). You can also use 'wrong -> right' rules (e.g. doctype -> TalkType).", "es": "Añade palabras que el reconocimiento de voz deba priorizar (separadas por comas, ej. TalkType, pibulus). También puedes usar reglas 'error -> corrección'."],
@@ -590,7 +598,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         engine.onFinal = { [weak self] rawText in
             guard let self = self else { return }
             let text = VocabularyManager.clean(rawText.trimmingCharacters(in: .whitespacesAndNewlines))
-            let engineName = TalkTypeConfig.isUsingDeepgram ? "Nova-3" : "Apple"
+            let engineName = TalkTypeConfig.isUsingDeepgram ? "Nova-3" : "Local"
             
             self.pasteWatchdogItem?.cancel()
             self.pasteWatchdogItem = nil
@@ -776,7 +784,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self.stopMenubarBounce()
                 let fallbackText = VocabularyManager.clean(self.engine.transcript.trimmingCharacters(in: .whitespacesAndNewlines))
                 if !fallbackText.isEmpty {
-                    self.history.add(text: fallbackText, engine: TalkTypeConfig.isUsingDeepgram ? "Nova-3" : "Apple")
+                    self.history.add(text: fallbackText, engine: TalkTypeConfig.isUsingDeepgram ? "Nova-3" : "Local")
                     self.deliver(text: fallbackText)
                 } else {
                     self.engine.phase = .idle
@@ -834,7 +842,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self.stopMenubarBounce()
             let fallbackText = VocabularyManager.clean(self.engine.transcript.trimmingCharacters(in: .whitespacesAndNewlines))
             if !fallbackText.isEmpty {
-                self.history.add(text: fallbackText, engine: TalkTypeConfig.isUsingDeepgram ? "Nova-3" : "Apple")
+                self.history.add(text: fallbackText, engine: TalkTypeConfig.isUsingDeepgram ? "Nova-3" : "Local")
                 self.deliver(text: fallbackText)
             } else {
                 self.engine.phase = .idle
@@ -984,8 +992,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(shortcutParent)
         #endif
 
-        // Speech Engine (with Deepgram Key config nested inside)
-        let modelMenu = NSMenu(title: "Engine")
+        // Voice Mode (with Supercharged Pass config nested inside)
+        let modelMenu = NSMenu(title: "Voice Mode")
         let isDeepgram = TalkTypeConfig.isUsingDeepgram
         let appleItem = NSMenuItem(title: L10n.t("appleSpeech"), action: #selector(selectAppleModel), keyEquivalent: "")
         appleItem.target = self
@@ -998,7 +1006,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         modelMenu.addItem(dgItem)
 
         modelMenu.addItem(NSMenuItem.separator())
-        let keyItem = NSMenuItem(title: L10n.t("deepgramApiKey"), action: #selector(promptDeepgramKey), keyEquivalent: "")
+        let keyTitle = TalkTypeConfig.deepgramApiKey.isEmpty ? L10n.t("unlockSupercharged") : L10n.t("superchargedConnected")
+        let keyItem = NSMenuItem(title: keyTitle, action: #selector(promptDeepgramKey), keyEquivalent: "")
         keyItem.target = self
         modelMenu.addItem(keyItem)
 
@@ -1214,13 +1223,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         alert.messageText = L10n.t("dgAlertTitle")
         alert.informativeText = L10n.t("dgAlertInfo")
         alert.alertStyle = .informational
-        alert.addButton(withTitle: L10n.t("save"))
+        let hasKey = !TalkTypeConfig.deepgramApiKey.isEmpty
+        alert.addButton(withTitle: hasKey ? L10n.t("updatePass") : L10n.t("save"))
         alert.addButton(withTitle: L10n.t("getKey"))
         alert.addButton(withTitle: L10n.t("cancel"))
 
         let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
         input.stringValue = TalkTypeConfig.deepgramApiKey
-        input.placeholderString = L10n.t("pasteKey")
+        input.placeholderString = hasKey ? L10n.t("pasteKeyOrClear") : L10n.t("pasteKey")
         alert.accessoryView = input
 
         let response = alert.runModal()
@@ -1237,7 +1247,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 UserDefaults.standard.set("deepgram", forKey: TalkTypeConfig.engineStorageKey)
             }
         case .alertSecondButtonReturn:
-            if let url = URL(string: "https://console.deepgram.com") {
+            if let url = URL(string: "https://console.deepgram.com/signup") {
                 NSWorkspace.shared.open(url)
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
@@ -1267,13 +1277,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         alert.messageText = L10n.t("geminiAlertTitle")
         alert.informativeText = L10n.t("geminiAlertInfo")
         alert.alertStyle = .informational
-        alert.addButton(withTitle: L10n.t("save"))
+        let hasKey = !TalkTypeConfig.geminiApiKey.isEmpty
+        alert.addButton(withTitle: hasKey ? L10n.t("updatePass") : L10n.t("save"))
         alert.addButton(withTitle: L10n.t("getKey"))
         alert.addButton(withTitle: L10n.t("cancel"))
 
         let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
         input.stringValue = TalkTypeConfig.geminiApiKey
-        input.placeholderString = L10n.t("pasteGeminiKey")
+        input.placeholderString = hasKey ? L10n.t("pasteKeyOrClear") : L10n.t("pasteGeminiKey")
         alert.accessoryView = input
 
         let response = alert.runModal()
@@ -2398,7 +2409,13 @@ struct ContentView: View {
     @State private var copiedId: UUID? = nil
     @State private var liveCopied: Bool = false
     @State private var permissionRefreshVersion = 0
+    @AppStorage(TalkTypeConfig.engineStorageKey) private var storedEngine: String = "apple"
+    @State private var hasDeepgramKey: Bool = !TalkTypeConfig.deepgramApiKey.isEmpty
     var appDelegate: AppDelegate
+
+    private var isSupercharged: Bool {
+        storedEngine == "deepgram" && hasDeepgramKey
+    }
 
     private var p: Palette { scheme == .dark ? .dark : .light }
     private var isRec: Bool { speechEngine.isRecording }
@@ -2488,6 +2505,9 @@ struct ContentView: View {
                 }
                 ghostButton
                 statusLine
+
+                voiceModeBadge
+                    .padding(.top, 2)
                 
                 Spacer(minLength: 0)
 
@@ -2518,9 +2538,13 @@ struct ContentView: View {
         .frame(width: 346, height: 440, alignment: .top)
         .background(p.shell)
         .animation(.easeOut(duration: 0.18), value: permissionHelpIssue)
-        .onAppear { refreshPermissionStatus() }
+        .onAppear {
+            refreshPermissionStatus()
+            hasDeepgramKey = !TalkTypeConfig.deepgramApiKey.isEmpty
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshPermissionStatus()
+            hasDeepgramKey = !TalkTypeConfig.deepgramApiKey.isEmpty
         }
     }
 
@@ -2704,6 +2728,52 @@ struct ContentView: View {
             .frame(height: 20)
     }
 
+    private var voiceModeBadge: some View {
+        Button(action: {
+            appDelegate.promptDeepgramKey()
+            hasDeepgramKey = !TalkTypeConfig.deepgramApiKey.isEmpty
+        }) {
+            HStack(spacing: 5) {
+                if isSupercharged {
+                    Image(systemName: "bolt.fill")
+                        .font(.system(size: 9.5, weight: .bold))
+                    Text(L10n.t("superchargedActiveBadge"))
+                        .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                } else {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 9.5, weight: .bold))
+                    Text(L10n.t("trySuperchargedBadge"))
+                        .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                }
+            }
+            .padding(.horizontal, 11)
+            .padding(.vertical, 4.5)
+            .background(isSupercharged ? Color.mint.opacity(0.18) : TT.pink.opacity(0.12))
+            .foregroundStyle(isSupercharged ? Color.mint : TT.pink)
+            .clipShape(Capsule())
+            .overlay(
+                Capsule()
+                    .strokeBorder(isSupercharged ? Color.mint.opacity(0.35) : TT.pink.opacity(0.28), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .help(isSupercharged ? L10n.t("superchargedHelp") : L10n.t("trySuperchargedHelp"))
+    }
+
+    @ViewBuilder
+    private func engineTag(for engine: String) -> some View {
+        if !engine.isEmpty {
+            let isNova = engine == "Nova-3"
+            Text(isNova ? "⚡ Nova-3" : "🎙️ Local")
+                .font(.system(size: 8.5, weight: .bold, design: .rounded))
+                .padding(.horizontal, 5)
+                .padding(.vertical, 1.5)
+                .background(isNova ? TT.pink.opacity(0.15) : p.border.opacity(0.12))
+                .foregroundStyle(isNova ? TT.pink : p.inkSoft.opacity(0.6))
+                .clipShape(Capsule())
+        }
+    }
+
     private var historyCard: some View {
         VStack(spacing: 8) {
             if history.records.isEmpty {
@@ -2723,10 +2793,12 @@ struct ContentView: View {
                     LazyVStack(spacing: 10) {
                         ForEach(history.records) { record in
                             VStack(alignment: .leading, spacing: 6) {
-                                HStack {
+                                HStack(spacing: 6) {
                                     Text(record.timestamp, style: .time)
                                         .font(.system(size: 10, weight: .bold, design: .rounded))
                                         .foregroundStyle(p.inkSoft.opacity(0.55))
+
+                                    engineTag(for: record.engine)
                                     
                                     Spacer()
                                     
