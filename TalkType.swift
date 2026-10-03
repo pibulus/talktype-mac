@@ -209,7 +209,8 @@ enum L10n {
         "permissionPasteTitle": ["en": "Automatic paste is off", "es": "El pegado automático está desactivado"],
         "permissionPasteDetail": ["en": "Text still copies. Allow access to paste it for you.", "es": "El texto se copia. Permite el acceso para pegarlo automáticamente."],
         "fixPermission": ["en": "Fix", "es": "Ajustes"],
-        "delete": ["en": "Delete", "es": "Eliminar"]
+        "delete": ["en": "Delete", "es": "Eliminar"],
+        "paste": ["en": "Paste", "es": "Pegar"]
     ]
 }
 
@@ -530,6 +531,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     let history = HistoryStore.shared
     private var liveHUDController: LiveHUDWindowController?
     private var dictationTargetApp: NSRunningApplication?
+    private var lastExternalApp: NSRunningApplication?
 
     private var pttMonitors: [Any] = []
     private var pttHeld = false
@@ -550,6 +552,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
+        // Track the active user application so Jumpcut-style menu pasting hits the right window
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didDeactivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            if let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+               app.bundleIdentifier != Bundle.main.bundleIdentifier {
+                self?.lastExternalApp = app
+            }
+        }
+
         // Setup Menu Bar Item
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
@@ -832,6 +846,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func statusItemClicked(_ sender: NSStatusBarButton) {
+        if let front = NSWorkspace.shared.frontmostApplication,
+           front.bundleIdentifier != Bundle.main.bundleIdentifier {
+            dictationTargetApp = front
+            lastExternalApp = front
+        }
         guard let event = NSApp.currentEvent else { return }
         if event.type == .rightMouseUp || event.modifierFlags.contains(.control) {
             showContextMenu(sender)
@@ -841,85 +860,118 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func showContextMenu(_ sender: NSStatusBarButton) {
+        if let front = NSWorkspace.shared.frontmostApplication,
+           front.bundleIdentifier != Bundle.main.bundleIdentifier {
+            dictationTargetApp = front
+            lastExternalApp = front
+        }
+
         let menu = NSMenu(title: "TalkType")
-        
-        let titleItem = NSMenuItem(title: "TalkType", action: nil, keyEquivalent: "")
-        titleItem.attributedTitle = NSAttributedString(
-            string: "TalkType 👻",
-            attributes: [.font: NSFont.systemFont(ofSize: 14, weight: .bold)]
-        )
-        titleItem.isEnabled = false
-        menu.addItem(titleItem)
-        menu.addItem(NSMenuItem.separator())
-        
-        #if !MAS_BUILD
-        // Accessibility Status Alert if not trusted
-        if !AXIsProcessTrusted() {
-            let permItem = NSMenuItem(title: L10n.t("accessibilityDisabled"), action: #selector(openAccessibilitySettings), keyEquivalent: "")
-            permItem.target = self
-            menu.addItem(permItem)
-            menu.addItem(NSMenuItem.separator())
-        }
-        #endif
+        menu.autoenablesItems = false
 
-        // Microphone Status Alert if denied/restricted
-        let micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
-        if micStatus == .denied || micStatus == .restricted {
-            let micItem = NSMenuItem(title: L10n.t("micDisabled"), action: #selector(openMicrophoneSettings), keyEquivalent: "")
-            micItem.target = self
-            menu.addItem(micItem)
-            menu.addItem(NSMenuItem.separator())
-        }
-
-        // Speech Recognition Status Alert if denied/restricted (when using Apple Speech)
-        if !TalkTypeConfig.isUsingDeepgram {
-            let speechStatus = SFSpeechRecognizer.authorizationStatus()
-            if speechStatus == .denied || speechStatus == .restricted {
-                let speechItem = NSMenuItem(title: L10n.t("speechDisabled"), action: #selector(openSpeechRecognitionSettings), keyEquivalent: "")
-                speechItem.target = self
-                menu.addItem(speechItem)
-                menu.addItem(NSMenuItem.separator())
-            }
-        }
-        
-        // Quick Recovery: Copy Last Transcript
-        if let last = history.records.first {
-            let snippet = last.text.count > 32 ? String(last.text.prefix(30)) + "…" : last.text
-            let copyLast = NSMenuItem(title: "\(L10n.t("copyLast")): \"\(snippet)\"", action: #selector(copyLastTranscript), keyEquivalent: "c")
-            copyLast.target = self
-            menu.addItem(copyLast)
-        } else {
-            let copyLast = NSMenuItem(title: L10n.t("noRecentTranscripts"), action: nil, keyEquivalent: "")
-            copyLast.isEnabled = false
-            menu.addItem(copyLast)
-        }
-        
-        // Recent History Submenu
-        let historyMenu = NSMenu(title: "Recent")
+        // ══════════════════════════════════════════════════════════
+        // 1. RECENT TAKES (CLICK TO PASTE — JUMPCUT STYLE)
+        // ══════════════════════════════════════════════════════════
         if history.records.isEmpty {
-            let empty = NSMenuItem(title: L10n.t("historyEmpty"), action: nil, keyEquivalent: "")
-            empty.isEnabled = false
-            historyMenu.addItem(empty)
+            let emptyItem = NSMenuItem(title: L10n.t("noRecentTranscripts"), action: nil, keyEquivalent: "")
+            emptyItem.isEnabled = false
+            menu.addItem(emptyItem)
         } else {
-            for record in history.records.prefix(8) {
-                let preview = record.text.count > 40 ? String(record.text.prefix(38)) + "…" : record.text
-                let item = NSMenuItem(title: preview, action: #selector(copySpecificRecord(_:)), keyEquivalent: "")
+            let takesHeader = NSMenuItem(title: "RECENT TAKES (CLICK TO PASTE)", action: nil, keyEquivalent: "")
+            takesHeader.attributedTitle = NSAttributedString(
+                string: "RECENT TAKES (CLICK TO PASTE)",
+                attributes: [
+                    .font: NSFont.systemFont(ofSize: 10, weight: .bold),
+                    .foregroundColor: NSColor.secondaryLabelColor
+                ]
+            )
+            takesHeader.isEnabled = false
+            menu.addItem(takesHeader)
+
+            // Top 5 takes directly in the root menu with ⌘1..⌘5 shortcuts
+            for (idx, record) in history.records.prefix(5).enumerated() {
+                let clean = record.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                let preview = clean.count > 44 ? String(clean.prefix(42)) + "…" : clean
+                let keyEq = "\(idx + 1)"
+
+                let item = NSMenuItem(
+                    title: "\(idx + 1). \"\(preview)\"",
+                    action: #selector(pasteSpecificRecord(_:)),
+                    keyEquivalent: keyEq
+                )
                 item.target = self
-                item.representedObject = record.text
-                historyMenu.addItem(item)
+                item.representedObject = clean
+                item.toolTip = "Paste into active app: \"\(clean)\""
+                menu.addItem(item)
+
+                // Alternate: Hold Option to copy without pasting
+                let altItem = NSMenuItem(
+                    title: "Copy: \"\(preview)\"",
+                    action: #selector(copySpecificRecord(_:)),
+                    keyEquivalent: keyEq
+                )
+                altItem.isAlternate = true
+                altItem.keyEquivalentModifierMask = [.option]
+                altItem.target = self
+                altItem.representedObject = clean
+                menu.addItem(altItem)
             }
+
+            // Older takes submenu if > 5
+            if history.records.count > 5 {
+                let olderMenu = NSMenu(title: "Older Takes")
+                for (idx, record) in history.records.dropFirst(5).prefix(20).enumerated() {
+                    let clean = record.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let preview = clean.count > 44 ? String(clean.prefix(42)) + "…" : clean
+                    let item = NSMenuItem(
+                        title: "\(idx + 6). \"\(preview)\"",
+                        action: #selector(pasteSpecificRecord(_:)),
+                        keyEquivalent: ""
+                    )
+                    item.target = self
+                    item.representedObject = clean
+                    item.toolTip = "Paste into active app: \"\(clean)\""
+                    olderMenu.addItem(item)
+                }
+                let olderParent = NSMenuItem(title: "More Takes (\(history.records.count - 5))…", action: nil, keyEquivalent: "")
+                olderParent.submenu = olderMenu
+                menu.addItem(olderParent)
+            }
+
+            if let last = history.records.first {
+                let snippet = last.text.count > 30 ? String(last.text.prefix(28)) + "…" : last.text
+                let copyLast = NSMenuItem(title: "\(L10n.t("copyLast")): \"\(snippet)\"", action: #selector(copyLastTranscript), keyEquivalent: "c")
+                copyLast.target = self
+                menu.addItem(copyLast)
+            }
+
+            let clearItem = NSMenuItem(title: L10n.t("clearHistory"), action: #selector(clearHistoryMenuAction), keyEquivalent: "")
+            clearItem.target = self
+            menu.addItem(clearItem)
         }
-        let historyParent = NSMenuItem(title: "\(L10n.t("recentTranscripts")) (\(history.records.count))", action: nil, keyEquivalent: "")
-        historyParent.submenu = historyMenu
-        menu.addItem(historyParent)
-        
+
         menu.addItem(NSMenuItem.separator())
-        
+
+        // ══════════════════════════════════════════════════════════
+        // 2. QUICK ACTIONS & VISUAL WINDOW
+        // ══════════════════════════════════════════════════════════
+        let visualItem = NSMenuItem(title: "Open Visual Window…", action: #selector(openVisualPopover), keyEquivalent: "o")
+        visualItem.target = self
+        menu.addItem(visualItem)
+
+        let polishItem = NSMenuItem(title: "✨ Polish with AI (Gemini)", action: #selector(togglePolish), keyEquivalent: "")
+        polishItem.target = self
+        polishItem.state = TalkTypeConfig.isPolishing ? .on : .off
+        menu.addItem(polishItem)
+
+        menu.addItem(NSMenuItem.separator())
+
+        // ══════════════════════════════════════════════════════════
+        // 3. SETTINGS & PREFERENCES
+        // ══════════════════════════════════════════════════════════
         #if !MAS_BUILD
-        // Push-to-Talk Shortcut Submenu (Accessibility)
         let shortcutMenu = NSMenu(title: "Shortcut")
         let activeTrigger = TalkTypeConfig.pttTrigger
-        
         for trigger in PTTTrigger.allCases {
             let item = NSMenuItem(title: trigger.title, action: #selector(selectShortcutTrigger(_:)), keyEquivalent: "")
             item.target = self
@@ -927,26 +979,29 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             item.state = (trigger == activeTrigger) ? .on : .off
             shortcutMenu.addItem(item)
         }
-        
         let shortcutParent = NSMenuItem(title: L10n.t("pushToTalkKey"), action: nil, keyEquivalent: "")
         shortcutParent.submenu = shortcutMenu
         menu.addItem(shortcutParent)
         #endif
-        
-        // Model Selection Submenu
-        let modelMenu = NSMenu(title: "Model")
+
+        // Speech Engine (with Deepgram Key config nested inside)
+        let modelMenu = NSMenu(title: "Engine")
         let isDeepgram = TalkTypeConfig.isUsingDeepgram
-        
-        let appleItem = NSMenuItem(title: L10n.t("appleSpeech"), action: #selector(selectAppleModel), keyEquivalent: "1")
+        let appleItem = NSMenuItem(title: L10n.t("appleSpeech"), action: #selector(selectAppleModel), keyEquivalent: "")
         appleItem.target = self
         appleItem.state = !isDeepgram ? .on : .off
         modelMenu.addItem(appleItem)
-        
-        let dgItem = NSMenuItem(title: L10n.t("deepgramNova"), action: #selector(selectDeepgramModel), keyEquivalent: "2")
+
+        let dgItem = NSMenuItem(title: L10n.t("deepgramNova"), action: #selector(selectDeepgramModel), keyEquivalent: "")
         dgItem.target = self
         dgItem.state = isDeepgram ? .on : .off
         modelMenu.addItem(dgItem)
-        
+
+        modelMenu.addItem(NSMenuItem.separator())
+        let keyItem = NSMenuItem(title: L10n.t("deepgramApiKey"), action: #selector(promptDeepgramKey), keyEquivalent: "")
+        keyItem.target = self
+        modelMenu.addItem(keyItem)
+
         let modelParent = NSMenuItem(title: L10n.t("transcriptionEngine"), action: nil, keyEquivalent: "")
         modelParent.submenu = modelMenu
         menu.addItem(modelParent)
@@ -964,61 +1019,85 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let langParent = NSMenuItem(title: L10n.t("language"), action: nil, keyEquivalent: "")
         langParent.submenu = langMenu
         menu.addItem(langParent)
-        
+
         // HUD Position Submenu
         let posMenu = NSMenu(title: "HUD Position")
         let isTop = TalkTypeConfig.hudPosition == "top"
-        
         let posBottom = NSMenuItem(title: L10n.t("bottomOfScreen"), action: #selector(setHudBottom), keyEquivalent: "")
         posBottom.target = self
         posBottom.state = !isTop ? .on : .off
         posMenu.addItem(posBottom)
-        
+
         let posTop = NSMenuItem(title: L10n.t("topOfScreen"), action: #selector(setHudTop), keyEquivalent: "")
         posTop.target = self
         posTop.state = isTop ? .on : .off
         posMenu.addItem(posTop)
-        
+
         let posParent = NSMenuItem(title: L10n.t("hudPosition"), action: nil, keyEquivalent: "")
         posParent.submenu = posMenu
         menu.addItem(posParent)
-        
-        menu.addItem(NSMenuItem.separator())
-        
-        // Deepgram Key Config
-        let keyItem = NSMenuItem(title: L10n.t("deepgramApiKey"), action: #selector(promptDeepgramKey), keyEquivalent: "k")
-        keyItem.target = self
-        menu.addItem(keyItem)
 
-        let geminiItem = NSMenuItem(title: L10n.t("geminiApiKey"), action: #selector(promptGeminiKey), keyEquivalent: "")
-        geminiItem.target = self
-        menu.addItem(geminiItem)
-
-        let polishItem = NSMenuItem(title: L10n.t("polishOutput"), action: #selector(togglePolish), keyEquivalent: "")
-        polishItem.target = self
-        polishItem.state = TalkTypeConfig.isPolishing ? .on : .off
-        menu.addItem(polishItem)
-        
+        // Custom Vocabulary
         let vocabItem = NSMenuItem(title: L10n.t("customKeywords"), action: #selector(promptCustomKeywords), keyEquivalent: "")
         vocabItem.target = self
         menu.addItem(vocabItem)
-        
+
+        if TalkTypeConfig.isPolishing {
+            let geminiItem = NSMenuItem(title: L10n.t("geminiApiKey"), action: #selector(promptGeminiKey), keyEquivalent: "")
+            geminiItem.target = self
+            menu.addItem(geminiItem)
+        }
+
+        // ══════════════════════════════════════════════════════════
+        // 4. PERMISSIONS / SYSTEM ALERTS (Only if needed)
+        // ══════════════════════════════════════════════════════════
+        var hasAlert = false
+        #if !MAS_BUILD
+        if !AXIsProcessTrusted() {
+            if !hasAlert { menu.addItem(NSMenuItem.separator()); hasAlert = true }
+            let permItem = NSMenuItem(title: L10n.t("accessibilityDisabled"), action: #selector(openAccessibilitySettings), keyEquivalent: "")
+            permItem.target = self
+            menu.addItem(permItem)
+        }
+        #endif
+
+        let micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
+        if micStatus == .denied || micStatus == .restricted {
+            if !hasAlert { menu.addItem(NSMenuItem.separator()); hasAlert = true }
+            let micItem = NSMenuItem(title: L10n.t("micDisabled"), action: #selector(openMicrophoneSettings), keyEquivalent: "")
+            micItem.target = self
+            menu.addItem(micItem)
+        }
+
+        if !TalkTypeConfig.isUsingDeepgram {
+            let speechStatus = SFSpeechRecognizer.authorizationStatus()
+            if speechStatus == .denied || speechStatus == .restricted {
+                if !hasAlert { menu.addItem(NSMenuItem.separator()); hasAlert = true }
+                let speechItem = NSMenuItem(title: L10n.t("speechDisabled"), action: #selector(openSpeechRecognitionSettings), keyEquivalent: "")
+                speechItem.target = self
+                menu.addItem(speechItem)
+            }
+        }
+
         menu.addItem(NSMenuItem.separator())
-        
+
+        // ══════════════════════════════════════════════════════════
+        // 5. FOOTER
+        // ══════════════════════════════════════════════════════════
         let webItem = NSMenuItem(title: "TalkType on the Web…", action: #selector(openTalkTypeWeb), keyEquivalent: "")
         webItem.target = self
         menu.addItem(webItem)
-        
+
         let privacyItem = NSMenuItem(title: L10n.t("privacyPolicy"), action: #selector(openPrivacyPolicy), keyEquivalent: "")
         privacyItem.target = self
         menu.addItem(privacyItem)
-        
+
         menu.addItem(NSMenuItem.separator())
-        
+
         let quitItem = NSMenuItem(title: L10n.t("quit"), action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
-        
+
         statusItem.menu = menu
         statusItem.button?.performClick(nil)
         statusItem.menu = nil
@@ -1068,15 +1147,41 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let pasteboard = NSPasteboard.general
             pasteboard.clearContents()
             pasteboard.setString(last.text, forType: .string)
+            NSSound(named: "Pop")?.play()
         }
     }
 
-    @objc func copySpecificRecord(_ sender: NSMenuItem) {
-        if let text = sender.representedObject as? String {
-            let pasteboard = NSPasteboard.general
-            pasteboard.clearContents()
-            pasteboard.setString(text, forType: .string)
+    @objc func pasteSpecificRecord(_ sender: NSMenuItem) {
+        guard let text = sender.representedObject as? String else { return }
+        #if !MAS_BUILD
+        if AXIsProcessTrusted() {
+            pasteToActiveApp(text: text)
+            return
         }
+        #endif
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+        NSSound(named: "Pop")?.play()
+    }
+
+    @objc func copySpecificRecord(_ sender: NSMenuItem) {
+        guard let text = sender.representedObject as? String else { return }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+        NSSound(named: "Pop")?.play()
+    }
+
+    @objc func openVisualPopover() {
+        if let button = statusItem.button {
+            togglePopover(button)
+        }
+    }
+
+    @objc func clearHistoryMenuAction() {
+        history.clear()
+        NSSound(named: "Pop")?.play()
     }
 
     @objc func setHudBottom() {
@@ -1229,7 +1334,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     #if !MAS_BUILD
     // Simulates Cmd+V to paste into the active app
     func pasteToActiveApp(text: String) {
-        let targetApp = self.dictationTargetApp
+        let targetApp = self.dictationTargetApp ?? self.lastExternalApp
         self.dictationTargetApp = nil
 
         let pasteboard = NSPasteboard.general
@@ -2626,6 +2731,25 @@ struct ContentView: View {
                                     Spacer()
                                     
                                     HStack(spacing: 5) {
+                                        #if !MAS_BUILD
+                                        Button(action: {
+                                            appDelegate.pasteToActiveApp(text: record.text)
+                                        }) {
+                                            HStack(spacing: 3) {
+                                                Image(systemName: "arrow.right.doc.on.clipboard")
+                                                Text(L10n.t("paste"))
+                                            }
+                                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 3)
+                                            .background(TT.hot.opacity(0.18))
+                                            .foregroundStyle(TT.hot)
+                                            .clipShape(Capsule())
+                                        }
+                                        .buttonStyle(.plain)
+                                        .help(L10n.t("paste"))
+                                        #endif
+
                                         Button(action: {
                                             let pb = NSPasteboard.general
                                             pb.clearContents()
