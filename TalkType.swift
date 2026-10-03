@@ -405,7 +405,7 @@ enum Polisher {
         let key = TalkTypeConfig.geminiApiKey
         guard !key.isEmpty else { completion(text); return }
         let model = TalkTypeConfig.geminiModel
-        let prompt = "Rewrite this dictation into clean, natural prose. Fix grammar, punctuation, and repeated words. Keep the meaning and voice exactly. Return only the rewritten text, no preamble or quotes:\n\n\(text)"
+        let systemInstruction = "Rewrite dictation into clean, natural prose. Fix grammar, punctuation, and repeated words. Keep meaning and voice. Return only rewritten text, no preamble or quotes."
         guard let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(model):generateContent") else {
             completion(text); return
         }
@@ -415,7 +415,8 @@ enum Polisher {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(key, forHTTPHeaderField: "x-goog-api-key")
         let body: [String: Any] = [
-            "contents": [["parts": [["text": prompt]]]],
+            "systemInstruction": ["parts": [["text": systemInstruction]]],
+            "contents": [["parts": [["text": text]]]],
             "generationConfig": ["thinkingConfig": ["thinkingBudget": 0]]
         ]
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
@@ -581,6 +582,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         app.delegate = delegate
         app.setActivationPolicy(.accessory)
         app.run()
+    }
+
+    func applicationWillTerminate(_ aNotification: Notification) {
+        for monitor in pttMonitors {
+            NSEvent.removeMonitor(monitor)
+        }
+        pttMonitors.removeAll()
+        engine.stopRecording()
+        stopMenubarBounce()
+        liveHUDController?.hide()
     }
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
@@ -1856,6 +1867,8 @@ class SpeechEngine: NSObject, ObservableObject {
     private let audioEngine = AVAudioEngine()
     private var hasInstalledAudioTap = false
     private var lastMeterPublishTime: TimeInterval = 0
+    private var lastBufferArrivalTime: TimeInterval = 0
+    private var streamStallWatchdogTimer: Timer?
     let audioMeter = AudioLevelMeter()
     
     // CoreAudio real-time processing queue & Session tracking
@@ -1872,6 +1885,25 @@ class SpeechEngine: NSObject, ObservableObject {
     private var isStopping = false
     private var permissionRequestInProgress = false
     
+    private func armStreamWatchdog() {
+        disarmStreamWatchdog()
+        lastBufferArrivalTime = ProcessInfo.processInfo.systemUptime
+        streamStallWatchdogTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
+            guard let self = self, self.isRecording else { return }
+            let now = ProcessInfo.processInfo.systemUptime
+            if now - self.lastBufferArrivalTime > 4.0 {
+                NSLog("⚠️ TalkType: Audio stream stalled for >4s (hardware preemption by FaceTime/Siri). Stopping recording.")
+                self.disarmStreamWatchdog()
+                self.stopRecording()
+            }
+        }
+    }
+
+    private func disarmStreamWatchdog() {
+        streamStallWatchdogTimer?.invalidate()
+        streamStallWatchdogTimer = nil
+    }
+
     private func commitInterim() {
         guard !interimTranscript.isEmpty else { return }
         if confirmedTranscript.isEmpty {
@@ -1920,6 +1952,7 @@ class SpeechEngine: NSObject, ObservableObject {
     }
     
     deinit {
+        disarmStreamWatchdog()
         NotificationCenter.default.removeObserver(self)
         NSWorkspace.shared.notificationCenter.removeObserver(self)
         urlSession?.invalidateAndCancel()
@@ -1930,6 +1963,7 @@ class SpeechEngine: NSObject, ObservableObject {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             NSLog("🔄 TalkType: Audio engine route changed (e.g. AirPods connected/disconnected)")
+            self.disarmStreamWatchdog()
             self.hasInstalledAudioTap = false // Route change destroys taps internally
             if self.isRecording {
                 self.stopRecording()
@@ -1944,6 +1978,7 @@ class SpeechEngine: NSObject, ObservableObject {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             NSLog("💤 TalkType: System going to sleep, resetting audio engine")
+            self.disarmStreamWatchdog()
             if self.isRecording {
                 self.stopRecording()
             }
@@ -2113,6 +2148,7 @@ class SpeechEngine: NSObject, ObservableObject {
         transcript = ""
         confirmedTranscript = ""
         interimTranscript = ""
+        armStreamWatchdog()
         
         if TalkTypeConfig.isUsingDeepgram {
             startDeepgramStreaming()
@@ -2122,6 +2158,7 @@ class SpeechEngine: NSObject, ObservableObject {
     }
     
     func stopRecording() {
+        disarmStreamWatchdog()
         guard isRecording || audioEngine.isRunning || webSocketTask != nil else { return }
 
         if TalkTypeConfig.isUsingDeepgram {
@@ -2143,7 +2180,9 @@ class SpeechEngine: NSObject, ObservableObject {
         }
         
         var request = URLRequest(url: url)
-        request.setValue("Token \(apiKey)", forHTTPHeaderField: "Authorization")
+        var authHeader = "Token "
+        authHeader.append(apiKey)
+        request.setValue(authHeader, forHTTPHeaderField: "Authorization")
         
         webSocketTask = urlSession?.webSocketTask(with: request)
         webSocketTask?.resume()
@@ -2172,6 +2211,7 @@ class SpeechEngine: NSObject, ObservableObject {
         let inputNode = audioEngine.inputNode
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: nativeFormat) { [weak self] buffer, _ in
             guard let self = self, self.isRecording else { return }
+            self.lastBufferArrivalTime = ProcessInfo.processInfo.systemUptime
             self.publishInputLevel(from: buffer)
             
             // Deep-copy audio frame data before CoreAudio driver recycles the underlying buffer
@@ -2272,6 +2312,20 @@ class SpeechEngine: NSObject, ObservableObject {
         guard let data = jsonString.data(using: .utf8) else { return }
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
         
+        // Trap Deepgram API errors (e.g. invalid key, quota exhausted, rate limit)
+        if let errCode = (json["err_code"] as? String) ?? (json["error"] as? String) {
+            let errMsg = (json["err_msg"] as? String) ?? (json["message"] as? String) ?? "Unknown Deepgram error"
+            NSLog("⚠️ TalkType: Deepgram API error [%@]: %@", errCode, errMsg)
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self, self.isRecording else { return }
+                self.commitInterim()
+                self.safeRemoveTap()
+                self.audioEngine.stop()
+                self.startAppleSpeechRecognition(appendingToExisting: true)
+            }
+            return
+        }
+
         guard let channel = json["channel"] as? [String: Any],
               let alternatives = channel["alternatives"] as? [[String: Any]],
               let firstAlt = alternatives.first,
@@ -2390,6 +2444,7 @@ class SpeechEngine: NSObject, ObservableObject {
         let inputNode = audioEngine.inputNode
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
             guard let self = self, self.isRecording, self.currentSessionId == sessionId else { return }
+            self.lastBufferArrivalTime = ProcessInfo.processInfo.systemUptime
             self.publishInputLevel(from: buffer)
             self.recognitionRequest?.append(buffer)
         }
