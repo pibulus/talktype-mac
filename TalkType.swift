@@ -205,6 +205,9 @@ enum L10n {
         "copy": ["en": "Copy", "es": "Copiar"],
         "copied": ["en": "Copied!", "es": "¡Copiado!"],
         "clearHistory": ["en": "Clear History", "es": "Borrar historial"],
+        "clearAll": ["en": "Clear All", "es": "Borrar todo"],
+        "newest": ["en": "Newest", "es": "Más recientes"],
+        "oldest": ["en": "Oldest", "es": "Más antiguos"],
         "copiedToClipboard": ["en": "Copied to clipboard — Press ⌘V to paste!", "es": "Copiado al portapapeles — ¡Pulsa ⌘V para pegar!"],
         "polishing": ["en": "Polishing…", "es": "Puliendo…"],
         "autoPolish": ["en": "Auto-Polish", "es": "Pulido automático"],
@@ -654,6 +657,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             
             // 1. ALWAYS persist take into history
             self.history.add(text: text, engine: engineName)
+            UserDefaults.standard.set(UserDefaults.standard.integer(forKey: "talktypeDictationCount") + 1, forKey: "talktypeDictationCount")
             
             // 2. Deliver to clipboard & paste to active app
             if TalkTypeConfig.isPolishing && !TalkTypeConfig.geminiApiKey.isEmpty {
@@ -2897,20 +2901,21 @@ struct HistoryRecordCard: View {
     let onDelete: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center) {
                 Text(formatHistoryTimestamp(record.timestamp))
-                    .font(.system(size: 10.5, weight: .bold, design: .rounded))
-                    .foregroundStyle(p.inkSoft.opacity(0.55))
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(p.inkSoft.opacity(0.65))
 
                 Spacer()
 
                 CopyPillButton(isCopied: isCopied, action: onCopy)
             }
+            .padding(.top, 1)
 
             Text(record.text)
                 .font(.system(size: 12.5, weight: .medium, design: .monospaced))
-                .lineSpacing(2)
+                .lineSpacing(2.5)
                 .foregroundStyle(p.ink)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -2941,12 +2946,28 @@ struct ContentView: View {
     @State private var permissionRefreshVersion = 0
     @AppStorage(TalkTypeConfig.engineStorageKey) private var storedEngine: String = "apple"
     @AppStorage("talktypeGhostMood") private var ghostMood: Int = 0
+    @AppStorage("talktypeDictationCount") private var dictationCount: Int = 0
+    @AppStorage("talktypeSuperchargeDismissed") private var superchargeDismissed: Bool = false
+    @AppStorage("talktypeHistorySortNewestFirst") private var sortNewestFirst: Bool = true
+    @State private var isConfirmingClear: Bool = false
     @State private var hasDeepgramKey: Bool = !TalkTypeConfig.deepgramApiKey.isEmpty
     @State private var wordmarkScale: CGFloat = 1.0
     var appDelegate: AppDelegate
 
     private var isSupercharged: Bool {
         storedEngine == "deepgram" && hasDeepgramKey
+    }
+
+    private var shouldShowSuperchargedPrompt: Bool {
+        !isSupercharged && !superchargeDismissed && dictationCount < 5
+    }
+
+    private var sortedRecords: [TranscriptRecord] {
+        if sortNewestFirst {
+            return history.records.sorted { $0.timestamp > $1.timestamp }
+        } else {
+            return history.records.sorted { $0.timestamp < $1.timestamp }
+        }
     }
 
     private var currentMoodGradient: LinearGradient {
@@ -3035,32 +3056,50 @@ struct ContentView: View {
                 }
                 ghostButton
                 statusLine
-                
-                Spacer(minLength: 0)
 
-                HStack(spacing: 8) {
-                    HoverButton(title: L10n.t("privacyPolicy"), p: p) {
-                        appDelegate.openPrivacyPolicy()
-                    }
-
-                    if !isSupercharged {
-                        Text("•")
-                            .font(.system(size: 10))
-                            .foregroundStyle(p.inkSoft.opacity(0.3))
-
-                        HoverButton(title: L10n.t("unlockSupercharged"), p: p) {
+                if shouldShowSuperchargedPrompt {
+                    HStack(spacing: 4) {
+                        Button(action: {
                             appDelegate.promptDeepgramKey()
                             hasDeepgramKey = !TalkTypeConfig.deepgramApiKey.isEmpty
+                        }) {
+                            HStack(spacing: 5) {
+                                Image(systemName: "sparkles")
+                                    .font(.system(size: 9.5, weight: .bold))
+                                Text(L10n.t("trySuperchargedBadge"))
+                                    .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                            }
                         }
-                    }
+                        .buttonStyle(.plain)
 
-                    Spacer()
-
-                    HoverButton(title: L10n.t("quit"), p: p) {
-                        NSApplication.shared.terminate(nil)
+                        Button(action: {
+                            withAnimation(.easeOut(duration: 0.15)) {
+                                superchargeDismissed = true
+                            }
+                        }) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 7.5, weight: .bold))
+                                .foregroundStyle(TT.pink.opacity(0.6))
+                                .padding(3)
+                        }
+                        .buttonStyle(.plain)
+                        .help(L10n.t("cancel"))
                     }
+                    .padding(.leading, 10)
+                    .padding(.trailing, 6)
+                    .padding(.vertical, 4.5)
+                    .background(TT.pink.opacity(0.12))
+                    .foregroundStyle(TT.pink)
+                    .clipShape(Capsule())
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(TT.pink.opacity(0.28), lineWidth: 1)
+                    )
+                    .padding(.top, 2)
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
                 }
-                .padding(.horizontal, 4)
+                
+                Spacer(minLength: 0)
             } else {
                 // History View (Never lose text again)
                 historyCard
