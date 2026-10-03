@@ -198,11 +198,13 @@ enum L10n {
         "clearHistory": ["en": "Clear History", "es": "Borrar historial"],
         "copiedToClipboard": ["en": "Copied to clipboard — Press ⌘V to paste! 📋", "es": "Copiado al portapapeles — ¡Pulsa ⌘V para pegar! 📋"],
         "polishing": ["en": "Polishing…", "es": "Puliendo…"],
-        "polishOutput": ["en": "Polish Output (Gemini)", "es": "Pulir texto (Gemini)"],
-        "geminiApiKey": ["en": "Gemini AI Pass…", "es": "Pase de IA Gemini…"],
-        "pasteGeminiKey": ["en": "Paste your Gemini code here", "es": "Pega tu código de Gemini aquí"],
-        "geminiAlertTitle": ["en": "Polish with AI (Free Gemini Pass)", "es": "Pulir con IA (Pase de Gemini gratis)"],
-        "geminiAlertInfo": ["en": "TalkType operates completely standalone. Optionally add a free Gemini pass from Google AI Studio (no credit card required) to automatically format and polish your transcripts into clean prose.", "es": "TalkType funciona de forma completamente independiente. Opcionalmente añade un pase gratuito de Google AI Studio (sin tarjeta de crédito) para dar formato y pulir tus transcripciones."],
+        "autoPolish": ["en": "Auto-Polish", "es": "Pulido automático"],
+        "autoPolishTranscripts": ["en": "Auto-Polish Transcripts", "es": "Pulir transcripciones automáticamente"],
+        "geminiPass": ["en": "Free Polish Pass…", "es": "Pase de pulido gratis…"],
+        "pasteGeminiKey": ["en": "Paste your pass code here", "es": "Pega tu código de pase aquí"],
+        "geminiAlertTitle": ["en": "Auto-Polish Transcripts (Free Pass)", "es": "Pulido automático (Pase gratis)"],
+        "geminiAlertInfo": ["en": "TalkType operates completely standalone. Optionally add a free pass from Google AI Studio (no credit card required) to automatically format and polish your transcripts into clean prose.", "es": "TalkType funciona de forma completamente independiente. Opcionalmente añade un pase gratuito de Google AI Studio (sin tarjeta de crédito) para dar formato y pulir tus transcripciones."],
+        "talkTypeWeb": ["en": "TalkType on the Web…", "es": "TalkType en la Web…"],
         "customKeywords": ["en": "Custom Vocabulary…", "es": "Vocabulario personalizado…"],
         "keywordsAlertTitle": ["en": "Custom Vocabulary & Keywords", "es": "Vocabulario y palabras clave"],
         "keywordsAlertInfo": ["en": "Add words or names speech recognition should prioritize (comma-separated, e.g. TalkType, pibulus, NoteBro). You can also use 'wrong -> right' rules (e.g. doctype -> TalkType).", "es": "Añade palabras que el reconocimiento de voz deba priorizar (separadas por comas, ej. TalkType, pibulus). También puedes usar reglas 'error -> corrección'."],
@@ -998,10 +1000,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(shortcutParent)
         #endif
 
-        // Polish with AI (Self-contained submenu: toggle + pass configuration)
-        let polishMenu = NSMenu(title: "Polish with AI")
+        // Auto-Polish (Self-contained submenu: toggle + pass configuration)
+        let polishMenu = NSMenu(title: "Auto-Polish")
         let polishToggle = NSMenuItem(
-            title: L10n.t("polishTranscripts"),
+            title: L10n.t("autoPolishTranscripts"),
             action: #selector(togglePolish),
             keyEquivalent: ""
         )
@@ -1011,14 +1013,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         polishMenu.addItem(NSMenuItem.separator())
         let geminiKeyItem = NSMenuItem(
-            title: TalkTypeConfig.geminiApiKey.isEmpty ? L10n.t("geminiApiKey") : L10n.t("changePass"),
+            title: TalkTypeConfig.geminiApiKey.isEmpty ? L10n.t("geminiPass") : L10n.t("changePass"),
             action: #selector(promptGeminiKey),
             keyEquivalent: ""
         )
         geminiKeyItem.target = self
         polishMenu.addItem(geminiKeyItem)
 
-        let polishParent = NSMenuItem(title: "✨ Polish with AI", action: nil, keyEquivalent: "")
+        let polishParent = NSMenuItem(title: L10n.t("autoPolish"), action: nil, keyEquivalent: "")
         polishParent.submenu = polishMenu
         menu.addItem(polishParent)
 
@@ -1093,6 +1095,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 4. FOOTER
         // ══════════════════════════════════════════════════════════
         menu.addItem(NSMenuItem.separator())
+
+        let webItem = NSMenuItem(title: L10n.t("talkTypeWeb"), action: #selector(openTalkTypeWeb), keyEquivalent: "")
+        webItem.target = self
+        menu.addItem(webItem)
 
         let quitItem = NSMenuItem(title: L10n.t("quit"), action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
