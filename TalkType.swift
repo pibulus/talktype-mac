@@ -195,6 +195,8 @@ enum L10n {
         "listeningSpeak": ["en": "Listening… speak freely", "es": "Escuchando… habla con libertad"],
         "listening": ["en": "Listening…", "es": "Escuchando…"],
         "live": ["en": "Live", "es": "En vivo"],
+        "today": ["en": "Today", "es": "Hoy"],
+        "yesterday": ["en": "Yesterday", "es": "Ayer"],
         "history": ["en": "History", "es": "Historial"],
         "holdGhost": ["en": "Click the ghost to start talking…", "es": "Haz clic en el fantasma para empezar a hablar…"],
         "clickGhostHold": ["en": "Click ghost or hold ", "es": "Haz clic en el fantasma o mantén "],
@@ -1880,6 +1882,7 @@ class SpeechEngine: NSObject, ObservableObject {
     // Deepgram WebSocket
     private var webSocketTask: URLSessionWebSocketTask?
     private var urlSession: URLSession?
+    private var deepgramKeepAliveTimer: Timer?
     private var confirmedTranscript = ""
     private var interimTranscript = ""
     private var isStopping = false
@@ -1953,6 +1956,8 @@ class SpeechEngine: NSObject, ObservableObject {
     
     deinit {
         disarmStreamWatchdog()
+        deepgramKeepAliveTimer?.invalidate()
+        deepgramKeepAliveTimer = nil
         NotificationCenter.default.removeObserver(self)
         NSWorkspace.shared.notificationCenter.removeObserver(self)
         urlSession?.invalidateAndCancel()
@@ -2188,6 +2193,13 @@ class SpeechEngine: NSObject, ObservableObject {
         webSocketTask?.resume()
         listenWebSocket()
         
+        deepgramKeepAliveTimer?.invalidate()
+        deepgramKeepAliveTimer = Timer.scheduledTimer(withTimeInterval: 8.0, repeats: true) { [weak self] _ in
+            guard let self = self, self.isRecording, let ws = self.webSocketTask else { return }
+            ws.send(.string("{\"type\":\"KeepAlive\"}")) { _ in }
+            ws.sendPing { _ in }
+        }
+        
         guard let nativeFormat = resolveInputFormat() else {
             startAppleSpeechRecognition()
             return
@@ -2299,6 +2311,8 @@ class SpeechEngine: NSObject, ObservableObject {
                 // If Deepgram WebSocket fails mid-recording, seamlessly fallback without losing prior words
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self, self.isRecording, !self.isStopping else { return }
+                    self.deepgramKeepAliveTimer?.invalidate()
+                    self.deepgramKeepAliveTimer = nil
                     self.commitInterim()
                     self.safeRemoveTap()
                     self.audioEngine.stop()
@@ -2358,6 +2372,8 @@ class SpeechEngine: NSObject, ObservableObject {
     
     private func stopDeepgramStreaming() {
         isStopping = true
+        deepgramKeepAliveTimer?.invalidate()
+        deepgramKeepAliveTimer = nil
         audioEngine.stop()
         safeRemoveTap()
         DispatchQueue.main.async { [weak self] in
@@ -2407,7 +2423,7 @@ class SpeechEngine: NSObject, ObservableObject {
         }
     }
     
-    // MARK: - Apple Speech Fallback
+    // MARK: - Apple Speech Engine & Fallback
     private func startAppleSpeechRecognition(appendingToExisting: Bool = false) {
         isStopping = false
         if !appendingToExisting {
@@ -2416,19 +2432,7 @@ class SpeechEngine: NSObject, ObservableObject {
             interimTranscript = ""
             transcript = ""
         }
-        let baseText = confirmedTranscript
         let sessionId = self.currentSessionId
-        
-        recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
-        guard let recognitionRequest = recognitionRequest else { return }
-        recognitionRequest.shouldReportPartialResults = true
-        recognitionRequest.contextualStrings = VocabularyManager.contextualHints
-        
-        if #available(macOS 13.0, *) {
-            recognitionRequest.addsPunctuation = true
-        }
-        // Strictly require on-device recognition: zero audio leaves this Mac
-        recognitionRequest.requiresOnDeviceRecognition = true
         
         guard let recordingFormat = resolveInputFormat() else {
             DispatchQueue.main.async { [weak self] in
@@ -2457,40 +2461,7 @@ class SpeechEngine: NSObject, ObservableObject {
             self.phase = .listening
             self.onStateChange?(true)
             
-            recognitionTask = speechRecognizer?.recognitionTask(with: recognitionRequest) { [weak self] result, error in
-                guard let self = self, self.currentSessionId == sessionId else { return }
-                var isFinal = false
-                if let result = result {
-                    let cleaned = VocabularyManager.clean(result.bestTranscription.formattedString)
-                    DispatchQueue.main.async {
-                        guard self.currentSessionId == sessionId else { return }
-                        if baseText.isEmpty {
-                            self.transcript = cleaned
-                        } else if cleaned.isEmpty {
-                            self.transcript = baseText
-                        } else {
-                            self.transcript = baseText + " " + cleaned
-                        }
-                    }
-                    isFinal = result.isFinal
-                }
-                
-                if error != nil || isFinal {
-                    DispatchQueue.main.async {
-                        guard self.currentSessionId == sessionId else { return }
-                        self.currentSessionId = UUID()
-                        self.audioEngine.stop()
-                        self.safeRemoveTap()
-                        self.recognitionRequest = nil
-                        self.recognitionTask = nil
-                        self.isRecording = false
-                        self.isStopping = false
-                        self.phase = .processing
-                        self.onStateChange?(false)
-                        self.onFinal?(self.transcript)
-                    }
-                }
-            }
+            setupAppleRecognitionTask(for: sessionId)
         } catch {
             NSLog("⚠️ TalkType: Failed to start Apple Speech audio engine: %@", error.localizedDescription)
             safeRemoveTap()
@@ -2499,6 +2470,78 @@ class SpeechEngine: NSObject, ObservableObject {
             self.isStopping = false
             self.phase = .idle
             self.onStateChange?(false)
+        }
+    }
+    
+    private func setupAppleRecognitionTask(for sessionId: UUID) {
+        let request = SFSpeechAudioBufferRecognitionRequest()
+        request.shouldReportPartialResults = true
+        request.contextualStrings = VocabularyManager.contextualHints
+        if #available(macOS 13.0, *) {
+            request.addsPunctuation = true
+        }
+        if speechRecognizer?.supportsOnDeviceRecognition == true {
+            request.requiresOnDeviceRecognition = true
+        }
+        self.recognitionRequest = request
+        
+        var segmentText = ""
+        self.recognitionTask = speechRecognizer?.recognitionTask(with: request) { [weak self] result, error in
+            guard let self = self, self.currentSessionId == sessionId else { return }
+            var isFinal = false
+            if let result = result {
+                let cleaned = VocabularyManager.clean(result.bestTranscription.formattedString)
+                segmentText = cleaned
+                DispatchQueue.main.async {
+                    guard self.currentSessionId == sessionId else { return }
+                    if self.confirmedTranscript.isEmpty {
+                        self.transcript = cleaned
+                    } else if cleaned.isEmpty {
+                        self.transcript = self.confirmedTranscript
+                    } else {
+                        self.transcript = self.confirmedTranscript + " " + cleaned
+                    }
+                }
+                isFinal = result.isFinal
+            }
+            
+            if error != nil || isFinal {
+                DispatchQueue.main.async {
+                    guard self.currentSessionId == sessionId else { return }
+                    
+                    // Commit any captured segment text to confirmed transcript
+                    if !segmentText.isEmpty {
+                        if self.confirmedTranscript.isEmpty {
+                            self.confirmedTranscript = segmentText
+                        } else {
+                            self.confirmedTranscript += " " + segmentText
+                        }
+                    }
+                    self.transcript = self.confirmedTranscript
+                    
+                    // If user is STILL recording (long take!) and we did not ask to stop:
+                    // Apple's ~60s task limit was reached! Seamlessly cycle to the next recognition task
+                    // on the existing running audio stream without dropping words or stopping dictation!
+                    if self.isRecording && !self.isStopping {
+                        NSLog("🔄 TalkType: Apple Speech task limit/segment ended during active take. Seamlessly cycling to next segment.")
+                        self.recognitionTask = nil
+                        self.setupAppleRecognitionTask(for: sessionId)
+                        return
+                    }
+                    
+                    // User has finished or stopping
+                    self.currentSessionId = UUID()
+                    self.audioEngine.stop()
+                    self.safeRemoveTap()
+                    self.recognitionRequest = nil
+                    self.recognitionTask = nil
+                    self.isRecording = false
+                    self.isStopping = false
+                    self.phase = .processing
+                    self.onStateChange?(false)
+                    self.onFinal?(self.transcript)
+                }
+            }
         }
     }
     
@@ -2703,9 +2746,84 @@ struct GhostMark: View {
     }
 }
 
+func formatHistoryTimestamp(_ date: Date) -> String {
+    let calendar = Calendar.current
+    let timeFormatter = DateFormatter()
+    timeFormatter.dateStyle = .none
+    timeFormatter.timeStyle = .short
+    let timeStr = timeFormatter.string(from: date)
+    
+    if calendar.isDateInToday(date) {
+        return "\(L10n.t("today")), \(timeStr)"
+    } else if calendar.isDateInYesterday(date) {
+        return "\(L10n.t("yesterday")), \(timeStr)"
+    } else {
+        let df = DateFormatter()
+        let isSameYear = calendar.component(.year, from: date) == calendar.component(.year, from: Date())
+        df.dateFormat = isSameYear ? "MMM d, " : "MMM d yyyy, "
+        return df.string(from: date) + timeStr
+    }
+}
+
+struct TabPill: View {
+    let title: String
+    let isSelected: Bool
+    let p: Palette
+    let action: () -> Void
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(
+                    isSelected
+                        ? p.card
+                        : (isHovering ? p.card.opacity(0.45) : Color.clear)
+                )
+                .foregroundStyle(
+                    isSelected
+                        ? p.ink
+                        : (isHovering ? p.ink.opacity(0.85) : p.inkSoft.opacity(0.6))
+                )
+                .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.14)) {
+                isHovering = hovering
+            }
+        }
+    }
+}
+
+struct HoverButton: View {
+    let title: String
+    let p: Palette
+    let action: () -> Void
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                .foregroundStyle(isHovering ? p.ink : p.inkSoft.opacity(0.5))
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.12)) {
+                isHovering = hovering
+            }
+        }
+    }
+}
+
 struct CopyPillButton: View {
     let isCopied: Bool
     let action: () -> Void
+    @State private var isHovering = false
 
     var body: some View {
         Button(action: action) {
@@ -2718,12 +2836,22 @@ struct CopyPillButton: View {
                     .fixedSize(horizontal: true, vertical: false)
             }
             .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(isCopied ? AnyShapeStyle(TT.pink.opacity(0.28)) : AnyShapeStyle(TT.hot.opacity(0.18)))
+            .padding(.vertical, 3.5)
+            .background(
+                isCopied
+                    ? AnyShapeStyle(TT.pink.opacity(isHovering ? 0.38 : 0.28))
+                    : AnyShapeStyle(TT.hot.opacity(isHovering ? 0.28 : 0.18))
+            )
             .foregroundStyle(isCopied ? AnyShapeStyle(TT.pink) : AnyShapeStyle(TT.hot))
+            .scaleEffect(isHovering ? 1.03 : 1.0)
             .clipShape(Capsule())
         }
         .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.12)) {
+                isHovering = hovering
+            }
+        }
     }
 }
 
@@ -2737,27 +2865,13 @@ struct HistoryRecordCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
-                Text(record.timestamp, style: .time)
+                Text(formatHistoryTimestamp(record.timestamp))
                     .font(.system(size: 10.5, weight: .bold, design: .rounded))
                     .foregroundStyle(p.inkSoft.opacity(0.55))
 
                 Spacer()
 
-                HStack(spacing: 5) {
-                    CopyPillButton(isCopied: isCopied, action: onCopy)
-
-                    Button(action: onDelete) {
-                        Image(systemName: "trash")
-                            .font(.system(size: 9, weight: .semibold))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3.5)
-                            .background(p.border.opacity(0.10))
-                            .foregroundStyle(p.inkSoft.opacity(0.55))
-                            .clipShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .help(L10n.t("delete"))
-                }
+                CopyPillButton(isCopied: isCopied, action: onCopy)
             }
 
             Text(record.text)
@@ -2773,6 +2887,11 @@ struct HistoryRecordCard: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(p.border.opacity(0.6), lineWidth: 1)
         )
+        .contextMenu {
+            Button(L10n.t("delete")) {
+                onDelete()
+            }
+        }
     }
 }
 
@@ -2860,27 +2979,13 @@ struct ContentView: View {
                 
                 // Mode Toggle
                 HStack(spacing: 2) {
-                    Button(action: { selectedTab = 0 }) {
-                        Text(L10n.t("live"))
-                            .font(.system(size: 11, weight: .bold, design: .rounded))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 4)
-                            .background(selectedTab == 0 ? p.card : Color.clear)
-                            .foregroundStyle(selectedTab == 0 ? p.ink : p.inkSoft.opacity(0.6))
-                            .clipShape(Capsule())
+                    TabPill(title: L10n.t("live"), isSelected: selectedTab == 0, p: p) {
+                        selectedTab = 0
                     }
-                    .buttonStyle(.plain)
                     
-                    Button(action: { selectedTab = 1 }) {
-                        Text(L10n.t("history"))
-                            .font(.system(size: 11, weight: .bold, design: .rounded))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 4)
-                            .background(selectedTab == 1 ? p.card : Color.clear)
-                            .foregroundStyle(selectedTab == 1 ? p.ink : p.inkSoft.opacity(0.6))
-                            .clipShape(Capsule())
+                    TabPill(title: L10n.t("history"), isSelected: selectedTab == 1, p: p) {
+                        selectedTab = 1
                     }
-                    .buttonStyle(.plain)
                 }
                 .padding(2)
                 .background(p.border.opacity(0.12))
@@ -2896,28 +3001,30 @@ struct ContentView: View {
                 }
                 ghostButton
                 statusLine
-
-                voiceModeBadge
-                    .padding(.top, 2)
                 
                 Spacer(minLength: 0)
 
-                HStack {
-                    Button(L10n.t("privacyPolicy")) {
+                HStack(spacing: 8) {
+                    HoverButton(title: L10n.t("privacyPolicy"), p: p) {
                         appDelegate.openPrivacyPolicy()
                     }
-                    .font(.system(size: 10.5, weight: .medium, design: .rounded))
-                    .foregroundStyle(p.inkSoft.opacity(0.5))
-                    .buttonStyle(.plain)
+
+                    if !isSupercharged {
+                        Text("•")
+                            .font(.system(size: 10))
+                            .foregroundStyle(p.inkSoft.opacity(0.3))
+
+                        HoverButton(title: L10n.t("unlockSupercharged"), p: p) {
+                            appDelegate.promptDeepgramKey()
+                            hasDeepgramKey = !TalkTypeConfig.deepgramApiKey.isEmpty
+                        }
+                    }
 
                     Spacer()
 
-                    Button(L10n.t("quit")) {
+                    HoverButton(title: L10n.t("quit"), p: p) {
                         NSApplication.shared.terminate(nil)
                     }
-                    .font(.system(size: 10.5, weight: .medium, design: .rounded))
-                    .foregroundStyle(p.inkSoft.opacity(0.5))
-                    .buttonStyle(.plain)
                 }
                 .padding(.horizontal, 4)
             } else {
@@ -3102,38 +3209,6 @@ struct ContentView: View {
             .frame(height: 20)
     }
 
-    private var voiceModeBadge: some View {
-        Button(action: {
-            appDelegate.promptDeepgramKey()
-            hasDeepgramKey = !TalkTypeConfig.deepgramApiKey.isEmpty
-        }) {
-            HStack(spacing: 5) {
-                if isSupercharged {
-                    Image(systemName: "bolt.fill")
-                        .font(.system(size: 9.5, weight: .bold))
-                    Text(L10n.t("superchargedActiveBadge"))
-                        .font(.system(size: 10.5, weight: .bold, design: .rounded))
-                } else {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 9.5, weight: .bold))
-                    Text(L10n.t("trySuperchargedBadge"))
-                        .font(.system(size: 10.5, weight: .bold, design: .rounded))
-                }
-            }
-            .padding(.horizontal, 11)
-            .padding(.vertical, 4.5)
-            .background(isSupercharged ? Color.mint.opacity(0.18) : TT.pink.opacity(0.12))
-            .foregroundStyle(isSupercharged ? Color.mint : TT.pink)
-            .clipShape(Capsule())
-            .overlay(
-                Capsule()
-                    .strokeBorder(isSupercharged ? Color.mint.opacity(0.35) : TT.pink.opacity(0.28), lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-        .help(isSupercharged ? L10n.t("superchargedHelp") : L10n.t("trySuperchargedHelp"))
-    }
-
     private var historyCard: some View {
         VStack(spacing: 8) {
             if history.records.isEmpty {
@@ -3178,32 +3253,23 @@ struct ContentView: View {
                 .frame(height: 330)
                 
                 HStack {
-                    Button(L10n.t("clearHistory")) {
+                    HoverButton(title: L10n.t("clearHistory"), p: p) {
                         history.clear()
                     }
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .foregroundStyle(p.inkSoft.opacity(0.5))
-                    .buttonStyle(.plain)
                     
                     Spacer()
 
-                    Button(L10n.t("privacyPolicy")) {
+                    HoverButton(title: L10n.t("privacyPolicy"), p: p) {
                         appDelegate.openPrivacyPolicy()
                     }
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .foregroundStyle(p.inkSoft.opacity(0.5))
-                    .buttonStyle(.plain)
 
                     Text("•")
                         .font(.system(size: 10))
                         .foregroundStyle(p.inkSoft.opacity(0.3))
 
-                    Button(L10n.t("quit")) {
+                    HoverButton(title: L10n.t("quit"), p: p) {
                         NSApplication.shared.terminate(nil)
                     }
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .foregroundStyle(p.inkSoft.opacity(0.5))
-                    .buttonStyle(.plain)
                 }
                 .padding(.horizontal, 4)
             }
