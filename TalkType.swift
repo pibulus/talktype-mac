@@ -540,8 +540,11 @@ class HistoryStore: ObservableObject {
     }
     
     private func save() {
-        if let data = try? JSONEncoder().encode(records) {
-            UserDefaults.standard.set(data, forKey: TalkTypeConfig.historyStorageKey)
+        let snapshot = self.records
+        DispatchQueue.global(qos: .utility).async {
+            if let data = try? JSONEncoder().encode(snapshot) {
+                UserDefaults.standard.set(data, forKey: TalkTypeConfig.historyStorageKey)
+            }
         }
     }
     
@@ -1526,7 +1529,7 @@ final class LiveHUDWindowController: NSWindowController {
         window.ignoresMouseEvents = true
         window.canHide = false
         window.hidesOnDeactivate = false
-        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         window.isReleasedWhenClosed = false
 
         window.contentView = NSHostingView(
@@ -1536,6 +1539,23 @@ final class LiveHUDWindowController: NSWindowController {
             ))
 
         super.init(window: window)
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleScreenParametersChanged),
+            name: NSApplication.didChangeScreenParametersNotification,
+            object: nil
+        )
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    @objc private func handleScreenParametersChanged(_ notification: Notification) {
+        DispatchQueue.main.async { [weak self] in
+            self?.updatePosition()
+        }
     }
     
     required init?(coder: NSCoder) {
@@ -1874,7 +1894,7 @@ class SpeechEngine: NSObject, ObservableObject {
     let audioMeter = AudioLevelMeter()
     
     // CoreAudio real-time processing queue & Session tracking
-    private let audioProcessingQueue = DispatchQueue(label: "com.talktype.audioProcessing", qos: .userInitiated)
+    private let audioProcessingQueue = DispatchQueue(label: "com.talktype.audioProcessing", qos: .userInteractive)
     private var currentSessionId = UUID()
     private var audioConverter: AVAudioConverter?
     private var targetAudioFormat: AVAudioFormat?
@@ -2243,12 +2263,26 @@ class SpeechEngine: NSObject, ObservableObject {
             // Offload buffer allocation, conversion, and websocket send from real-time CoreAudio thread
             self.audioProcessingQueue.async { [weak self, bufferCopy] in
                 guard let self = self, self.isRecording else { return }
-                let frameCount = AVAudioFrameCount(ceil(Double(bufferCopy.frameLength) * 16000.0 / sampleRate) + 2)
+                
+                // Dynamically adapt to input sample rate shifts (e.g. DAC switching 48k -> 96k/192k)
+                let inputRate = bufferCopy.format.sampleRate > 0 ? bufferCopy.format.sampleRate : sampleRate
+                let frameCount = AVAudioFrameCount(ceil(Double(bufferCopy.frameLength) * 16000.0 / inputRate) + 32)
                 guard let convertedBuffer = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: frameCount) else { return }
+                
+                // Reconstruct converter if hardware dynamically mutated input format mid-stream
+                let activeConverter: AVAudioConverter
+                if let existing = self.audioConverter, existing.inputFormat == bufferCopy.format {
+                    activeConverter = existing
+                } else if let dynamicConverter = AVAudioConverter(from: bufferCopy.format, to: targetFormat) {
+                    self.audioConverter = dynamicConverter
+                    activeConverter = dynamicConverter
+                } else {
+                    activeConverter = converter
+                }
                 
                 var error: NSError?
                 var allRead = false
-                converter.convert(to: convertedBuffer, error: &error) { _, outStatus in
+                activeConverter.convert(to: convertedBuffer, error: &error) { _, outStatus in
                     if allRead {
                         outStatus.pointee = .noDataNow
                         return nil
@@ -2258,7 +2292,7 @@ class SpeechEngine: NSObject, ObservableObject {
                     return bufferCopy
                 }
                 
-                if let channelData = convertedBuffer.int16ChannelData {
+                if error == nil, convertedBuffer.frameLength > 0, let channelData = convertedBuffer.int16ChannelData {
                     let data = Data(bytes: channelData.pointee, count: Int(convertedBuffer.frameLength) * 2)
                     self.webSocketTask?.send(.data(data)) { _ in }
                 }
