@@ -155,7 +155,7 @@ enum L10n {
         "english": ["en": "English", "es": "Inglés"],
         "spanish": ["en": "Spanish", "es": "Español"],
         "language": ["en": "Language", "es": "Idioma"],
-        "accessibilityDisabled": ["en": "⚠️ Accessibility Disabled (Click to Enable ⌘V)", "es": "⚠️ Accesibilidad desactivada (Clic para activar ⌘V)"],
+        "accessibilityDisabled": ["en": "Accessibility Disabled (Click to Enable ⌘V)", "es": "Accesibilidad desactivada (Clic para activar ⌘V)"],
         "copyLast": ["en": "Copy Last Take", "es": "Copiar última toma"],
         "changePass": ["en": "Change Pass…", "es": "Cambiar pase…"],
         "polishTranscripts": ["en": "Polish Transcripts", "es": "Pulir transcripciones"],
@@ -165,15 +165,15 @@ enum L10n {
         "pushToTalkKey": ["en": "Push to Talk Key", "es": "Tecla pulsar para hablar"],
         "transcriptionEngine": ["en": "Voice Mode", "es": "Modo de voz"],
         "appleSpeech": ["en": "Mac Built-in (Offline · Private)", "es": "Integrado en Mac (sin conexión · privado)"],
-        "deepgramNova": ["en": "⚡ Supercharged (Nova-3 · Real-Time)", "es": "⚡ Sobrealimentado (Nova-3 · en vivo)"],
+        "deepgramNova": ["en": "Supercharged (Nova-3 · Real-Time)", "es": "Sobrealimentado (Nova-3 · en vivo)"],
         "hudPosition": ["en": "HUD Position", "es": "Posición del HUD"],
         "bottomOfScreen": ["en": "Bottom of Screen", "es": "Parte inferior de la pantalla"],
         "topOfScreen": ["en": "Top of Screen", "es": "Parte superior de la pantalla"],
-        "deepgramApiKey": ["en": "🎁 Unlock Supercharged Voice (Free $200 Pass)…", "es": "🎁 Desbloquear voz sobrealimentada (Pase de $200 gratis)…"],
-        "unlockSupercharged": ["en": "⚡ Supercharged (Free $200 Pass)…", "es": "⚡ Voz sobrealimentada (Pase de $200 gratis)…"],
-        "superchargedConnected": ["en": "⚡ Supercharged Connected (Change Code…)", "es": "⚡ Voz sobrealimentada conectada (cambiar código…)"],
-        "trySuperchargedBadge": ["en": "✨ Try Supercharged Voice (Free)", "es": "✨ Probar voz sobrealimentada (Gratis)"],
-        "superchargedActiveBadge": ["en": "⚡ Supercharged Voice Active", "es": "⚡ Voz sobrealimentada activa"],
+        "deepgramApiKey": ["en": "Unlock Supercharged Voice (Free $200 Pass)…", "es": "Desbloquear voz sobrealimentada (Pase de $200 gratis)…"],
+        "unlockSupercharged": ["en": "Supercharged (Free $200 Pass)…", "es": "Voz sobrealimentada (Pase de $200 gratis)…"],
+        "superchargedConnected": ["en": "Supercharged Connected (Change Code…)", "es": "Voz sobrealimentada conectada (cambiar código…)"],
+        "trySuperchargedBadge": ["en": "Try Supercharged Voice (Free)", "es": "Probar voz sobrealimentada (Gratis)"],
+        "superchargedActiveBadge": ["en": "Supercharged Voice Active", "es": "Voz sobrealimentada activa"],
         "trySuperchargedHelp": ["en": "Get $200 free credit (~45,000 mins) for ultra-accurate streaming transcription", "es": "Consigue $200 de crédito gratis (~45.000 mins) para transcripción ultraprecisa"],
         "superchargedHelp": ["en": "Supercharged voice active (Deepgram Nova-3). Click to manage pass.", "es": "Voz sobrealimentada activa (Deepgram Nova-3). Clic para gestionar pase."],
         "quit": ["en": "Quit TalkType", "es": "Salir de TalkType"],
@@ -196,7 +196,7 @@ enum L10n {
         "copy": ["en": "Copy", "es": "Copiar"],
         "copied": ["en": "Copied!", "es": "¡Copiado!"],
         "clearHistory": ["en": "Clear History", "es": "Borrar historial"],
-        "copiedToClipboard": ["en": "Copied to clipboard — Press ⌘V to paste! 📋", "es": "Copiado al portapapeles — ¡Pulsa ⌘V para pegar! 📋"],
+        "copiedToClipboard": ["en": "Copied to clipboard — Press ⌘V to paste!", "es": "Copiado al portapapeles — ¡Pulsa ⌘V para pegar!"],
         "polishing": ["en": "Polishing…", "es": "Puliendo…"],
         "autoPolish": ["en": "Auto-Polish", "es": "Pulido automático"],
         "autoPolishTranscripts": ["en": "Auto-Polish Transcripts", "es": "Pulir transcripciones automáticamente"],
@@ -209,8 +209,8 @@ enum L10n {
         "keywordsAlertTitle": ["en": "Custom Vocabulary & Keywords", "es": "Vocabulario y palabras clave"],
         "keywordsAlertInfo": ["en": "Add words or names speech recognition should prioritize (comma-separated, e.g. TalkType, pibulus, NoteBro). You can also use 'wrong -> right' rules (e.g. doctype -> TalkType).", "es": "Añade palabras que el reconocimiento de voz deba priorizar (separadas por comas, ej. TalkType, pibulus). También puedes usar reglas 'error -> corrección'."],
         "privacyPolicy": ["en": "Privacy Policy…", "es": "Política de privacidad…"],
-        "micDisabled": ["en": "⚠️ Microphone Denied (Click to Fix)", "es": "⚠️ Micrófono denegado (Clic para activar)"],
-        "speechDisabled": ["en": "⚠️ Speech Recognition Denied (Click to Fix)", "es": "⚠️ Reconocimiento de voz denegado (Clic para activar)"],
+        "micDisabled": ["en": "Microphone Denied (Click to Fix)", "es": "Micrófono denegado (Clic para activar)"],
+        "speechDisabled": ["en": "Speech Recognition Denied (Click to Fix)", "es": "Reconocimiento de voz denegado (Clic para activar)"],
         "thinking": ["en": "Finishing…", "es": "Terminando…"],
         "ready": ["en": "Done", "es": "Listo"],
         "permissionMicTitle": ["en": "Microphone access is off", "es": "El acceso al micrófono está desactivado"],
@@ -223,9 +223,9 @@ enum L10n {
         "fixPermission": ["en": "Fix", "es": "Ajustes"],
         "delete": ["en": "Delete", "es": "Eliminar"],
         "paste": ["en": "Paste", "es": "Pegar"],
-        "menuBarClick": ["en": "Menu Bar Click", "es": "Clic en la barra de menú"],
-        "clickDefault": ["en": "Standard (Left: Card)", "es": "Estándar (Izquierdo: Tarjeta)"],
-        "clickSwapped": ["en": "Jumpcut (Left: Menu)", "es": "Jumpcut (Izquierdo: Menú)"]
+        "menuBarClick": ["en": "Left / Right Click", "es": "Clic izquierdo / derecho"],
+        "clickDefault": ["en": "Left: Card · Right: Menu", "es": "Izquierdo: Tarjeta · Derecho: Menú"],
+        "clickSwapped": ["en": "Left: Menu · Right: Card", "es": "Izquierdo: Menú · Derecho: Tarjeta"]
     ]
 }
 
@@ -573,7 +573,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
-        // Track the active user application so Jumpcut-style menu pasting hits the right window
+        // Track the active user application so menu take pasting hits the right window
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didDeactivateApplicationNotification,
             object: nil,
@@ -894,7 +894,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.autoenablesItems = false
 
         // ══════════════════════════════════════════════════════════
-        // 1. RECENT TAKES (CLICK TO PASTE — JUMPCUT STYLE)
+        // 1. RECENT TAKES (CLICK TO PASTE)
         // ══════════════════════════════════════════════════════════
         if history.records.isEmpty {
             let emptyItem = NSMenuItem(title: L10n.t("noRecentTranscripts"), action: nil, keyEquivalent: "")
@@ -1012,8 +1012,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(shortcutParent)
         #endif
 
-        // Menu Bar Click Action
-        let clickMenu = NSMenu(title: "Menu Bar Click")
+        // Left / Right Click Action
+        let clickMenu = NSMenu(title: L10n.t("menuBarClick"))
         let isSwapped = TalkTypeConfig.isClicksSwapped
 
         let defaultClickItem = NSMenuItem(
@@ -2473,6 +2473,79 @@ struct GhostMark: View {
     }
 }
 
+struct CopyPillButton: View {
+    let isCopied: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 3) {
+                Image(systemName: isCopied ? "checkmark" : "doc.on.doc")
+                    .font(.system(size: 9.5, weight: .bold))
+                Text(isCopied ? L10n.t("copied") : L10n.t("copy"))
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(isCopied ? AnyShapeStyle(TT.pink.opacity(0.28)) : AnyShapeStyle(TT.hot.opacity(0.18)))
+            .foregroundStyle(isCopied ? AnyShapeStyle(TT.pink) : AnyShapeStyle(TT.hot))
+            .clipShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+struct HistoryRecordCard: View {
+    let record: TranscriptRecord
+    let isCopied: Bool
+    let p: Palette
+    let onCopy: () -> Void
+    let onDelete: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Text(record.timestamp, style: .time)
+                    .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                    .foregroundStyle(p.inkSoft.opacity(0.55))
+
+                Spacer()
+
+                HStack(spacing: 5) {
+                    CopyPillButton(isCopied: isCopied, action: onCopy)
+
+                    Button(action: onDelete) {
+                        Image(systemName: "trash")
+                            .font(.system(size: 9, weight: .semibold))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3.5)
+                            .background(p.border.opacity(0.10))
+                            .foregroundStyle(p.inkSoft.opacity(0.55))
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .help(L10n.t("delete"))
+                }
+            }
+
+            Text(record.text)
+                .font(.system(size: 12.5, weight: .medium, design: .monospaced))
+                .lineSpacing(2)
+                .foregroundStyle(p.ink)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(12)
+        .background(p.card)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(p.border.opacity(0.6), lineWidth: 1)
+        )
+    }
+}
+
 // MARK: - SwiftUI Popover UI (with History Tab & Quick Recovery)
 struct ContentView: View {
     @ObservedObject var speechEngine: SpeechEngine
@@ -2486,8 +2559,6 @@ struct ContentView: View {
     @AppStorage(TalkTypeConfig.engineStorageKey) private var storedEngine: String = "apple"
     @AppStorage("talktypeGhostMood") private var ghostMood: Int = 0
     @State private var hasDeepgramKey: Bool = !TalkTypeConfig.deepgramApiKey.isEmpty
-    @State private var wordmarkTaps: Int = 0
-    @State private var easterEggMessage: String? = nil
     @State private var wordmarkScale: CGFloat = 1.0
     var appDelegate: AppDelegate
 
@@ -2536,7 +2607,6 @@ struct ContentView: View {
                 Button(action: {
                     withAnimation(.spring(response: 0.28, dampingFraction: 0.52)) {
                         ghostMood = (ghostMood + 1) % 4
-                        wordmarkTaps += 1
                         wordmarkScale = 1.08
                     }
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
@@ -2545,14 +2615,6 @@ struct ContentView: View {
                         }
                     }
                     NSSound(named: "Pop")?.play()
-
-                    if wordmarkTaps % 7 == 0 {
-                        NSSound(named: "Purr")?.play()
-                        easterEggMessage = "Can't scale IS the feature 🎸"
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-                            easterEggMessage = nil
-                        }
-                    }
                 }) {
                     HStack(spacing: 0) {
                         Text("Talk").foregroundStyle(p.ink)
@@ -2563,7 +2625,6 @@ struct ContentView: View {
                     .scaleEffect(wordmarkScale)
                 }
                 .buttonStyle(.plain)
-                .help("Click to cycle mood aura ✨")
                 
                 Spacer()
                 
@@ -2581,25 +2642,13 @@ struct ContentView: View {
                     .buttonStyle(.plain)
                     
                     Button(action: { selectedTab = 1 }) {
-                        HStack(spacing: 3) {
-                            Text(L10n.t("history"))
-                                .lineLimit(1)
-                                .fixedSize(horizontal: true, vertical: false)
-                            if !history.records.isEmpty {
-                                Text("\(history.records.count)")
-                                    .font(.system(size: 9, weight: .bold))
-                                    .padding(.horizontal, 4)
-                                    .padding(.vertical, 1)
-                                    .background(TT.pink.opacity(0.25))
-                                    .clipShape(Capsule())
-                            }
-                        }
-                        .font(.system(size: 11, weight: .bold, design: .rounded))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
-                        .background(selectedTab == 1 ? p.card : Color.clear)
-                        .foregroundStyle(selectedTab == 1 ? p.ink : p.inkSoft.opacity(0.6))
-                        .clipShape(Capsule())
+                        Text(L10n.t("history"))
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(selectedTab == 1 ? p.card : Color.clear)
+                            .foregroundStyle(selectedTab == 1 ? p.ink : p.inkSoft.opacity(0.6))
+                            .clipShape(Capsule())
                     }
                     .buttonStyle(.plain)
                 }
@@ -2746,7 +2795,7 @@ struct ContentView: View {
 
                     Spacer()
 
-                    Button(action: {
+                    CopyPillButton(isCopied: liveCopied) {
                         let pb = NSPasteboard.general
                         pb.clearContents()
                         pb.setString(speechEngine.transcript, forType: .string)
@@ -2754,24 +2803,7 @@ struct ContentView: View {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                             liveCopied = false
                         }
-                    }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: liveCopied ? "checkmark" : "doc.on.doc")
-                                .font(.system(size: 9.5, weight: .bold))
-                            Text(liveCopied ? L10n.t("copied") : L10n.t("copy"))
-                                .font(.system(size: 10, weight: .bold, design: .rounded))
-                        }
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 3.5)
-                        .background(liveCopied ? TT.pink.opacity(0.22) : p.border.opacity(0.12))
-                        .foregroundStyle(liveCopied ? TT.pink : p.inkSoft)
-                        .clipShape(Capsule())
-                        .overlay(
-                            Capsule()
-                                .strokeBorder(liveCopied ? TT.pink.opacity(0.5) : p.border.opacity(0.25), lineWidth: 1)
-                        )
                     }
-                    .buttonStyle(.plain)
                     .padding(.trailing, 10)
                     .padding(.bottom, 8)
                 }
@@ -2808,19 +2840,7 @@ struct ContentView: View {
         }
     }
 
-    @ViewBuilder
     private var statusLine: some View {
-        if let msg = easterEggMessage {
-            Text(msg)
-                .font(.system(size: 12, weight: .bold, design: .rounded))
-                .foregroundStyle(currentMoodGradient)
-                .frame(height: 20)
-        } else {
-            defaultStatusLine
-        }
-    }
-
-    private var defaultStatusLine: some View {
         let label: String
         let style: AnyShapeStyle
         switch speechEngine.phase {
@@ -2884,20 +2904,6 @@ struct ContentView: View {
         .help(isSupercharged ? L10n.t("superchargedHelp") : L10n.t("trySuperchargedHelp"))
     }
 
-    @ViewBuilder
-    private func engineTag(for engine: String) -> some View {
-        if !engine.isEmpty {
-            let isNova = engine == "Nova-3"
-            Text(isNova ? "⚡ Nova-3" : "🎙️ Local")
-                .font(.system(size: 8.5, weight: .bold, design: .rounded))
-                .padding(.horizontal, 5)
-                .padding(.vertical, 1.5)
-                .background(isNova ? TT.pink.opacity(0.15) : p.border.opacity(0.12))
-                .foregroundStyle(isNova ? TT.pink : p.inkSoft.opacity(0.6))
-                .clipShape(Capsule())
-        }
-    }
-
     private var historyCard: some View {
         VStack(spacing: 8) {
             if history.records.isEmpty {
@@ -2916,88 +2922,24 @@ struct ContentView: View {
                 ScrollView {
                     LazyVStack(spacing: 10) {
                         ForEach(history.records) { record in
-                            VStack(alignment: .leading, spacing: 6) {
-                                HStack(spacing: 6) {
-                                    Text(record.timestamp, style: .time)
-                                        .font(.system(size: 10, weight: .bold, design: .rounded))
-                                        .foregroundStyle(p.inkSoft.opacity(0.55))
-
-                                    engineTag(for: record.engine)
-                                    
-                                    Spacer()
-                                    
-                                    HStack(spacing: 5) {
-                                        #if !MAS_BUILD
-                                        Button(action: {
-                                            appDelegate.pasteToActiveApp(text: record.text)
-                                        }) {
-                                            HStack(spacing: 3) {
-                                                Image(systemName: "arrow.right.doc.on.clipboard")
-                                                Text(L10n.t("paste"))
-                                            }
-                                            .font(.system(size: 10, weight: .bold, design: .rounded))
-                                            .padding(.horizontal, 8)
-                                            .padding(.vertical, 3)
-                                            .background(TT.hot.opacity(0.18))
-                                            .foregroundStyle(TT.hot)
-                                            .clipShape(Capsule())
-                                        }
-                                        .buttonStyle(.plain)
-                                        .help(L10n.t("paste"))
-                                        #endif
-
-                                        Button(action: {
-                                            let pb = NSPasteboard.general
-                                            pb.clearContents()
-                                            pb.setString(record.text, forType: .string)
-                                            copiedId = record.id
-                                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                                                if copiedId == record.id { copiedId = nil }
-                                            }
-                                        }) {
-                                            HStack(spacing: 3) {
-                                                Image(systemName: copiedId == record.id ? "checkmark" : "doc.on.doc")
-                                                Text(copiedId == record.id ? L10n.t("copied") : L10n.t("copy"))
-                                            }
-                                            .font(.system(size: 10, weight: .semibold, design: .rounded))
-                                            .padding(.horizontal, 8)
-                                            .padding(.vertical, 3)
-                                            .background(copiedId == record.id ? TT.pink.opacity(0.2) : p.border.opacity(0.12))
-                                            .foregroundStyle(copiedId == record.id ? TT.pink : p.inkSoft)
-                                            .clipShape(Capsule())
-                                        }
-                                        .buttonStyle(.plain)
-
-                                        Button(action: {
-                                            withAnimation(.easeOut(duration: 0.2)) {
-                                                history.delete(id: record.id)
-                                            }
-                                        }) {
-                                            Image(systemName: "trash")
-                                                .font(.system(size: 9, weight: .semibold))
-                                                .padding(.horizontal, 6)
-                                                .padding(.vertical, 3.5)
-                                                .background(p.border.opacity(0.10))
-                                                .foregroundStyle(p.inkSoft.opacity(0.55))
-                                                .clipShape(Capsule())
-                                        }
-                                        .buttonStyle(.plain)
-                                        .help(L10n.t("delete"))
+                            HistoryRecordCard(
+                                record: record,
+                                isCopied: copiedId == record.id,
+                                p: p,
+                                onCopy: {
+                                    let pb = NSPasteboard.general
+                                    pb.clearContents()
+                                    pb.setString(record.text, forType: .string)
+                                    copiedId = record.id
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                                        if copiedId == record.id { copiedId = nil }
+                                    }
+                                },
+                                onDelete: {
+                                    withAnimation(.easeOut(duration: 0.2)) {
+                                        history.delete(id: record.id)
                                     }
                                 }
-                                
-                                Text(record.text)
-                                    .font(.system(size: 12.5, weight: .medium, design: .monospaced))
-                                    .lineSpacing(2)
-                                    .foregroundStyle(p.ink)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            .padding(12)
-                            .background(p.card)
-                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .strokeBorder(p.border.opacity(0.6), lineWidth: 1)
                             )
                         }
                     }
