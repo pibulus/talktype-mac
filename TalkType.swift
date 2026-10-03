@@ -156,7 +156,9 @@ enum L10n {
         "spanish": ["en": "Spanish", "es": "Español"],
         "language": ["en": "Language", "es": "Idioma"],
         "accessibilityDisabled": ["en": "⚠️ Accessibility Disabled (Click to Enable ⌘V)", "es": "⚠️ Accesibilidad desactivada (Clic para activar ⌘V)"],
-        "copyLast": ["en": "Copy Last", "es": "Copiar último"],
+        "copyLast": ["en": "Copy Last Take", "es": "Copiar última toma"],
+        "changePass": ["en": "Change Pass…", "es": "Cambiar pase…"],
+        "polishTranscripts": ["en": "Polish Transcripts", "es": "Pulir transcripciones"],
         "noRecentTranscripts": ["en": "No Recent Transcripts", "es": "Sin transcripciones recientes"],
         "recentTranscripts": ["en": "Recent Transcripts", "es": "Transcripciones recientes"],
         "historyEmpty": ["en": "History empty", "es": "Historial vacío"],
@@ -168,7 +170,7 @@ enum L10n {
         "bottomOfScreen": ["en": "Bottom of Screen", "es": "Parte inferior de la pantalla"],
         "topOfScreen": ["en": "Top of Screen", "es": "Parte superior de la pantalla"],
         "deepgramApiKey": ["en": "🎁 Unlock Supercharged Voice (Free $200 Pass)…", "es": "🎁 Desbloquear voz sobrealimentada (Pase de $200 gratis)…"],
-        "unlockSupercharged": ["en": "🎁 Unlock Supercharged Voice (Free $200 Pass)…", "es": "🎁 Desbloquear voz sobrealimentada (Pase de $200 gratis)…"],
+        "unlockSupercharged": ["en": "⚡ Supercharged (Free $200 Pass)…", "es": "⚡ Voz sobrealimentada (Pase de $200 gratis)…"],
         "superchargedConnected": ["en": "⚡ Supercharged Connected (Change Code…)", "es": "⚡ Voz sobrealimentada conectada (cambiar código…)"],
         "trySuperchargedBadge": ["en": "✨ Try Supercharged Voice (Free)", "es": "✨ Probar voz sobrealimentada (Gratis)"],
         "superchargedActiveBadge": ["en": "⚡ Supercharged Voice Active", "es": "⚡ Voz sobrealimentada activa"],
@@ -885,25 +887,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             emptyItem.isEnabled = false
             menu.addItem(emptyItem)
         } else {
-            let takesHeader = NSMenuItem(title: "RECENT TAKES (CLICK TO PASTE)", action: nil, keyEquivalent: "")
-            takesHeader.attributedTitle = NSAttributedString(
-                string: "RECENT TAKES (CLICK TO PASTE)",
-                attributes: [
-                    .font: NSFont.systemFont(ofSize: 10, weight: .bold),
-                    .foregroundColor: NSColor.secondaryLabelColor
-                ]
-            )
-            takesHeader.isEnabled = false
-            menu.addItem(takesHeader)
-
-            // Top 5 takes directly in the root menu with ⌘1..⌘5 shortcuts
+            // Top 5 takes directly in root menu with ⌘1..⌘5 shortcuts (pure snippet text, no numbers/quotes)
             for (idx, record) in history.records.prefix(5).enumerated() {
                 let clean = record.text.trimmingCharacters(in: .whitespacesAndNewlines)
-                let preview = clean.count > 44 ? String(clean.prefix(42)) + "…" : clean
+                let preview = clean.count > 46 ? String(clean.prefix(44)) + "…" : clean
                 let keyEq = "\(idx + 1)"
 
                 let item = NSMenuItem(
-                    title: "\(idx + 1). \"\(preview)\"",
+                    title: preview,
                     action: #selector(pasteSpecificRecord(_:)),
                     keyEquivalent: keyEq
                 )
@@ -914,7 +905,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
                 // Alternate: Hold Option to copy without pasting
                 let altItem = NSMenuItem(
-                    title: "Copy: \"\(preview)\"",
+                    title: "Copy: \(preview)",
                     action: #selector(copySpecificRecord(_:)),
                     keyEquivalent: keyEq
                 )
@@ -928,11 +919,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // Older takes submenu if > 5
             if history.records.count > 5 {
                 let olderMenu = NSMenu(title: "Older Takes")
-                for (idx, record) in history.records.dropFirst(5).prefix(20).enumerated() {
+                for record in history.records.dropFirst(5).prefix(20) {
                     let clean = record.text.trimmingCharacters(in: .whitespacesAndNewlines)
-                    let preview = clean.count > 44 ? String(clean.prefix(42)) + "…" : clean
+                    let preview = clean.count > 46 ? String(clean.prefix(44)) + "…" : clean
                     let item = NSMenuItem(
-                        title: "\(idx + 6). \"\(preview)\"",
+                        title: preview,
                         action: #selector(pasteSpecificRecord(_:)),
                         keyEquivalent: ""
                     )
@@ -946,9 +937,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 menu.addItem(olderParent)
             }
 
-            if let last = history.records.first {
-                let snippet = last.text.count > 30 ? String(last.text.prefix(28)) + "…" : last.text
-                let copyLast = NSMenuItem(title: "\(L10n.t("copyLast")): \"\(snippet)\"", action: #selector(copyLastTranscript), keyEquivalent: "c")
+            if history.records.first != nil {
+                let copyLast = NSMenuItem(title: L10n.t("copyLast"), action: #selector(copyLastTranscript), keyEquivalent: "c")
                 copyLast.target = self
                 menu.addItem(copyLast)
             }
@@ -961,22 +951,38 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem.separator())
 
         // ══════════════════════════════════════════════════════════
-        // 2. QUICK ACTIONS & VISUAL WINDOW
+        // 2. SETTINGS & PREFERENCES (Consolidated & Tightly Grouped)
         // ══════════════════════════════════════════════════════════
-        let visualItem = NSMenuItem(title: "Open Visual Window…", action: #selector(openVisualPopover), keyEquivalent: "o")
-        visualItem.target = self
-        menu.addItem(visualItem)
+        // Voice Mode (Zero duplicate labels)
+        let modelMenu = NSMenu(title: "Voice Mode")
+        let isDeepgram = TalkTypeConfig.isUsingDeepgram
+        let hasDeepgramKey = !TalkTypeConfig.deepgramApiKey.isEmpty
 
-        let polishItem = NSMenuItem(title: "✨ Polish with AI (Gemini)", action: #selector(togglePolish), keyEquivalent: "")
-        polishItem.target = self
-        polishItem.state = TalkTypeConfig.isPolishing ? .on : .off
-        menu.addItem(polishItem)
+        let appleItem = NSMenuItem(title: L10n.t("appleSpeech"), action: #selector(selectAppleModel), keyEquivalent: "")
+        appleItem.target = self
+        appleItem.state = !isDeepgram ? .on : .off
+        modelMenu.addItem(appleItem)
 
-        menu.addItem(NSMenuItem.separator())
+        if hasDeepgramKey {
+            let dgItem = NSMenuItem(title: L10n.t("deepgramNova"), action: #selector(selectDeepgramModel), keyEquivalent: "")
+            dgItem.target = self
+            dgItem.state = isDeepgram ? .on : .off
+            modelMenu.addItem(dgItem)
 
-        // ══════════════════════════════════════════════════════════
-        // 3. SETTINGS & PREFERENCES
-        // ══════════════════════════════════════════════════════════
+            modelMenu.addItem(NSMenuItem.separator())
+            let changeKeyItem = NSMenuItem(title: L10n.t("changePass"), action: #selector(promptDeepgramKey), keyEquivalent: "")
+            changeKeyItem.target = self
+            modelMenu.addItem(changeKeyItem)
+        } else {
+            let dgItem = NSMenuItem(title: L10n.t("unlockSupercharged"), action: #selector(selectDeepgramModel), keyEquivalent: "")
+            dgItem.target = self
+            modelMenu.addItem(dgItem)
+        }
+
+        let modelParent = NSMenuItem(title: L10n.t("transcriptionEngine"), action: nil, keyEquivalent: "")
+        modelParent.submenu = modelMenu
+        menu.addItem(modelParent)
+
         #if !MAS_BUILD
         let shortcutMenu = NSMenu(title: "Shortcut")
         let activeTrigger = TalkTypeConfig.pttTrigger
@@ -992,28 +998,34 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(shortcutParent)
         #endif
 
-        // Voice Mode (with Supercharged Pass config nested inside)
-        let modelMenu = NSMenu(title: "Voice Mode")
-        let isDeepgram = TalkTypeConfig.isUsingDeepgram
-        let appleItem = NSMenuItem(title: L10n.t("appleSpeech"), action: #selector(selectAppleModel), keyEquivalent: "")
-        appleItem.target = self
-        appleItem.state = !isDeepgram ? .on : .off
-        modelMenu.addItem(appleItem)
+        // Polish with AI (Self-contained submenu: toggle + pass configuration)
+        let polishMenu = NSMenu(title: "Polish with AI")
+        let polishToggle = NSMenuItem(
+            title: L10n.t("polishTranscripts"),
+            action: #selector(togglePolish),
+            keyEquivalent: ""
+        )
+        polishToggle.target = self
+        polishToggle.state = TalkTypeConfig.isPolishing ? .on : .off
+        polishMenu.addItem(polishToggle)
 
-        let dgItem = NSMenuItem(title: L10n.t("deepgramNova"), action: #selector(selectDeepgramModel), keyEquivalent: "")
-        dgItem.target = self
-        dgItem.state = isDeepgram ? .on : .off
-        modelMenu.addItem(dgItem)
+        polishMenu.addItem(NSMenuItem.separator())
+        let geminiKeyItem = NSMenuItem(
+            title: TalkTypeConfig.geminiApiKey.isEmpty ? L10n.t("geminiApiKey") : L10n.t("changePass"),
+            action: #selector(promptGeminiKey),
+            keyEquivalent: ""
+        )
+        geminiKeyItem.target = self
+        polishMenu.addItem(geminiKeyItem)
 
-        modelMenu.addItem(NSMenuItem.separator())
-        let keyTitle = TalkTypeConfig.deepgramApiKey.isEmpty ? L10n.t("unlockSupercharged") : L10n.t("superchargedConnected")
-        let keyItem = NSMenuItem(title: keyTitle, action: #selector(promptDeepgramKey), keyEquivalent: "")
-        keyItem.target = self
-        modelMenu.addItem(keyItem)
+        let polishParent = NSMenuItem(title: "✨ Polish with AI", action: nil, keyEquivalent: "")
+        polishParent.submenu = polishMenu
+        menu.addItem(polishParent)
 
-        let modelParent = NSMenuItem(title: L10n.t("transcriptionEngine"), action: nil, keyEquivalent: "")
-        modelParent.submenu = modelMenu
-        menu.addItem(modelParent)
+        // Custom Vocabulary
+        let vocabItem = NSMenuItem(title: L10n.t("customKeywords"), action: #selector(promptCustomKeywords), keyEquivalent: "")
+        vocabItem.target = self
+        menu.addItem(vocabItem)
 
         // Language Submenu
         let langMenu = NSMenu(title: "Language")
@@ -1046,19 +1058,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         posParent.submenu = posMenu
         menu.addItem(posParent)
 
-        // Custom Vocabulary
-        let vocabItem = NSMenuItem(title: L10n.t("customKeywords"), action: #selector(promptCustomKeywords), keyEquivalent: "")
-        vocabItem.target = self
-        menu.addItem(vocabItem)
-
-        if TalkTypeConfig.isPolishing {
-            let geminiItem = NSMenuItem(title: L10n.t("geminiApiKey"), action: #selector(promptGeminiKey), keyEquivalent: "")
-            geminiItem.target = self
-            menu.addItem(geminiItem)
-        }
-
         // ══════════════════════════════════════════════════════════
-        // 4. PERMISSIONS / SYSTEM ALERTS (Only if needed)
+        // 3. PERMISSIONS / SYSTEM ALERTS (Only if needed)
         // ══════════════════════════════════════════════════════════
         var hasAlert = false
         #if !MAS_BUILD
@@ -1088,19 +1089,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        menu.addItem(NSMenuItem.separator())
-
         // ══════════════════════════════════════════════════════════
-        // 5. FOOTER
+        // 4. FOOTER
         // ══════════════════════════════════════════════════════════
-        let webItem = NSMenuItem(title: "TalkType on the Web…", action: #selector(openTalkTypeWeb), keyEquivalent: "")
-        webItem.target = self
-        menu.addItem(webItem)
-
-        let privacyItem = NSMenuItem(title: L10n.t("privacyPolicy"), action: #selector(openPrivacyPolicy), keyEquivalent: "")
-        privacyItem.target = self
-        menu.addItem(privacyItem)
-
         menu.addItem(NSMenuItem.separator())
 
         let quitItem = NSMenuItem(title: L10n.t("quit"), action: #selector(quitApp), keyEquivalent: "q")
@@ -1269,6 +1260,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func togglePolish() {
+        if !TalkTypeConfig.isPolishing && TalkTypeConfig.geminiApiKey.isEmpty {
+            promptGeminiKey()
+            return
+        }
         TalkTypeConfig.isPolishing.toggle()
     }
 
