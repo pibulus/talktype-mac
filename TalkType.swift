@@ -61,20 +61,20 @@ enum PTTTrigger: String, CaseIterable, Identifiable {
     
     var title: String {
         switch self {
-        case .rightOption: return "Right ⌥ Option (Default)"
+        case .eitherOption: return "Either ⌥ Option (Default)"
+        case .rightOption: return "Right ⌥ Option"
         case .leftOption: return "Left ⌥ Option"
-        case .eitherOption: return "Either ⌥ Option"
-        case .function: return "Globe / Function (fn) 🌐"
+        case .function: return "Globe / Function (fn)"
         case .rightCommand: return "Right ⌘ Command"
         }
     }
     
     var shortTitle: String {
         switch self {
+        case .eitherOption: return "⌥ Option"
         case .rightOption: return "Right ⌥ Option"
         case .leftOption: return "Left ⌥ Option"
-        case .eitherOption: return "Either ⌥ Option"
-        case .function: return "Globe / fn 🌐"
+        case .function: return "Globe / fn"
         case .rightCommand: return "Right ⌘ Command"
         }
     }
@@ -287,8 +287,8 @@ enum TalkTypeConfig {
     }
     
     static var pttTrigger: PTTTrigger {
-        let raw = UserDefaults.standard.string(forKey: pttTriggerStorageKey) ?? PTTTrigger.rightOption.rawValue
-        return PTTTrigger(rawValue: raw) ?? .rightOption
+        let raw = UserDefaults.standard.string(forKey: pttTriggerStorageKey) ?? PTTTrigger.eitherOption.rawValue
+        return PTTTrigger(rawValue: raw) ?? .eitherOption
     }
 
     static var language: TranscriptionLanguage {
@@ -556,6 +556,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var pttMonitors: [Any] = []
     private var pttHeld = false
+    private var pttPressTime: Date?
+    private var isHandsFreeMode = false
     private var pendingPaste = false
     private var pasteWatchdogItem: DispatchWorkItem?
     
@@ -615,25 +617,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             
             self.pasteWatchdogItem?.cancel()
             self.pasteWatchdogItem = nil
-            
-            guard self.pendingPaste else {
-                if !self.engine.isRecording && self.engine.phase != .ready {
-                    self.engine.phase = .idle
-                    self.liveHUDController?.hide()
-                }
-                return
-            }
-            self.pendingPaste = false
             self.stopMenubarBounce()
+            self.isHandsFreeMode = false
             
             guard !text.isEmpty else {
+                self.pendingPaste = false
                 self.engine.phase = .idle
                 self.liveHUDController?.hide()
                 return
             }
             
+            // 1. ALWAYS persist take into history
             self.history.add(text: text, engine: engineName)
             
+            // 2. Deliver to clipboard & paste to active app
             if TalkTypeConfig.isPolishing && !TalkTypeConfig.geminiApiKey.isEmpty {
                 self.engine.transcript = L10n.t("polishing")
                 Polisher.polish(text) { polished in
@@ -758,54 +755,55 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let trigger = TalkTypeConfig.pttTrigger
         guard let down = trigger.matches(event: event) else { return }
         
-        if down, !pttHeld {
-            // If previous dictation got stuck in processing or pendingPaste,
-            // break the deadlock immediately so user can dictate without friction!
-            if pendingPaste || engine.phase == .processing {
-                pendingPaste = false
-                pasteWatchdogItem?.cancel()
-                pasteWatchdogItem = nil
-                engine.phase = .idle
-            }
-            pttHeld = true
-            dictationTargetApp = NSWorkspace.shared.frontmostApplication
-            liveHUDController?.show()
-            engine.startRecording(resumeAfterPermission: false)
-        } else if !down, pttHeld {
-            pttHeld = false
-
-            // A permission failure or a very short press can end before audio
-            // capture starts. Never treat its status text as dictated words.
-            guard engine.hasActiveCapture else {
-                pendingPaste = false
-                pasteWatchdogItem?.cancel()
-                pasteWatchdogItem = nil
-                stopMenubarBounce()
-                liveHUDController?.hide()
+        if down {
+            // If already recording in hands-free mode, or user taps shortcut while engine is running:
+            // Stop recording and paste immediately!
+            if isHandsFreeMode || (engine.isRecording && !pttHeld) {
+                isHandsFreeMode = false
+                pttHeld = false
+                pendingPaste = true
+                engine.stopRecording()
                 return
             }
-
-            pendingPaste = true
-            engine.stopRecording()
             
-            // Safety watchdog (1.5s): gives engine time to deliver final transcript.
-            // If it hangs or times out, safely delivers current buffer and dismisses HUD!
-            pasteWatchdogItem?.cancel()
-            let watchdog = DispatchWorkItem { [weak self] in
-                guard let self = self, self.pendingPaste else { return }
-                self.pendingPaste = false
-                self.stopMenubarBounce()
-                let fallbackText = VocabularyManager.clean(self.engine.transcript.trimmingCharacters(in: .whitespacesAndNewlines))
-                if !fallbackText.isEmpty {
-                    self.history.add(text: fallbackText, engine: TalkTypeConfig.isUsingDeepgram ? "Nova-3" : "Local")
-                    self.deliver(text: fallbackText)
-                } else {
-                    self.engine.phase = .idle
-                    self.liveHUDController?.hide()
-                }
+            if !pttHeld {
+                pttHeld = true
+                pttPressTime = Date()
+                pendingPaste = true
+                dictationTargetApp = NSWorkspace.shared.frontmostApplication
+                lastExternalApp = dictationTargetApp
+                liveHUDController?.show()
+                engine.startRecording(resumeAfterPermission: false)
             }
-            self.pasteWatchdogItem = watchdog
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: watchdog)
+        } else if pttHeld {
+            pttHeld = false
+            let pressDuration = Date().timeIntervalSince(pttPressTime ?? Date())
+            
+            if pressDuration < 0.28 {
+                // Short tap (< 0.28s): Enter hands-free mode! Keeps recording until tapped again
+                isHandsFreeMode = true
+            } else {
+                // Hold and release: Push-to-Talk finish & paste!
+                isHandsFreeMode = false
+                pendingPaste = true
+                engine.stopRecording()
+                
+                pasteWatchdogItem?.cancel()
+                let watchdog = DispatchWorkItem { [weak self] in
+                    guard let self = self else { return }
+                    self.stopMenubarBounce()
+                    let fallbackText = VocabularyManager.clean(self.engine.transcript.trimmingCharacters(in: .whitespacesAndNewlines))
+                    if !fallbackText.isEmpty {
+                        self.history.add(text: fallbackText, engine: TalkTypeConfig.isUsingDeepgram ? "Nova-3" : "Local")
+                        self.deliver(text: fallbackText)
+                    } else {
+                        self.engine.phase = .idle
+                        self.liveHUDController?.hide()
+                    }
+                }
+                self.pasteWatchdogItem = watchdog
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: watchdog)
+            }
         }
     }
     #endif
@@ -816,6 +814,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
+        // 1. ALWAYS copy to pasteboard
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
@@ -826,7 +825,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         engine.transcript = L10n.t("copiedToClipboard")
         self.liveHUDController?.hide(after: 1.5)
 #else
-        if AXIsProcessTrusted() {
+        let targetApp = self.dictationTargetApp ?? self.lastExternalApp
+        let shouldAutoPaste = self.pendingPaste || (targetApp != nil && targetApp?.bundleIdentifier != Bundle.main.bundleIdentifier)
+        self.pendingPaste = false
+
+        if AXIsProcessTrusted() && shouldAutoPaste {
             engine.transcript = text
             self.pasteToActiveApp(text: text)
             self.liveHUDController?.hide(after: 0.9)
@@ -846,12 +849,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func requestPaste() {
         pendingPaste = true
+        isHandsFreeMode = false
         engine.stopRecording()
         
         pasteWatchdogItem?.cancel()
         let watchdog = DispatchWorkItem { [weak self] in
-            guard let self = self, self.pendingPaste else { return }
-            self.pendingPaste = false
+            guard let self = self else { return }
             self.stopMenubarBounce()
             let fallbackText = VocabularyManager.clean(self.engine.transcript.trimmingCharacters(in: .whitespacesAndNewlines))
             if !fallbackText.isEmpty {
@@ -863,7 +866,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         self.pasteWatchdogItem = watchdog
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5, execute: watchdog)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: watchdog)
     }
 
     @objc func statusItemClicked(_ sender: NSStatusBarButton) {
