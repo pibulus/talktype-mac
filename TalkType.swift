@@ -222,7 +222,10 @@ enum L10n {
         "permissionPasteDetail": ["en": "Text still copies. Allow access to paste it for you.", "es": "El texto se copia. Permite el acceso para pegarlo automáticamente."],
         "fixPermission": ["en": "Fix", "es": "Ajustes"],
         "delete": ["en": "Delete", "es": "Eliminar"],
-        "paste": ["en": "Paste", "es": "Pegar"]
+        "paste": ["en": "Paste", "es": "Pegar"],
+        "menuBarClick": ["en": "Menu Bar Click", "es": "Clic en la barra de menú"],
+        "clickDefault": ["en": "Standard (Left: Card)", "es": "Estándar (Izquierdo: Tarjeta)"],
+        "clickSwapped": ["en": "Jumpcut (Left: Menu)", "es": "Jumpcut (Izquierdo: Menú)"]
     ]
 }
 
@@ -236,6 +239,12 @@ enum TalkTypeConfig {
     static let pttTriggerStorageKey = "talktypePttTrigger"
     static let languageStorageKey = "talktypeLanguage"
     static let customKeywordsStorageKey = "talktypeCustomKeywords"
+    static let swapClicksStorageKey = "talktypeSwapClicks"
+
+    static var isClicksSwapped: Bool {
+        get { UserDefaults.standard.bool(forKey: swapClicksStorageKey) }
+        set { UserDefaults.standard.set(newValue, forKey: swapClicksStorageKey) }
+    }
 
     // Keychain location for the Deepgram API key.
     static let keychainService = "com.pibulus.talktype"
@@ -864,7 +873,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             lastExternalApp = front
         }
         guard let event = NSApp.currentEvent else { return }
-        if event.type == .rightMouseUp || event.modifierFlags.contains(.control) {
+        let isRightClick = event.type == .rightMouseUp || event.modifierFlags.contains(.control)
+        let shouldShowMenu = TalkTypeConfig.isClicksSwapped ? !isRightClick : isRightClick
+
+        if shouldShowMenu {
             showContextMenu(sender)
         } else {
             togglePopover(sender)
@@ -999,6 +1011,32 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         shortcutParent.submenu = shortcutMenu
         menu.addItem(shortcutParent)
         #endif
+
+        // Menu Bar Click Action
+        let clickMenu = NSMenu(title: "Menu Bar Click")
+        let isSwapped = TalkTypeConfig.isClicksSwapped
+
+        let defaultClickItem = NSMenuItem(
+            title: L10n.t("clickDefault"),
+            action: #selector(setClickActionDefault),
+            keyEquivalent: ""
+        )
+        defaultClickItem.target = self
+        defaultClickItem.state = !isSwapped ? .on : .off
+        clickMenu.addItem(defaultClickItem)
+
+        let swappedClickItem = NSMenuItem(
+            title: L10n.t("clickSwapped"),
+            action: #selector(setClickActionSwapped),
+            keyEquivalent: ""
+        )
+        swappedClickItem.target = self
+        swappedClickItem.state = isSwapped ? .on : .off
+        clickMenu.addItem(swappedClickItem)
+
+        let clickParent = NSMenuItem(title: L10n.t("menuBarClick"), action: nil, keyEquivalent: "")
+        clickParent.submenu = clickMenu
+        menu.addItem(clickParent)
 
         // Auto-Polish (Self-contained submenu: toggle + pass configuration)
         let polishMenu = NSMenu(title: "Auto-Polish")
@@ -1198,6 +1236,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func setHudTop() {
         UserDefaults.standard.set("top", forKey: TalkTypeConfig.hudPositionStorageKey)
         liveHUDController?.updatePosition()
+    }
+
+    @objc func setClickActionDefault() {
+        TalkTypeConfig.isClicksSwapped = false
+    }
+
+    @objc func setClickActionSwapped() {
+        TalkTypeConfig.isClicksSwapped = true
     }
 
     @objc func selectDeepgramModel() {
@@ -2319,12 +2365,31 @@ enum TT {
                 .init(color: Palette.rgb(255, 207,  64), location: 1.00)],
         startPoint: .topLeading, endPoint: .bottomTrailing)
 
+    static let cyberGhost = LinearGradient(
+        stops: [.init(color: Palette.rgb(175, 82, 222), location: 0.00),
+                .init(color: Palette.rgb(120, 110, 255), location: 0.50),
+                .init(color: Palette.rgb(60, 220, 240), location: 1.00)],
+        startPoint: .topLeading, endPoint: .bottomTrailing)
+
+    static let matchaGhost = LinearGradient(
+        stops: [.init(color: Palette.rgb(70, 210, 120), location: 0.00),
+                .init(color: Palette.rgb(140, 230, 90), location: 0.50),
+                .init(color: Palette.rgb(255, 220, 80), location: 1.00)],
+        startPoint: .topLeading, endPoint: .bottomTrailing)
+
+    static let amigaGhost = LinearGradient(
+        stops: [.init(color: Palette.rgb(255, 60, 110), location: 0.00),
+                .init(color: Palette.rgb(255, 150, 40), location: 0.50),
+                .init(color: Palette.rgb(90, 200, 255), location: 1.00)],
+        startPoint: .topLeading, endPoint: .bottomTrailing)
+
     static let hot = LinearGradient(colors: [pink, tangerine],
                                     startPoint: .topLeading, endPoint: .bottomTrailing)
 }
 
 struct GhostMark: View {
     var isRecording = false
+    @AppStorage("talktypeGhostMood") private var ghostMood: Int = 0
 
     @State private var eyeScale: CGFloat = 1
     @State private var floatY: CGFloat = 0
@@ -2333,9 +2398,18 @@ struct GhostMark: View {
 
     private let eyeAnchor = UnitPoint(x: 0.5, y: 464.0 / 1024.0)
 
+    private var ghostGradient: LinearGradient {
+        switch ghostMood % 4 {
+        case 1: return TT.cyberGhost
+        case 2: return TT.matchaGhost
+        case 3: return TT.amigaGhost
+        default: return TT.peachGhost
+        }
+    }
+
     var body: some View {
         ZStack {
-            layer("ghost-fill").foregroundStyle(TT.peachGhost)
+            layer("ghost-fill").foregroundStyle(ghostGradient)
             layer("ghost-line").foregroundStyle(TT.ghostInk)
             layer("ghost-eyes").foregroundStyle(TT.ghostInk)
                 .scaleEffect(x: 1, y: eyeScale, anchor: eyeAnchor)
@@ -2343,8 +2417,7 @@ struct GhostMark: View {
         .offset(y: floatY)
         .rotationEffect(.degrees(tilt))
         .onAppear { startFloating(); scheduleBlink() }
-        .onDisappear { stopFloating(); blinkTimer?.invalidate() }
-        .onDisappear { blinkTimer?.invalidate(); blinkTimer = nil }
+        .onDisappear { stopFloating(); blinkTimer?.invalidate(); blinkTimer = nil }
         .onChange(of: isRecording) { _ in startFloating() }
     }
 
@@ -2411,11 +2484,24 @@ struct ContentView: View {
     @State private var liveCopied: Bool = false
     @State private var permissionRefreshVersion = 0
     @AppStorage(TalkTypeConfig.engineStorageKey) private var storedEngine: String = "apple"
+    @AppStorage("talktypeGhostMood") private var ghostMood: Int = 0
     @State private var hasDeepgramKey: Bool = !TalkTypeConfig.deepgramApiKey.isEmpty
+    @State private var wordmarkTaps: Int = 0
+    @State private var easterEggMessage: String? = nil
+    @State private var wordmarkScale: CGFloat = 1.0
     var appDelegate: AppDelegate
 
     private var isSupercharged: Bool {
         storedEngine == "deepgram" && hasDeepgramKey
+    }
+
+    private var currentMoodGradient: LinearGradient {
+        switch ghostMood % 4 {
+        case 1: return TT.cyberGhost
+        case 2: return TT.matchaGhost
+        case 3: return TT.amigaGhost
+        default: return TT.hot
+        }
     }
 
     private var p: Palette { scheme == .dark ? .dark : .light }
@@ -2447,12 +2533,37 @@ struct ContentView: View {
         VStack(spacing: permissionHelpIssue == nil ? 14 : 9) {
             // Header with Wordmark + Tab Picker (Rock-Solid Top Locked)
             HStack {
-                HStack(spacing: 0) {
-                    Text("Talk").foregroundStyle(p.ink)
-                    Text("Type").foregroundStyle(TT.hot)
+                Button(action: {
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.52)) {
+                        ghostMood = (ghostMood + 1) % 4
+                        wordmarkTaps += 1
+                        wordmarkScale = 1.08
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.6)) {
+                            wordmarkScale = 1.0
+                        }
+                    }
+                    NSSound(named: "Pop")?.play()
+
+                    if wordmarkTaps % 7 == 0 {
+                        NSSound(named: "Purr")?.play()
+                        easterEggMessage = "Can't scale IS the feature 🎸"
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                            easterEggMessage = nil
+                        }
+                    }
+                }) {
+                    HStack(spacing: 0) {
+                        Text("Talk").foregroundStyle(p.ink)
+                        Text("Type").foregroundStyle(currentMoodGradient)
+                    }
+                    .font(.system(size: 26, weight: .heavy, design: .rounded))
+                    .kerning(-0.5)
+                    .scaleEffect(wordmarkScale)
                 }
-                .font(.system(size: 26, weight: .heavy, design: .rounded))
-                .kerning(-0.5)
+                .buttonStyle(.plain)
+                .help("Click to cycle mood aura ✨")
                 
                 Spacer()
                 
@@ -2697,7 +2808,19 @@ struct ContentView: View {
         }
     }
 
+    @ViewBuilder
     private var statusLine: some View {
+        if let msg = easterEggMessage {
+            Text(msg)
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .foregroundStyle(currentMoodGradient)
+                .frame(height: 20)
+        } else {
+            defaultStatusLine
+        }
+    }
+
+    private var defaultStatusLine: some View {
         let label: String
         let style: AnyShapeStyle
         switch speechEngine.phase {
