@@ -1909,6 +1909,7 @@ class SpeechEngine: NSObject, ObservableObject {
     private var deepgramKeepAliveTimer: Timer?
     private var confirmedTranscript = ""
     private var interimTranscript = ""
+    private var lastSegmentStart: Double = -1
     private var isStopping = false
     private var permissionRequestInProgress = false
     
@@ -2177,6 +2178,7 @@ class SpeechEngine: NSObject, ObservableObject {
         transcript = ""
         confirmedTranscript = ""
         interimTranscript = ""
+        lastSegmentStart = -1
         armStreamWatchdog()
         
         if TalkTypeConfig.isUsingDeepgram {
@@ -2385,10 +2387,18 @@ class SpeechEngine: NSObject, ObservableObject {
         
         let isFinal = (json["is_final"] as? Bool) ?? false
         let speechFinal = (json["speech_final"] as? Bool) ?? false
+        let start = (json["start"] as? Double) ?? 0.0
         let trimmedChunk = VocabularyManager.clean(chunk.trimmingCharacters(in: .whitespacesAndNewlines))
         
         DispatchQueue.main.async {
             guard self.isRecording || self.isStopping else { return }
+            
+            // If the segment timestamp shifted forward to a new utterance while interim text was pending,
+            // commit the interim text so it is never dropped, cut off, or overwritten!
+            if self.lastSegmentStart >= 0 && start > (self.lastSegmentStart + 0.05) && !self.interimTranscript.isEmpty {
+                self.commitInterim()
+            }
+            self.lastSegmentStart = start
             
             if isFinal || speechFinal {
                 let toCommit = !trimmedChunk.isEmpty ? trimmedChunk : self.interimTranscript
