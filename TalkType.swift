@@ -266,13 +266,17 @@ enum TalkTypeConfig {
     static let geminiModel = "gemini-flash-latest"
 
     static var deepgramApiKey: String {
-        if let key = KeychainHelper.read(service: keychainService, account: keychainAccount) {
-            return key
+        switch KeychainHelper.lookup(service: keychainService, account: keychainAccount) {
+        case .value(let key): return key
+        case .unavailable: return "" // A denied read is not permission to overwrite an existing key.
+        case .missing: break
         }
         // One-time migration from the old plaintext UserDefaults store.
         if let legacy = UserDefaults.standard.string(forKey: deepgramKeyStorageKey)?.trimmingCharacters(in: .whitespacesAndNewlines),
            !legacy.isEmpty {
-            KeychainHelper.save(legacy, service: keychainService, account: keychainAccount)
+            guard KeychainHelper.save(legacy, service: keychainService, account: keychainAccount) else {
+                return "" // Keep the old value for a later migration attempt.
+            }
             UserDefaults.standard.removeObject(forKey: deepgramKeyStorageKey)
             return legacy
         }
@@ -349,7 +353,9 @@ enum VocabularyManager {
         let hints = contextualHints
         guard !hints.isEmpty else { return "" }
         let params = hints.compactMap { hint -> String? in
-            guard let enc = hint.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { return nil }
+            var allowed = CharacterSet.alphanumerics
+            allowed.insert(charactersIn: "-._~")
+            guard let enc = hint.addingPercentEncoding(withAllowedCharacters: allowed) else { return nil }
             return "keyterm=\(enc)"
         }.joined(separator: "&")
         return params.isEmpty ? "" : "&" + params
@@ -445,6 +451,26 @@ enum Polisher {
 
 // MARK: - Keychain Helper
 enum KeychainHelper {
+    static var onFailure: ((String) -> Void)?
+    private static var reportedReadFailures = Set<OSStatus>()
+
+    enum Lookup {
+        case value(String)
+        case missing
+        case unavailable
+    }
+
+    private static func checked(_ status: OSStatus, allowMissing: Bool = false, reading: Bool = false) -> Bool {
+        if status == errSecSuccess || (allowMissing && status == errSecItemNotFound) { return true }
+        let detail = SecCopyErrorMessageString(status, nil) as String? ?? "Status \(status)"
+        DispatchQueue.main.async {
+            // SwiftUI may read configuration again when the HUD changes. Report a
+            // repeated read failure once; explicit save/delete failures still surface.
+            if reading && !reportedReadFailures.insert(status).inserted { return }
+            onFailure?("Keychain could not complete the request: " + detail)
+        }
+        return false
+    }
     @discardableResult
     static func save(_ value: String, service: String, account: String) -> Bool {
         let data = Data(value.utf8)
@@ -457,12 +483,17 @@ enum KeychainHelper {
         if status == errSecItemNotFound {
             var query = base
             query[kSecValueData as String] = data
-            return SecItemAdd(query as CFDictionary, nil) == errSecSuccess
+            return checked(SecItemAdd(query as CFDictionary, nil))
         }
-        return status == errSecSuccess
+        return checked(status)
     }
 
     static func read(service: String, account: String) -> String? {
+        if case .value(let value) = lookup(service: service, account: account) { return value }
+        return nil
+    }
+
+    static func lookup(service: String, account: String) -> Lookup {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -471,9 +502,14 @@ enum KeychainHelper {
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
         var result: AnyObject?
-        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
-              let data = result as? Data else { return nil }
-        return String(data: data, encoding: .utf8)
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        guard status != errSecItemNotFound else { return .missing }
+        guard checked(status, reading: true) else { return .unavailable }
+        guard let data = result as? Data, let value = String(data: data, encoding: .utf8) else {
+            _ = checked(errSecDecode, reading: true)
+            return .unavailable
+        }
+        return .value(value)
     }
 
     @discardableResult
@@ -483,7 +519,7 @@ enum KeychainHelper {
             kSecAttrService as String: service,
             kSecAttrAccount as String: account
         ]
-        return SecItemDelete(query as CFDictionary) == errSecSuccess
+        return checked(SecItemDelete(query as CFDictionary), allowMissing: true)
     }
 }
 
@@ -560,7 +596,9 @@ class HistoryStore: ObservableObject {
 }
 
 // MARK: - App Delegate & Entry Point
+#if !TALKTYPE_TESTING
 @main
+#endif
 class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem!
     var popover: NSPopover!
@@ -570,14 +608,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var dictationTargetApp: NSRunningApplication?
     private var lastExternalApp: NSRunningApplication?
 
+    private var hotKeyRef: EventHotKeyRef?
+    private var hotKeyHandler: EventHandlerRef?
+    private var hotKeyHeld = false
     private var pttMonitors: [Any] = []
     private var pttHeld = false
     private var pttPressTime: Date?
     private var isHandsFreeMode = false
-    private var lastFlagsEventTime: TimeInterval = 0
     private var pendingPaste = false
-    private var pasteWatchdogItem: DispatchWorkItem?
     private var deliverySessionId = UUID()
+    private var pasteEventID = UUID()
+    private var feedbackID = UUID()
     
     private var menubarBounceTimer: Timer?
     private var menubarActiveBlinkTimer: Timer?
@@ -593,6 +634,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ aNotification: Notification) {
+        if let hotKeyRef = hotKeyRef { UnregisterEventHotKey(hotKeyRef) }
+        if let hotKeyHandler = hotKeyHandler { RemoveEventHandler(hotKeyHandler) }
         for monitor in pttMonitors {
             NSEvent.removeMonitor(monitor)
         }
@@ -637,14 +680,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Live HUD controller
         liveHUDController = LiveHUDWindowController(speechEngine: engine)
 
+        engine.onFailure = { [weak self] message in self?.showFailure(message) }
+        KeychainHelper.onFailure = { [weak self] message in self?.showFailure(message) }
+
         // Setup paste & history hook
         engine.onFinal = { [weak self] rawText in
             guard let self = self else { return }
             let text = VocabularyManager.clean(rawText.trimmingCharacters(in: .whitespacesAndNewlines))
-            let engineName = TalkTypeConfig.isUsingDeepgram ? "Nova-3" : "Local"
-            
-            self.pasteWatchdogItem?.cancel()
-            self.pasteWatchdogItem = nil
+            let engineName = self.engine.activeEngineName
             self.stopMenubarBounce()
             self.isHandsFreeMode = false
             
@@ -676,22 +719,30 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         engine.onStateChange = { [weak self] isRecording in
             DispatchQueue.main.async {
+                guard let self = self, self.engine.isRecording == isRecording else { return }
                 if isRecording {
-                    self?.startMenubarBounce()
-                    self?.liveHUDController?.show()
+                    self.deliverySessionId = UUID()
+                    self.feedbackID = UUID()
+                    self.engine.failureMessage = nil
+                    self.startMenubarBounce()
+                    self.liveHUDController?.show()
                     NSSound(named: "Tink")?.play()
                 } else {
-                    self?.stopMenubarBounce()
+                    self.stopMenubarBounce()
                     NSSound(named: "Pop")?.play()
-                    if !(self?.pendingPaste ?? false), self?.engine.phase != .ready {
-                        self?.engine.phase = .idle
-                        self?.liveHUDController?.hide()
+                    if !self.pendingPaste, self.engine.phase != .ready,
+                       self.engine.phase != .processing,
+                       self.engine.failureMessage == nil {
+                        self.engine.phase = .idle
+                        self.liveHUDController?.hide()
                     }
                 }
             }
         }
 
-        #if !MAS_BUILD
+        #if MAS_BUILD
+        setupCarbonHotKey()
+        #else
         setupPushToTalk()
         #endif
     }
@@ -771,6 +822,52 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         resetMenuBarIcon()
     }
 
+    private func setupCarbonHotKey() {
+        var types = [
+            EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed)),
+            EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyReleased))
+        ]
+        let context = Unmanaged.passUnretained(self).toOpaque()
+        let handlerStatus = InstallEventHandler(GetApplicationEventTarget(), { _, event, context in
+            guard let event = event, let context = context else { return OSStatus(eventNotHandledErr) }
+            var identifier = EventHotKeyID()
+            let status = GetEventParameter(event, EventParamName(kEventParamDirectObject),
+                                           EventParamType(typeEventHotKeyID), nil,
+                                           MemoryLayout<EventHotKeyID>.size, nil, &identifier)
+            guard status == noErr, identifier.signature == 0x54544B59, identifier.id == 1 else {
+                return OSStatus(eventNotHandledErr)
+            }
+            let owner = Unmanaged<AppDelegate>.fromOpaque(context).takeUnretainedValue()
+            let down = GetEventKind(event) == UInt32(kEventHotKeyPressed)
+            owner.handleCarbonHotKey(down: down)
+            return noErr
+        }, types.count, &types, context, &hotKeyHandler)
+        guard handlerStatus == noErr else {
+            showFailure("Global shortcut unavailable (\(handlerStatus)). Use the menu bar.")
+            return
+        }
+        let status = RegisterEventHotKey(UInt32(kVK_Space), UInt32(controlKey | optionKey),
+                                        EventHotKeyID(signature: 0x54544B59, id: 1),
+                                        GetApplicationEventTarget(), 0, &hotKeyRef)
+        if status != noErr {
+            if let hotKeyHandler = hotKeyHandler { RemoveEventHandler(hotKeyHandler) }
+            hotKeyHandler = nil
+            showFailure("⌃⌥ Space is unavailable (\(status)). Use the menu bar.")
+        }
+    }
+
+    private func handleCarbonHotKey(down: Bool) {
+        if down {
+            guard !hotKeyHeld, !engine.isRecording, engine.phase != .processing else { return }
+            deliverySessionId = UUID()
+            engine.startRecording(resumeAfterPermission: false)
+            hotKeyHeld = engine.isRecording
+        } else if hotKeyHeld {
+            hotKeyHeld = false
+            requestPaste()
+        }
+    }
+
     #if !MAS_BUILD
     /// Hold designated shortcut anywhere to dictate; release to paste into whatever has focus.
     func setupPushToTalk() {
@@ -784,13 +881,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handleFlags(_ event: NSEvent) {
-        let now = ProcessInfo.processInfo.systemUptime
-        guard now - lastFlagsEventTime > 0.04 else { return } // Debounce 40ms contact chatter
-        lastFlagsEventTime = now
         let trigger = TalkTypeConfig.pttTrigger
         guard let down = trigger.matches(event: event) else { return }
+        // A down is already represented by pttHeld; every up must be consumed.
+        guard !down || !pttHeld else { return }
         
         if down {
+            guard engine.phase != .processing else { return }
             // If already recording in hands-free mode, or user taps shortcut while engine is running:
             // Stop recording and paste immediately!
             if isHandsFreeMode || (engine.isRecording && !pttHeld) {
@@ -808,8 +905,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 pendingPaste = true
                 dictationTargetApp = NSWorkspace.shared.frontmostApplication
                 lastExternalApp = dictationTargetApp
-                liveHUDController?.show()
                 engine.startRecording(resumeAfterPermission: false)
+                if !engine.isRecording {
+                    pttHeld = false
+                    pendingPaste = false
+                }
             }
         } else if pttHeld {
             pttHeld = false
@@ -823,26 +923,29 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 isHandsFreeMode = false
                 pendingPaste = true
                 engine.stopRecording()
-                
-                pasteWatchdogItem?.cancel()
-                let watchdog = DispatchWorkItem { [weak self] in
-                    guard let self = self else { return }
-                    self.stopMenubarBounce()
-                    let fallbackText = VocabularyManager.clean(self.engine.transcript.trimmingCharacters(in: .whitespacesAndNewlines))
-                    if !fallbackText.isEmpty {
-                        self.history.add(text: fallbackText, engine: TalkTypeConfig.isUsingDeepgram ? "Nova-3" : "Local")
-                        self.deliver(text: fallbackText)
-                    } else {
-                        self.engine.phase = .idle
-                        self.liveHUDController?.hide()
-                    }
-                }
-                self.pasteWatchdogItem = watchdog
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: watchdog)
             }
         }
     }
     #endif
+
+    private func showFailure(_ message: String) {
+        let feedback = UUID()
+        feedbackID = feedback
+        engine.failureMessage = message
+        if !engine.isRecording && engine.phase != .processing {
+            pttHeld = false
+            pendingPaste = false
+            isHandsFreeMode = false
+        }
+        liveHUDController?.show()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
+            guard let self = self, self.feedbackID == feedback else { return }
+            self.engine.failureMessage = nil
+            if !self.engine.isRecording && self.engine.phase != .processing {
+                self.liveHUDController?.hide()
+            }
+        }
+    }
 
     private func deliver(text: String) {
         guard Thread.isMainThread else {
@@ -857,7 +960,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         engine.phase = .ready
 
 #if MAS_BUILD
-        // The sandboxed App Store build stays click-to-dictate and clipboard-only.
+        // MAS uses Carbon or the menu bar to dictate; delivery is clipboard-only.
+        self.pendingPaste = false
         engine.transcript = L10n.t("copiedToClipboard")
         self.liveHUDController?.hide(after: 1.5)
 #else
@@ -876,33 +980,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 #endif
 
+        let delivery = deliverySessionId
         let resetReadyState = DispatchWorkItem { [weak self] in
-            guard let self = self, self.engine.phase == .ready else { return }
+            guard let self = self, self.deliverySessionId == delivery,
+                  self.engine.phase == .ready else { return }
             self.engine.phase = .idle
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.6, execute: resetReadyState)
     }
 
     func requestPaste() {
+        guard engine.isRecording, engine.phase == .listening else { return }
         pendingPaste = true
         isHandsFreeMode = false
         engine.stopRecording()
-        
-        pasteWatchdogItem?.cancel()
-        let watchdog = DispatchWorkItem { [weak self] in
-            guard let self = self else { return }
-            self.stopMenubarBounce()
-            let fallbackText = VocabularyManager.clean(self.engine.transcript.trimmingCharacters(in: .whitespacesAndNewlines))
-            if !fallbackText.isEmpty {
-                self.history.add(text: fallbackText, engine: TalkTypeConfig.isUsingDeepgram ? "Nova-3" : "Local")
-                self.deliver(text: fallbackText)
-            } else {
-                self.engine.phase = .idle
-                self.liveHUDController?.hide()
-            }
-        }
-        self.pasteWatchdogItem = watchdog
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: watchdog)
     }
 
     @objc func statusItemClicked(_ sender: NSStatusBarButton) {
@@ -1310,7 +1401,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         alert.addButton(withTitle: L10n.t("getKey"))
         alert.addButton(withTitle: L10n.t("cancel"))
 
-        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
+        let input = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
         input.stringValue = TalkTypeConfig.deepgramApiKey
         input.placeholderString = hasKey ? L10n.t("pasteKeyOrClear") : L10n.t("pasteKey")
         alert.accessoryView = input
@@ -1319,12 +1410,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         switch response {
         case .alertFirstButtonReturn:
             let key = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard key.rangeOfCharacter(from: .whitespacesAndNewlines.union(.controlCharacters)) == nil else {
+                showFailure("The API key contains spaces or control characters.")
+                return
+            }
             if key.isEmpty {
-                KeychainHelper.delete(service: TalkTypeConfig.keychainService, account: TalkTypeConfig.keychainAccount)
+                guard KeychainHelper.delete(service: TalkTypeConfig.keychainService, account: TalkTypeConfig.keychainAccount) else { return }
                 UserDefaults.standard.removeObject(forKey: TalkTypeConfig.deepgramKeyStorageKey)
                 UserDefaults.standard.set("apple", forKey: TalkTypeConfig.engineStorageKey)
             } else {
-                KeychainHelper.save(key, service: TalkTypeConfig.keychainService, account: TalkTypeConfig.keychainAccount)
+                guard KeychainHelper.save(key, service: TalkTypeConfig.keychainService, account: TalkTypeConfig.keychainAccount) else { return }
                 UserDefaults.standard.removeObject(forKey: TalkTypeConfig.deepgramKeyStorageKey)
                 UserDefaults.standard.set("deepgram", forKey: TalkTypeConfig.engineStorageKey)
             }
@@ -1368,7 +1463,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         alert.addButton(withTitle: L10n.t("getKey"))
         alert.addButton(withTitle: L10n.t("cancel"))
 
-        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
+        let input = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
         input.stringValue = TalkTypeConfig.geminiApiKey
         input.placeholderString = hasKey ? L10n.t("pasteKeyOrClear") : L10n.t("pasteGeminiKey")
         alert.accessoryView = input
@@ -1377,11 +1472,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         switch response {
         case .alertFirstButtonReturn:
             let key = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard key.rangeOfCharacter(from: .whitespacesAndNewlines.union(.controlCharacters)) == nil else {
+                showFailure("The API key contains spaces or control characters.")
+                return
+            }
             if key.isEmpty {
-                KeychainHelper.delete(service: TalkTypeConfig.keychainService, account: TalkTypeConfig.keychainAccountGemini)
+                guard KeychainHelper.delete(service: TalkTypeConfig.keychainService, account: TalkTypeConfig.keychainAccountGemini) else { return }
                 TalkTypeConfig.isPolishing = false
             } else {
-                KeychainHelper.save(key, service: TalkTypeConfig.keychainService, account: TalkTypeConfig.keychainAccountGemini)
+                guard KeychainHelper.save(key, service: TalkTypeConfig.keychainService, account: TalkTypeConfig.keychainAccountGemini) else { return }
                 TalkTypeConfig.isPolishing = true
             }
         case .alertSecondButtonReturn:
@@ -1462,6 +1561,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // Simulates Cmd+V to paste into the active app
     func pasteToActiveApp(text: String) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        guard pasteboard.setString(text, forType: .string) else { return }
+        let changeCount = pasteboard.changeCount
+        let eventID = UUID()
+        pasteEventID = eventID
+        let deliveryID = deliverySessionId
         let targetApp = self.dictationTargetApp ?? self.lastExternalApp
         self.dictationTargetApp = nil
         
@@ -1479,7 +1585,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Allow time for target app to gain focus and pasteboard propagation
         let delay: TimeInterval = (wasPopoverShown || targetApp != nil) ? 0.18 : 0.08
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-            guard let self = self else { return }
+            guard let self = self, self.pasteEventID == eventID,
+                  self.deliverySessionId == deliveryID,
+                  AXIsProcessTrusted(), pasteboard.changeCount == changeCount else { return }
+            if let target = targetApp,
+               NSWorkspace.shared.frontmostApplication?.processIdentifier != target.processIdentifier {
+                self.showFailure("Text copied. Focus the destination and press ⌘V.")
+                return
+            }
             let src = CGEventSource(stateID: .combinedSessionState)
             let vKeyCode: CGKeyCode = self.resolvePasteKeyCode()
             
@@ -1641,6 +1754,7 @@ struct LiveTranscriptHUDView: View {
     @State private var ghostBounce: CGFloat = 1.0
     
     private var displayedText: String {
+        if let failure = speechEngine.failureMessage { return failure }
         if !speechEngine.transcript.isEmpty { return speechEngine.transcript }
         switch speechEngine.phase {
         case .idle: return L10n.t("holdGhost")
@@ -1890,6 +2004,8 @@ class SpeechEngine: NSObject, ObservableObject {
     }
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
+    private var appleTaskID = UUID()
+    private var appleSegmentText = ""
     private let audioEngine = AVAudioEngine()
     private var hasInstalledAudioTap = false
     private var lastMeterPublishTime: TimeInterval = 0
@@ -1900,8 +2016,58 @@ class SpeechEngine: NSObject, ObservableObject {
     // CoreAudio real-time processing queue & Session tracking
     private let audioProcessingQueue = DispatchQueue(label: "com.talktype.audioProcessing", qos: .userInteractive)
     private var currentSessionId = UUID()
-    private var audioConverter: AVAudioConverter?
-    private var targetAudioFormat: AVAudioFormat?
+    private final class DeepgramCapture {
+        var converter: AVAudioConverter
+        let format: AVAudioFormat
+        var closed = false // Owned by audioProcessingQueue, including the close marker.
+        init(converter: AVAudioConverter, format: AVAudioFormat) {
+            self.converter = converter
+            self.format = format
+        }
+    }
+    private final class AppleCapture {
+        // Read/written only on audioProcessingQueue.
+        var request: SFSpeechAudioBufferRecognitionRequest?
+        var closed = false
+    }
+    private var deepgramCapture: DeepgramCapture?
+    private var appleCapture: AppleCapture?
+
+    private static func copyAudio(_ buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
+        guard buffer.frameLength > 0,
+              let copy = AVAudioPCMBuffer(pcmFormat: buffer.format,
+                                         frameCapacity: buffer.frameLength) else { return nil }
+        copy.frameLength = buffer.frameLength
+        let source = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: buffer.audioBufferList))
+        let destination = UnsafeMutableAudioBufferListPointer(copy.mutableAudioBufferList)
+        guard source.count == destination.count else { return nil }
+        let byteCount = Int(buffer.frameLength) * Int(buffer.format.streamDescription.pointee.mBytesPerFrame)
+        for index in source.indices {
+            guard let src = source[index].mData, let dst = destination[index].mData,
+                  Int(source[index].mDataByteSize) >= byteCount,
+                  Int(destination[index].mDataByteSize) >= byteCount else { return nil }
+            memcpy(dst, src, byteCount)
+        }
+        return copy
+    }
+
+    private func reportBuffer(_ buffer: AVAudioPCMBuffer, arrival: TimeInterval, sessionID: UUID) {
+        publishInputLevel(from: buffer, sessionID: sessionID)
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self, self.currentSessionId == sessionID, self.isRecording else { return }
+            self.lastBufferArrivalTime = arrival
+        }
+    }
+
+    private func closeAppleCapture() {
+        let capture = appleCapture
+        appleCapture = nil
+        audioProcessingQueue.async {
+            capture?.closed = true
+            capture?.request?.endAudio()
+            capture?.request = nil
+        }
+    }
 
     // Deepgram WebSocket
     private var webSocketTask: URLSessionWebSocketTask?
@@ -1909,9 +2075,14 @@ class SpeechEngine: NSObject, ObservableObject {
     private var deepgramKeepAliveTimer: Timer?
     private var confirmedTranscript = ""
     private var interimTranscript = ""
-    private var lastSegmentStart: Double = -1
     private var isStopping = false
+    private var deepgramStopDeadline: DispatchWorkItem?
+    private var deepgramFinalRanges = Set<String>()
     private var permissionRequestInProgress = false
+    private enum CaptureBackend { case apple, deepgram }
+    private var activeBackend: CaptureBackend = .apple
+
+    var activeEngineName: String { activeBackend == .deepgram ? "Nova-3" : "Local" }
     
     private func armStreamWatchdog() {
         disarmStreamWatchdog()
@@ -1925,6 +2096,7 @@ class SpeechEngine: NSObject, ObservableObject {
                 self.stopRecording()
             }
         }
+        if let timer = streamStallWatchdogTimer { RunLoop.main.add(timer, forMode: .common) }
     }
 
     private func disarmStreamWatchdog() {
@@ -1943,6 +2115,7 @@ class SpeechEngine: NSObject, ObservableObject {
         transcript = confirmedTranscript
     }
     
+    @Published var failureMessage: String?
     @Published var transcript = ""
     @Published var isRecording = false
     @Published var phase: SpeechPhase = .idle
@@ -1953,6 +2126,47 @@ class SpeechEngine: NSObject, ObservableObject {
 
     var onFinal: ((String) -> Void)?
     var onStateChange: ((Bool) -> Void)?
+    var onFailure: ((String) -> Void)?
+
+    private func failRecognition(_ message: String) {
+        let saved = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        currentSessionId = UUID()
+        appleTaskID = UUID()
+        deepgramStopDeadline?.cancel()
+        deepgramStopDeadline = nil
+        deepgramCapture = nil
+        disarmStreamWatchdog()
+        deepgramKeepAliveTimer?.invalidate()
+        deepgramKeepAliveTimer = nil
+        webSocketTask?.cancel(with: .goingAway, reason: nil)
+        webSocketTask = nil
+        safeRemoveTap()
+        audioEngine.stop()
+        closeAppleCapture()
+        recognitionTask?.cancel()
+        recognitionTask = nil
+        recognitionRequest = nil
+        isRecording = false
+        isStopping = false
+        audioMeter.level = 0
+        phase = saved.isEmpty ? .idle : .processing
+        onStateChange?(false)
+        if !saved.isEmpty { onFinal?(saved) }
+        onFailure?(message)
+    }
+
+    private func localRecognizer() -> SFSpeechRecognizer? {
+        guard SFSpeechRecognizer.authorizationStatus() == .authorized else {
+            failRecognition(L10n.t("permissionSpeechTitle"))
+            return nil
+        }
+        guard let recognizer = speechRecognizer,
+              recognizer.isAvailable, recognizer.supportsOnDeviceRecognition else {
+            failRecognition("On-device speech is unavailable for this language. No audio was sent to Apple.")
+            return nil
+        }
+        return recognizer
+    }
     
     override init() {
         super.init()
@@ -1987,6 +2201,10 @@ class SpeechEngine: NSObject, ObservableObject {
         NSWorkspace.shared.notificationCenter.removeObserver(self)
         urlSession?.invalidateAndCancel()
         safeRemoveTap()
+        audioEngine.stop()
+        recognitionTask?.cancel()
+        closeAppleCapture()
+        deepgramStopDeadline?.cancel()
     }
     
     @objc private func handleAudioEngineConfigChange(_ notification: Notification) {
@@ -1994,13 +2212,12 @@ class SpeechEngine: NSObject, ObservableObject {
             guard let self = self else { return }
             NSLog("🔄 TalkType: Audio engine route changed (e.g. AirPods connected/disconnected)")
             self.disarmStreamWatchdog()
-            self.hasInstalledAudioTap = false // Route change destroys taps internally
+            self.safeRemoveTap()
             if self.isRecording {
                 self.stopRecording()
             }
             self.audioEngine.stop()
             self.audioEngine.reset()
-            self.phase = .idle
         }
     }
 
@@ -2015,7 +2232,6 @@ class SpeechEngine: NSObject, ObservableObject {
             self.safeRemoveTap()
             self.audioEngine.stop()
             self.audioEngine.reset()
-            self.phase = .idle
         }
     }
 
@@ -2023,8 +2239,9 @@ class SpeechEngine: NSObject, ObservableObject {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             NSLog("☀️ TalkType: System woke up, resetting engine state to idle")
+            guard !self.isRecording, !self.isStopping else { return }
+            self.safeRemoveTap()
             self.audioEngine.reset()
-            self.phase = .idle
         }
     }
     
@@ -2042,8 +2259,8 @@ class SpeechEngine: NSObject, ObservableObject {
         let inputNode = audioEngine.inputNode
         var format = inputNode.outputFormat(forBus: 0)
         if format.sampleRate <= 0 || format.channelCount == 0 {
+            safeRemoveTap()
             audioEngine.reset()
-            hasInstalledAudioTap = false
             format = inputNode.outputFormat(forBus: 0)
         }
         guard format.sampleRate > 0, format.channelCount > 0 else {
@@ -2053,7 +2270,7 @@ class SpeechEngine: NSObject, ObservableObject {
         return format
     }
 
-    private func publishInputLevel(from buffer: AVAudioPCMBuffer) {
+    private func publishInputLevel(from buffer: AVAudioPCMBuffer, sessionID: UUID) {
         let frameCount = Int(buffer.frameLength)
         let channelCount = Int(buffer.format.channelCount)
         guard frameCount > 0, channelCount > 0 else { return }
@@ -2065,12 +2282,15 @@ class SpeechEngine: NSObject, ObservableObject {
         var sumOfSquares = 0.0
         var totalSamples = 0
         let step = max(1, frameCount / 64)
+        let interleaved = buffer.format.isInterleaved
+        let stride = interleaved ? channelCount : 1
         if let channels = buffer.floatChannelData {
             for channel in 0..<channelCount {
-                let samples = channels[channel]
+                let samples = channels[interleaved ? 0 : channel]
+                let offset = interleaved ? channel : 0
                 var frame = 0
                 while frame < frameCount {
-                    let sample = Double(samples[frame])
+                    let sample = Double(samples[frame * stride + offset])
                     sumOfSquares += sample * sample
                     totalSamples += 1
                     frame += step
@@ -2078,10 +2298,11 @@ class SpeechEngine: NSObject, ObservableObject {
             }
         } else if let channels = buffer.int16ChannelData {
             for channel in 0..<channelCount {
-                let samples = channels[channel]
+                let samples = channels[interleaved ? 0 : channel]
+                let offset = interleaved ? channel : 0
                 var frame = 0
                 while frame < frameCount {
-                    let sample = Double(samples[frame]) / 32768.0
+                    let sample = Double(samples[frame * stride + offset]) / 32768.0
                     sumOfSquares += sample * sample
                     totalSamples += 1
                     frame += step
@@ -2095,29 +2316,20 @@ class SpeechEngine: NSObject, ObservableObject {
         let level = min(1.0, max(0.0, sqrt(sumOfSquares / Double(totalSamples)) * 5.0))
 
         DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
+            guard let self = self, self.currentSessionId == sessionID else { return }
             self.audioMeter.level = self.isRecording ? level : 0
         }
     }
     
     func startRecording(resumeAfterPermission: Bool = true) {
-        if phase == .processing || isStopping {
-            // User re-triggered dictation while flushing prior take: force-finalize immediately
-            webSocketTask?.cancel(with: .normalClosure, reason: nil)
-            webSocketTask = nil
-            recognitionTask?.cancel()
-            recognitionTask = nil
-            isStopping = false
-        }
+        guard !isRecording, !isStopping, phase != .processing,
+              !permissionRequestInProgress else { return }
 
-        isStopping = false
         if audioEngine.isRunning {
             safeRemoveTap()
             audioEngine.stop()
             audioEngine.reset()
         }
-        guard !permissionRequestInProgress else { return }
-
         phase = .idle
 
         switch AVCaptureDevice.authorizationStatus(for: .audio) {
@@ -2178,7 +2390,8 @@ class SpeechEngine: NSObject, ObservableObject {
         transcript = ""
         confirmedTranscript = ""
         interimTranscript = ""
-        lastSegmentStart = -1
+        deepgramFinalRanges.removeAll()
+        failureMessage = nil
         armStreamWatchdog()
         
         if TalkTypeConfig.isUsingDeepgram {
@@ -2189,10 +2402,11 @@ class SpeechEngine: NSObject, ObservableObject {
     }
     
     func stopRecording() {
+        guard !isStopping else { return }
         disarmStreamWatchdog()
         guard isRecording || audioEngine.isRunning || webSocketTask != nil else { return }
 
-        if TalkTypeConfig.isUsingDeepgram {
+        if activeBackend == .deepgram {
             stopDeepgramStreaming()
         } else {
             stopAppleSpeechRecognition()
@@ -2201,6 +2415,7 @@ class SpeechEngine: NSObject, ObservableObject {
     
     // MARK: - Deepgram WebSocket Streaming
     private func startDeepgramStreaming() {
+        activeBackend = .deepgram
         isStopping = false
         let apiKey = TalkTypeConfig.deepgramApiKey
         let keywordsParam = VocabularyManager.deepgramKeywordsParam
@@ -2215,9 +2430,14 @@ class SpeechEngine: NSObject, ObservableObject {
         authHeader.append(apiKey)
         request.setValue(authHeader, forHTTPHeaderField: "Authorization")
         
-        webSocketTask = urlSession?.webSocketTask(with: request)
-        webSocketTask?.resume()
-        listenWebSocket()
+        guard let socket = urlSession?.webSocketTask(with: request) else {
+            failRecognition("Could not open the transcription connection.")
+            return
+        }
+        let sessionID = currentSessionId
+        webSocketTask = socket
+        socket.resume()
+        listenWebSocket(socket, sessionID: sessionID)
         
         deepgramKeepAliveTimer?.invalidate()
         deepgramKeepAliveTimer = Timer.scheduledTimer(withTimeInterval: 8.0, repeats: true) { [weak self] _ in
@@ -2225,6 +2445,7 @@ class SpeechEngine: NSObject, ObservableObject {
             ws.send(.string("{\"type\":\"KeepAlive\"}")) { _ in }
             ws.sendPing { _ in }
         }
+        if let timer = deepgramKeepAliveTimer { RunLoop.main.add(timer, forMode: .common) }
         
         guard let nativeFormat = resolveInputFormat() else {
             startAppleSpeechRecognition()
@@ -2241,35 +2462,19 @@ class SpeechEngine: NSObject, ObservableObject {
             return
         }
         
-        self.audioConverter = converter
-        self.targetAudioFormat = targetFormat
+        let capture = DeepgramCapture(converter: converter, format: targetFormat)
+        deepgramCapture = capture
         
         safeRemoveTap()
         let sampleRate = nativeFormat.sampleRate
         let inputNode = audioEngine.inputNode
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: nativeFormat) { [weak self] buffer, _ in
-            guard let self = self, self.isRecording else { return }
-            self.lastBufferArrivalTime = ProcessInfo.processInfo.systemUptime
-            self.publishInputLevel(from: buffer)
-            
-            // Deep-copy audio frame data before CoreAudio driver recycles the underlying buffer
-            guard let bufferCopy = AVAudioPCMBuffer(pcmFormat: buffer.format, frameCapacity: buffer.frameCapacity) else { return }
-            bufferCopy.frameLength = buffer.frameLength
-            let channelCount = Int(buffer.format.channelCount)
-            if let srcChannels = buffer.floatChannelData, let dstChannels = bufferCopy.floatChannelData {
-                for channel in 0..<channelCount {
-                    dstChannels[channel].update(from: srcChannels[channel], count: Int(buffer.frameLength))
-                }
-            } else if let srcChannels = buffer.int16ChannelData, let dstChannels = bufferCopy.int16ChannelData {
-                for channel in 0..<channelCount {
-                    dstChannels[channel].update(from: srcChannels[channel], count: Int(buffer.frameLength))
-                }
-            }
-            
-            // Offload buffer allocation, conversion, and websocket send from real-time CoreAudio thread
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: nil) { [weak self] buffer, _ in
+            guard let self = self, let bufferCopy = Self.copyAudio(buffer) else { return }
+            let arrival = ProcessInfo.processInfo.systemUptime
             self.audioProcessingQueue.async { [weak self, bufferCopy] in
-                guard let self = self, self.isRecording else { return }
-                
+                guard let self = self, !capture.closed else { return }
+                self.reportBuffer(bufferCopy, arrival: arrival, sessionID: sessionID)
+
                 // Dynamically adapt to input sample rate shifts (e.g. DAC switching 48k -> 96k/192k)
                 let inputRate = bufferCopy.format.sampleRate > 0 ? bufferCopy.format.sampleRate : sampleRate
                 let frameCount = AVAudioFrameCount(ceil(Double(bufferCopy.frameLength) * 16000.0 / inputRate) + 32)
@@ -2277,13 +2482,13 @@ class SpeechEngine: NSObject, ObservableObject {
                 
                 // Reconstruct converter if hardware dynamically mutated input format mid-stream
                 let activeConverter: AVAudioConverter
-                if let existing = self.audioConverter, existing.inputFormat == bufferCopy.format {
-                    activeConverter = existing
+                if capture.converter.inputFormat == bufferCopy.format {
+                    activeConverter = capture.converter
                 } else if let dynamicConverter = AVAudioConverter(from: bufferCopy.format, to: targetFormat) {
-                    self.audioConverter = dynamicConverter
+                    capture.converter = dynamicConverter
                     activeConverter = dynamicConverter
                 } else {
-                    activeConverter = converter
+                    return // Never feed a mismatched PCM format to the old converter.
                 }
                 
                 var error: NSError?
@@ -2300,7 +2505,7 @@ class SpeechEngine: NSObject, ObservableObject {
                 
                 if error == nil, convertedBuffer.frameLength > 0, let channelData = convertedBuffer.int16ChannelData {
                     let data = Data(bytes: channelData.pointee, count: Int(convertedBuffer.frameLength) * 2)
-                    self.webSocketTask?.send(.data(data)) { _ in }
+                    socket.send(.data(data)) { _ in }
                 }
             }
         }
@@ -2314,312 +2519,290 @@ class SpeechEngine: NSObject, ObservableObject {
             self.onStateChange?(true)
         } catch {
             NSLog("⚠️ TalkType: Failed to start audioEngine: %@", error.localizedDescription)
-            safeRemoveTap()
+            failRecognition("The microphone could not start: " + error.localizedDescription)
             audioEngine.reset()
-            self.isRecording = false
-            self.phase = .idle
-            self.onStateChange?(false)
         }
     }
     
-    private func listenWebSocket() {
-        webSocketTask?.receive { [weak self] result in
-            guard let self = self, self.isRecording || self.webSocketTask != nil else { return }
-            
-            switch result {
-            case .success(let message):
-                switch message {
-                case .string(let text):
-                    self.parseDeepgramJSON(text)
-                case .data(let data):
-                    if let text = String(data: data, encoding: .utf8) {
-                        self.parseDeepgramJSON(text)
+    private func listenWebSocket(_ socket: URLSessionWebSocketTask, sessionID: UUID) {
+        socket.receive { [weak self, weak socket] result in
+            DispatchQueue.main.async {
+                guard let self = self, let socket = socket,
+                      self.currentSessionId == sessionID,
+                      self.webSocketTask === socket else { return }
+                switch result {
+                case .success(let message):
+                    let text: String?
+                    switch message {
+                    case .string(let value): text = value
+                    case .data(let data): text = String(data: data, encoding: .utf8)
+                    @unknown default: text = nil
                     }
-                @unknown default:
-                    break
-                }
-                self.listenWebSocket()
-                
-            case .failure(let error):
-                // If stream was intentionally stopped, this closure error is expected
-                if self.isStopping {
-                    return
-                }
-                guard self.isRecording else { return }
-                
-                NSLog("⚠️ TalkType Deepgram WebSocket error during recording: %@", error.localizedDescription)
-                // If Deepgram WebSocket fails mid-recording, seamlessly fallback without losing prior words
-                DispatchQueue.main.async { [weak self] in
-                    guard let self = self, self.isRecording, !self.isStopping else { return }
-                    self.deepgramKeepAliveTimer?.invalidate()
-                    self.deepgramKeepAliveTimer = nil
-                    self.commitInterim()
-                    self.safeRemoveTap()
-                    self.audioEngine.stop()
-                    self.startAppleSpeechRecognition(appendingToExisting: true)
+                    if let text = text { self.parseDeepgramJSON(text) }
+                    guard self.webSocketTask === socket else { return }
+                    self.listenWebSocket(socket, sessionID: sessionID)
+                case .failure:
+                    if self.isStopping {
+                        self.finishDeepgram(sessionID: sessionID, socket: socket)
+                    } else {
+                        self.fallbackToApple()
+                    }
                 }
             }
         }
     }
-    
+
+    private func fallbackToApple() {
+        guard isRecording, !isStopping else { return }
+        commitInterim()
+        safeRemoveTap()
+        audioEngine.stop()
+        startAppleSpeechRecognition(appendingToExisting: true)
+    }
+
     private func parseDeepgramJSON(_ jsonString: String) {
-        guard let data = jsonString.data(using: .utf8) else { return }
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
-        
-        // Trap Deepgram API errors (e.g. invalid key, quota exhausted, rate limit)
-        if let errCode = (json["err_code"] as? String) ?? (json["error"] as? String) {
-            let errMsg = (json["err_msg"] as? String) ?? (json["message"] as? String) ?? "Unknown Deepgram error"
-            NSLog("⚠️ TalkType: Deepgram API error [%@]: %@", errCode, errMsg)
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self, self.isRecording else { return }
-                self.commitInterim()
-                self.safeRemoveTap()
-                self.audioEngine.stop()
-                self.startAppleSpeechRecognition(appendingToExisting: true)
+        guard isRecording || isStopping,
+              let data = jsonString.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+
+        if json["type"] as? String == "Metadata", isStopping, let socket = webSocketTask {
+            finishDeepgram(sessionID: currentSessionId, socket: socket)
+            return
+        }
+
+        if json["err_code"] != nil || json["error"] != nil {
+            if isStopping, let socket = webSocketTask {
+                finishDeepgram(sessionID: currentSessionId, socket: socket)
+            } else {
+                fallbackToApple()
             }
             return
         }
 
         guard let channel = json["channel"] as? [String: Any],
               let alternatives = channel["alternatives"] as? [[String: Any]],
-              let firstAlt = alternatives.first,
-              let chunk = firstAlt["transcript"] as? String else { return }
-        
+              let chunk = alternatives.first?["transcript"] as? String else { return }
+        let cleaned = VocabularyManager.clean(chunk.trimmingCharacters(in: .whitespacesAndNewlines))
         let isFinal = (json["is_final"] as? Bool) ?? false
-        let speechFinal = (json["speech_final"] as? Bool) ?? false
-        let start = (json["start"] as? Double) ?? 0.0
-        let trimmedChunk = VocabularyManager.clean(chunk.trimmingCharacters(in: .whitespacesAndNewlines))
-        
-        DispatchQueue.main.async {
-            guard self.isRecording || self.isStopping else { return }
-            
-            // If the segment timestamp shifted forward to a new utterance while interim text was pending,
-            // commit the interim text so it is never dropped, cut off, or overwritten!
-            if self.lastSegmentStart >= 0 && start > (self.lastSegmentStart + 0.05) && !self.interimTranscript.isEmpty {
-                self.commitInterim()
+
+        // speech_final marks an utterance boundary. Only is_final establishes
+        // immutable text; a moving start timestamp alone does not finalize it.
+        if isFinal {
+            if let start = json["start"] as? Double, let duration = json["duration"] as? Double {
+                let range = "\(start):\(duration)"
+                guard deepgramFinalRanges.insert(range).inserted else { return }
             }
-            self.lastSegmentStart = start
-            
-            if isFinal || speechFinal {
-                let toCommit = !trimmedChunk.isEmpty ? trimmedChunk : self.interimTranscript
-                if !toCommit.isEmpty {
-                    if self.confirmedTranscript.isEmpty {
-                        self.confirmedTranscript = toCommit
-                    } else {
-                        self.confirmedTranscript += " " + toCommit
-                    }
-                }
-                self.interimTranscript = ""
-                self.transcript = self.confirmedTranscript
-            } else if !trimmedChunk.isEmpty {
-                self.interimTranscript = trimmedChunk
-                self.transcript = self.confirmedTranscript.isEmpty ? self.interimTranscript : (self.confirmedTranscript + " " + self.interimTranscript)
-            }
+            if !cleaned.isEmpty { interimTranscript = cleaned }
+            commitInterim()
+        } else if !cleaned.isEmpty {
+            interimTranscript = cleaned
+            transcript = [confirmedTranscript, interimTranscript].filter { !$0.isEmpty }.joined(separator: " ")
         }
     }
-    
+
     private func stopDeepgramStreaming() {
+        guard let socket = webSocketTask else { return }
+        let sessionID = currentSessionId
         isStopping = true
+        isRecording = false
+        phase = .processing
         deepgramKeepAliveTimer?.invalidate()
         deepgramKeepAliveTimer = nil
         audioEngine.stop()
         safeRemoveTap()
-        DispatchQueue.main.async { [weak self] in
-            self?.audioMeter.level = 0
-            self?.phase = .processing
-            self?.commitInterim()
+        audioMeter.level = 0
+        onStateChange?(false)
+
+        let deadline = DispatchWorkItem { [weak self] in
+            self?.finishDeepgram(sessionID: sessionID, socket: socket, timedOut: true)
         }
-        
-        // Drain any unread tail frames in converter on the processing queue before sending close frame
-        audioProcessingQueue.async { [weak self] in
-            guard let self = self else { return }
-            if let converter = self.audioConverter, let targetFormat = self.targetAudioFormat {
-                if let flushBuffer = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: 1024) {
-                    var error: NSError?
-                    converter.convert(to: flushBuffer, error: &error) { _, outStatus in
-                        outStatus.pointee = .endOfStream
-                        return nil
-                    }
-                    if flushBuffer.frameLength > 0, let channelData = flushBuffer.int16ChannelData {
-                        let data = Data(bytes: channelData.pointee, count: Int(flushBuffer.frameLength) * 2)
-                        self.webSocketTask?.send(.data(data)) { _ in }
-                    }
+        deepgramStopDeadline = deadline
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: deadline)
+
+        let capture = deepgramCapture
+        deepgramCapture = nil
+        // The serial queue drains already-enqueued audio before CloseStream.
+        audioProcessingQueue.async {
+            capture?.closed = true
+            if let capture = capture,
+               let buffer = AVAudioPCMBuffer(pcmFormat: capture.format, frameCapacity: 1024) {
+                let converter = capture.converter
+                var error: NSError?
+                converter.convert(to: buffer, error: &error) { _, status in
+                    status.pointee = .endOfStream
+                    return nil
+                }
+                if error == nil, buffer.frameLength > 0, let channel = buffer.int16ChannelData {
+                    socket.send(.data(Data(bytes: channel.pointee,
+                                           count: Int(buffer.frameLength) * 2))) { _ in }
                 }
                 converter.reset()
             }
-            self.audioConverter = nil
-            self.targetAudioFormat = nil
-            
-            let closeData = Data()
-            self.webSocketTask?.send(.data(closeData)) { _ in }
-        }
-        
-        // Give Deepgram time to return final flushed transcription segment before disconnecting
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
-            guard let self = self else { return }
-            self.commitInterim()
-            self.webSocketTask?.cancel(with: .normalClosure, reason: nil)
-            self.webSocketTask = nil
-            self.isRecording = false
-            self.isStopping = false
-            self.audioMeter.level = 0
-            self.phase = .processing
-            self.onStateChange?(false)
-            
-            let finalOutput = self.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-            self.onFinal?(finalOutput)
+            socket.send(.string("{\"type\":\"CloseStream\"}")) { _ in }
         }
     }
-    
+
+    private func finishDeepgram(sessionID: UUID, socket: URLSessionWebSocketTask, timedOut: Bool = false) {
+        guard currentSessionId == sessionID, webSocketTask === socket, isStopping else { return }
+        deepgramStopDeadline?.cancel()
+        deepgramStopDeadline = nil
+        commitInterim() // Provisional words are used only if no final arrived.
+        currentSessionId = UUID()
+        webSocketTask = nil
+        socket.cancel(with: .normalClosure, reason: nil)
+        isRecording = false
+        isStopping = false
+        phase = .processing
+        onFinal?(transcript.trimmingCharacters(in: .whitespacesAndNewlines))
+        if timedOut { onFailure?("Transcription timed out. The latest available text was kept.") }
+    }
+
     // MARK: - Apple Speech Engine & Fallback
     private func startAppleSpeechRecognition(appendingToExisting: Bool = false) {
+        activeBackend = .apple
+        deepgramKeepAliveTimer?.invalidate()
+        deepgramKeepAliveTimer = nil
+        webSocketTask?.cancel(with: .goingAway, reason: nil)
+        webSocketTask = nil
+        deepgramCapture = nil
+        deepgramStopDeadline?.cancel()
+        deepgramStopDeadline = nil
+        guard localRecognizer() != nil else { return }
         isStopping = false
+        currentSessionId = UUID() // Also invalidates queued meter updates from the cloud capture.
         if !appendingToExisting {
-            currentSessionId = UUID()
             confirmedTranscript = ""
             interimTranscript = ""
             transcript = ""
         }
         let sessionId = self.currentSessionId
         
-        guard let recordingFormat = resolveInputFormat() else {
-            DispatchQueue.main.async { [weak self] in
-                self?.isRecording = false
-                self?.isStopping = false
-                self?.phase = .idle
-                self?.onStateChange?(false)
-            }
+        guard resolveInputFormat() != nil else {
+            failRecognition("No usable microphone input is available.")
             return
         }
         
         safeRemoveTap()
+        closeAppleCapture()
+        let capture = AppleCapture()
+        appleCapture = capture
         let inputNode = audioEngine.inputNode
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
-            guard let self = self, self.isRecording, self.currentSessionId == sessionId else { return }
-            self.lastBufferArrivalTime = ProcessInfo.processInfo.systemUptime
-            self.publishInputLevel(from: buffer)
-            self.recognitionRequest?.append(buffer)
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: nil) { [weak self] buffer, _ in
+            guard let self = self, let copy = Self.copyAudio(buffer) else { return }
+            let arrival = ProcessInfo.processInfo.systemUptime
+            self.audioProcessingQueue.async { [weak self, copy] in
+                guard let self = self, !capture.closed else { return }
+                self.reportBuffer(copy, arrival: arrival, sessionID: sessionId)
+                capture.request?.append(copy)
+            }
         }
         hasInstalledAudioTap = true
-        
+        setupAppleRecognitionTask(for: sessionId)
+        guard recognitionRequest != nil else { return }
         audioEngine.prepare()
         do {
             try audioEngine.start()
             self.isRecording = true
             self.phase = .listening
             self.onStateChange?(true)
-            
-            setupAppleRecognitionTask(for: sessionId)
         } catch {
             NSLog("⚠️ TalkType: Failed to start Apple Speech audio engine: %@", error.localizedDescription)
-            safeRemoveTap()
+            failRecognition("The microphone could not start: " + error.localizedDescription)
             audioEngine.reset()
-            self.isRecording = false
-            self.isStopping = false
-            self.phase = .idle
-            self.onStateChange?(false)
         }
     }
     
     private func setupAppleRecognitionTask(for sessionId: UUID) {
+        guard let recognizer = localRecognizer() else { return }
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
         request.contextualStrings = VocabularyManager.contextualHints
         if #available(macOS 13.0, *) {
             request.addsPunctuation = true
         }
-        if speechRecognizer?.supportsOnDeviceRecognition == true {
-            request.requiresOnDeviceRecognition = true
-        }
+        request.requiresOnDeviceRecognition = true
         self.recognitionRequest = request
-        
-        var segmentText = ""
-        self.recognitionTask = speechRecognizer?.recognitionTask(with: request) { [weak self] result, error in
-            guard let self = self, self.currentSessionId == sessionId else { return }
-            var isFinal = false
-            if let result = result {
-                let cleaned = VocabularyManager.clean(result.bestTranscription.formattedString)
-                segmentText = cleaned
-                DispatchQueue.main.async {
-                    guard self.currentSessionId == sessionId else { return }
-                    if self.confirmedTranscript.isEmpty {
-                        self.transcript = cleaned
-                    } else if cleaned.isEmpty {
-                        self.transcript = self.confirmedTranscript
-                    } else {
-                        self.transcript = self.confirmedTranscript + " " + cleaned
-                    }
-                }
-                isFinal = result.isFinal
-            }
-            
-            if error != nil || isFinal {
-                DispatchQueue.main.async {
-                    guard self.currentSessionId == sessionId else { return }
-                    
-                    // Commit any captured segment text to confirmed transcript
-                    if !segmentText.isEmpty {
-                        if self.confirmedTranscript.isEmpty {
-                            self.confirmedTranscript = segmentText
-                        } else {
-                            self.confirmedTranscript += " " + segmentText
-                        }
-                    }
-                    self.transcript = self.confirmedTranscript
-                    
-                    // If user is STILL recording (long take!) and we did not ask to stop:
-                    // Apple's ~60s task limit was reached! Seamlessly cycle to the next recognition task
-                    // on the existing running audio stream without dropping words or stopping dictation!
-                    if self.isRecording && !self.isStopping {
-                        NSLog("🔄 TalkType: Apple Speech task limit/segment ended during active take. Seamlessly cycling to next segment.")
-                        self.recognitionTask = nil
-                        self.setupAppleRecognitionTask(for: sessionId)
-                        return
-                    }
-                    
-                    // User has finished or stopping
-                    self.currentSessionId = UUID()
-                    self.audioEngine.stop()
-                    self.safeRemoveTap()
-                    self.recognitionRequest = nil
-                    self.recognitionTask = nil
-                    self.isRecording = false
-                    self.isStopping = false
-                    self.phase = .processing
-                    self.onStateChange?(false)
-                    self.onFinal?(self.transcript)
-                }
+        let capture = appleCapture
+        audioProcessingQueue.async {
+            guard let capture = capture, !capture.closed else { return }
+            capture.request = request
+        }
+
+        let taskID = UUID()
+        appleTaskID = taskID
+        appleSegmentText = ""
+        recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
+            DispatchQueue.main.async {
+                self?.receiveAppleResult(text: result?.bestTranscription.formattedString,
+                                         isFinal: result?.isFinal ?? false,
+                                         error: error, sessionID: sessionId, taskID: taskID)
             }
         }
     }
-    
+
+    private func receiveAppleResult(text: String?, isFinal: Bool, error: Error?, sessionID: UUID, taskID: UUID) {
+        guard currentSessionId == sessionID, appleTaskID == taskID else { return }
+        if let text = text {
+            let cleaned = VocabularyManager.clean(text.trimmingCharacters(in: .whitespacesAndNewlines))
+            if !cleaned.isEmpty { appleSegmentText = cleaned }
+            transcript = [confirmedTranscript, appleSegmentText].filter { !$0.isEmpty }.joined(separator: " ")
+        }
+        guard error != nil || isFinal else { return }
+        appleTaskID = UUID() // A finished task may still have queued callbacks.
+        confirmedTranscript = [confirmedTranscript, appleSegmentText].filter { !$0.isEmpty }.joined(separator: " ")
+        appleSegmentText = ""
+        transcript = confirmedTranscript
+
+        if let error = error, !isStopping {
+            failRecognition("Speech recognition stopped: " + error.localizedDescription)
+        } else if isRecording && !isStopping {
+            // Successful task completion can roll over within the same take.
+            // A service error must not start an unbounded retry loop.
+            recognitionTask = nil
+            setupAppleRecognitionTask(for: sessionID)
+        } else {
+            finishApple(sessionID: sessionID)
+        }
+    }
+
+    private func finishApple(sessionID: UUID) {
+        guard currentSessionId == sessionID else { return }
+        let wasRecording = isRecording
+        currentSessionId = UUID()
+        appleTaskID = UUID()
+        disarmStreamWatchdog()
+        audioEngine.stop()
+        safeRemoveTap()
+        closeAppleCapture()
+        recognitionTask?.cancel()
+        recognitionTask = nil
+        recognitionRequest = nil
+        isRecording = false
+        isStopping = false
+        audioMeter.level = 0
+        phase = .processing
+        if wasRecording { onStateChange?(false) }
+        onFinal?(transcript.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
     private func stopAppleSpeechRecognition() {
         isStopping = true
-        let sessionId = self.currentSessionId
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self, self.currentSessionId == sessionId else { return }
-            self.audioEngine.stop()
-            self.recognitionRequest?.endAudio()
-            self.safeRemoveTap()
-            self.isRecording = false
-            self.audioMeter.level = 0
-            self.phase = .processing
-            self.onStateChange?(false)
-            
-            // Safety timeout: if Apple Speech hangs on silence, finalize with current buffer
-            let current = self.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
-                guard let self = self, self.currentSessionId == sessionId, self.recognitionTask != nil else { return }
-                self.currentSessionId = UUID() // Invalidate session to drop subsequent cancel callbacks
-                self.recognitionTask?.cancel()
-                self.recognitionTask = nil
-                self.recognitionRequest = nil
-                self.isStopping = false
-                let finalOut = self.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-                self.onFinal?(finalOut.isEmpty ? current : finalOut)
-            }
+        let sessionID = currentSessionId
+        audioEngine.stop()
+        safeRemoveTap()
+        closeAppleCapture()
+        isRecording = false
+        audioMeter.level = 0
+        phase = .processing
+        onStateChange?(false)
+
+        // Bound completion even when the service or processing queue stalls.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+            guard let self = self, self.currentSessionId == sessionID, self.isStopping else { return }
+            self.finishApple(sessionID: sessionID)
         }
     }
+
 }
 
 // MARK: - TalkType Palette

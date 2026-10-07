@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+LOCAL_BUILD="${LOCAL_BUILD:-0}"
+
 # TalkType Mac Build Pipeline
 # Builds Direct Distribution (Unlocked DMG with Notarization readiness) or Mac App Store (Sandboxed PKG)
 
@@ -16,6 +18,11 @@ RES_DIR="${APP_DIR}/Contents/Resources"
 
 TARGET_MODE="${1:-direct}" # "direct" or "mas"
 UNIVERSAL="${UNIVERSAL:-0}"  # UNIVERSAL=1 builds a fat arm64 + x86_64 binary
+
+case "${TARGET_MODE}" in
+    direct|mas) ;;
+    *) echo "Usage: ./build.sh direct|mas" >&2; exit 1 ;;
+esac
 
 echo "🎨 Building ${APP_NAME} v${VERSION} (${BUILD_NUMBER}) (${TARGET_MODE} target)..."
 
@@ -40,6 +47,16 @@ if [ "${TARGET_MODE}" = "mas" ]; then
         echo "   Create them at developer.apple.com → Certificates, or Xcode → Settings → Accounts → Manage Certificates."
         echo "   ALLOW_ADHOC_MAS=1 ./build.sh mas  builds an ad-hoc sandboxed binary for local testing only."
         echo "   Nothing was touched: build/ and dist/ are as you left them."
+        exit 1
+    fi
+fi
+
+# Fail before removing a previous good build when release signing is unavailable.
+if [ "${TARGET_MODE}" = "direct" ]; then
+    IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null \
+               | grep "Developer ID Application" | head -1 | sed 's/.*"\(.*\)"/\1/' || true)
+    if [ -z "${IDENTITY}" ] && [ "${LOCAL_BUILD}" != "1" ]; then
+        echo "Missing Developer ID Application identity; refusing to make a release." >&2
         exit 1
     fi
 fi
@@ -149,13 +166,13 @@ fi
 
 chmod +x "${BIN_DIR}/${APP_NAME}"
 
-# App Store builds must carry a provisioning profile (App Store Connect → Profiles →
-# "Mac App Store Connect" type, bundle id com.pibulus.talktype). Drop it next to build.sh.
+# Embed a profile when supplied. Restricted entitlements and TestFlight require
+# one; this app's basic sandbox entitlements alone do not require a profile.
 if [ "${TARGET_MODE}" = "mas" ] && [ -f "TalkType.provisionprofile" ]; then
     cp "TalkType.provisionprofile" "${APP_DIR}/Contents/embedded.provisionprofile"
     echo "📎 Embedded provisioning profile"
 elif [ "${TARGET_MODE}" = "mas" ]; then
-    echo "⚠️  No TalkType.provisionprofile found — App Store upload will be rejected without one."
+    echo "ℹ️  No provisioning profile supplied; add one before TestFlight or restricted capabilities."
 fi
 
 # 4. Code Signing & Entitlements (Secure Timestamp enabled)
@@ -197,9 +214,6 @@ else
     ENTITLEMENTS="TalkType.entitlements"
     echo "⚡ Direct distribution mode enabled with Hardened Runtime & ${ENTITLEMENTS}"
     
-    IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null \
-               | grep "Developer ID Application" | head -1 | sed 's/.*"\(.*\)"/\1/' || true)
-    
     if [ -n "${IDENTITY}" ]; then
         codesign --force --sign "${IDENTITY}" \
                  --options runtime \
@@ -213,15 +227,27 @@ else
                  --identifier com.pibulus.talktype "${APP_DIR}"
         echo "🔏 Signed with Developer ID: ${IDENTITY}"
     else
+        if [ "${LOCAL_BUILD}" != "1" ]; then
+            echo "Missing Developer ID Application identity; refusing to make a release." >&2
+            exit 1
+        fi
         codesign --force --sign - \
                  --entitlements "${ENTITLEMENTS}" \
                  --identifier com.pibulus.talktype "${APP_DIR}"
-        echo "🔏 Ad-hoc signed"
+        echo "Ad-hoc local test build"
     fi
     
     # 5. Build Styled DMG for Direct Distribution
     DMG_PATH="${DIST_DIR}/${APP_NAME}-${VERSION}.dmg"
     rm -f "${DMG_PATH}"
+    # A failed release must never leave an apparently shippable image in dist/.
+    DIRECT_BUILD_COMPLETE=0
+    NOTARY_ERROR_FILE=""
+    trap '
+        if [ -n "${NOTARY_ERROR_FILE}" ]; then rm -f "${NOTARY_ERROR_FILE}"; fi
+        if [ "${DIRECT_BUILD_COMPLETE}" != "1" ]; then rm -f "${DMG_PATH}"; fi
+    ' EXIT
+    codesign --verify --strict "${APP_DIR}"
 
     if command -v create-dmg >/dev/null 2>&1; then
         echo "🎨 Building styled DMG with custom volume icon and background..."
@@ -248,7 +274,9 @@ else
             --overwrite
         )
 
-        create-dmg "${CREATE_DMG_ARGS[@]}" "${DMG_PATH}" "${DMG_STAGE}" || true
+        if ! create-dmg "${CREATE_DMG_ARGS[@]}" "${DMG_PATH}" "${DMG_STAGE}"; then
+            rm -f "${DMG_PATH}" # Never trust an image left by a failed producer.
+        fi
         rm -rf "${DMG_STAGE}"
     fi
 
@@ -279,8 +307,8 @@ else
         echo "🔏 Signed DMG container with Developer ID: ${IDENTITY}"
     fi
 
-    # 6. Notarize & staple (direct distribution). Gracefully skipped without a profile.
-    if [ -z "${NOTARY_PROFILE:-}" ]; then
+    # 6. Notarize & staple. Local test builds deliberately skip network submission.
+    if [ "${LOCAL_BUILD}" != "1" ] && [ -z "${NOTARY_PROFILE:-}" ]; then
         if xcrun notarytool history --keychain-profile "AC_PASSWORD" >/dev/null 2>&1; then
             NOTARY_PROFILE="AC_PASSWORD"
         elif xcrun notarytool history --keychain-profile "talktype-notary" >/dev/null 2>&1; then
@@ -290,32 +318,39 @@ else
         fi
     fi
     DMG_PATH="${DIST_DIR}/${APP_NAME}-${VERSION}.dmg"
-    if [ "${SKIP_NOTARIZE:-0}" = "1" ]; then
-        echo "⏭️  Skipping notarization (SKIP_NOTARIZE=1)."
-    elif xcrun notarytool history --keychain-profile "${NOTARY_PROFILE}" >/dev/null 2>&1; then
+    NOTARY_ERROR_FILE=$(mktemp "${TMPDIR:-/tmp}/talktype-notary-error.XXXXXX")
+    if [ "${LOCAL_BUILD}" = "1" ] || [ "${SKIP_NOTARIZE:-0}" = "1" ]; then
+        echo "⏭️  Skipping notarization for the requested local/test configuration."
+    elif xcrun notarytool history --keychain-profile "${NOTARY_PROFILE}" >/dev/null 2>"${NOTARY_ERROR_FILE}"; then
         echo "🔐 Submitting DMG for notarization (profile: ${NOTARY_PROFILE})…"
         # Stapling only succeeds if Apple issued a ticket, so it's the real pass/fail.
-        xcrun notarytool submit "${DMG_PATH}" --keychain-profile "${NOTARY_PROFILE}" --wait || true
+        xcrun notarytool submit "${DMG_PATH}" --keychain-profile "${NOTARY_PROFILE}" --wait
         if xcrun stapler staple "${DMG_PATH}"; then
+            xcrun stapler validate "${DMG_PATH}"
             echo "✅ Notarized & stapled: ${DMG_PATH}"
         else
             echo "❌ Notarization failed — see: xcrun notarytool log <submission-id> --keychain-profile ${NOTARY_PROFILE}"
             exit 1
         fi
     else
-        echo "⚠️  Notary profile '${NOTARY_PROFILE}' not found — skipping notarization."
-        echo "    Create it once with:"
-        echo "      xcrun notarytool store-credentials \"${NOTARY_PROFILE}\" \\"
-        echo "        --apple-id <apple-id-email> --team-id V433H655PN --password <app-specific-password>"
-        echo "    (or an App Store Connect API key via --key / --key-id / --issuer)"
+        echo "❌ Cannot access notarization with profile '${NOTARY_PROFILE}':" >&2
+        cat "${NOTARY_ERROR_FILE}" >&2
+        exit 1
     fi
 
     # Gatekeeper is the only judge that matters for a download.
-    if spctl -a -t open --context context:primary-signature "${DMG_PATH}" 2>/dev/null; then
+    if xcrun stapler validate "${DMG_PATH}" >/dev/null 2>&1 && spctl -a -t open --context context:primary-signature "${DMG_PATH}" 2>/dev/null; then
         echo "✨ Direct DMG ready to ship: ${DMG_PATH}"
     else
-        echo "🚧 ${DMG_PATH} is LOCAL-ONLY: Gatekeeper rejects it (not notarized). Do not upload it."
+        if [ "${LOCAL_BUILD}" != "1" ]; then
+            echo "Release image lacks a valid ticket or failed Gatekeeper; build failed." >&2
+            rm -f "${DMG_PATH}"
+            exit 1
+        fi
+        mv "${DMG_PATH}" "${DMG_PATH%.dmg}-LOCAL-ONLY.dmg"
+        echo "Local test artifact only."
     fi
+    DIRECT_BUILD_COMPLETE=1
 fi
 
 echo "✨ Built successfully at ${APP_DIR}"
