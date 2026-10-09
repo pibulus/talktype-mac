@@ -1588,11 +1588,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self = self, self.pasteEventID == eventID,
                   self.deliverySessionId == deliveryID,
                   AXIsProcessTrusted(), pasteboard.changeCount == changeCount else { return }
-            if let target = targetApp,
-               NSWorkspace.shared.frontmostApplication?.processIdentifier != target.processIdentifier {
-                self.showFailure("Text copied. Focus the destination and press ⌘V.")
-                return
-            }
             let src = CGEventSource(stateID: .combinedSessionState)
             let vKeyCode: CGKeyCode = self.resolvePasteKeyCode()
             
@@ -2087,11 +2082,11 @@ class SpeechEngine: NSObject, ObservableObject {
     private func armStreamWatchdog() {
         disarmStreamWatchdog()
         lastBufferArrivalTime = ProcessInfo.processInfo.systemUptime
-        streamStallWatchdogTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
+        streamStallWatchdogTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
             guard let self = self, self.isRecording else { return }
             let now = ProcessInfo.processInfo.systemUptime
-            if now - self.lastBufferArrivalTime > 4.0 {
-                NSLog("⚠️ TalkType: Audio stream stalled for >4s (hardware preemption by FaceTime/Siri). Stopping recording.")
+            if now - self.lastBufferArrivalTime > 12.0 {
+                NSLog("⚠️ TalkType: Audio stream stalled for >12s (hardware preemption). Stopping recording.")
                 self.disarmStreamWatchdog()
                 self.stopRecording()
             }
@@ -2584,10 +2579,9 @@ class SpeechEngine: NSObject, ObservableObject {
               let chunk = alternatives.first?["transcript"] as? String else { return }
         let cleaned = VocabularyManager.clean(chunk.trimmingCharacters(in: .whitespacesAndNewlines))
         let isFinal = (json["is_final"] as? Bool) ?? false
+        let speechFinal = (json["speech_final"] as? Bool) ?? false
 
-        // speech_final marks an utterance boundary. Only is_final establishes
-        // immutable text; a moving start timestamp alone does not finalize it.
-        if isFinal {
+        if isFinal || speechFinal {
             if let start = json["start"] as? Double, let duration = json["duration"] as? Double {
                 let range = "\(start):\(duration)"
                 guard deepgramFinalRanges.insert(range).inserted else { return }
