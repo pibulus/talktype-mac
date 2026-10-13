@@ -615,6 +615,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var pttHeld = false
     private var pttPressTime: Date?
     private var isHandsFreeMode = false
+    private var handsFreeStartTime: Date?
     private var pendingPaste = false
     private var deliverySessionId = UUID()
     private var pasteEventID = UUID()
@@ -690,6 +691,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let engineName = self.engine.activeEngineName
             self.stopMenubarBounce()
             self.isHandsFreeMode = false
+            self.handsFreeStartTime = nil
             
             guard !text.isEmpty else {
                 self.pendingPaste = false
@@ -891,7 +893,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             // If already recording in hands-free mode, or user taps shortcut while engine is running:
             // Stop recording and paste immediately!
             if isHandsFreeMode || (engine.isRecording && !pttHeld) {
+                // Ignore contact chatter or rapid re-trigger (< 200ms) after entering hands-free mode
+                if let startTime = handsFreeStartTime, Date().timeIntervalSince(startTime) < 0.20 {
+                    return
+                }
                 isHandsFreeMode = false
+                handsFreeStartTime = nil
                 pttHeld = false
                 pendingPaste = true
                 engine.stopRecording()
@@ -918,9 +925,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if pressDuration < 0.28 {
                 // Short tap (< 0.28s): Enter hands-free mode! Keeps recording until tapped again
                 isHandsFreeMode = true
+                handsFreeStartTime = Date()
             } else {
                 // Hold and release: Push-to-Talk finish & paste!
                 isHandsFreeMode = false
+                handsFreeStartTime = nil
                 pendingPaste = true
                 engine.stopRecording()
             }
@@ -936,6 +945,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             pttHeld = false
             pendingPaste = false
             isHandsFreeMode = false
+            handsFreeStartTime = nil
         }
         liveHUDController?.show()
         DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in
@@ -993,6 +1003,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guard engine.isRecording, engine.phase == .listening else { return }
         pendingPaste = true
         isHandsFreeMode = false
+        handsFreeStartTime = nil
         engine.stopRecording()
     }
 
@@ -2073,6 +2084,7 @@ class SpeechEngine: NSObject, ObservableObject {
     private var isStopping = false
     private var deepgramStopDeadline: DispatchWorkItem?
     private var deepgramFinalRanges = Set<String>()
+    private var lastSegmentStart: Double = -1
     private var permissionRequestInProgress = false
     private enum CaptureBackend { case apple, deepgram }
     private var activeBackend: CaptureBackend = .apple
@@ -2206,6 +2218,11 @@ class SpeechEngine: NSObject, ObservableObject {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             NSLog("🔄 TalkType: Audio engine route changed (e.g. AirPods connected/disconnected)")
+            let timeSinceBuffer = ProcessInfo.processInfo.systemUptime - self.lastBufferArrivalTime
+            if (self.isRecording || self.isStopping) && timeSinceBuffer < 1.5 {
+                NSLog("ℹ️ TalkType: Audio stream is healthy (last buffer %.2fs ago). Ignoring spurious configuration change.", timeSinceBuffer)
+                return
+            }
             self.disarmStreamWatchdog()
             self.safeRemoveTap()
             if self.isRecording {
@@ -2385,6 +2402,7 @@ class SpeechEngine: NSObject, ObservableObject {
         transcript = ""
         confirmedTranscript = ""
         interimTranscript = ""
+        lastSegmentStart = -1
         deepgramFinalRanges.removeAll()
         failureMessage = nil
         armStreamWatchdog()
@@ -2580,15 +2598,39 @@ class SpeechEngine: NSObject, ObservableObject {
         let cleaned = VocabularyManager.clean(chunk.trimmingCharacters(in: .whitespacesAndNewlines))
         let isFinal = (json["is_final"] as? Bool) ?? false
         let speechFinal = (json["speech_final"] as? Bool) ?? false
+        let start = (json["start"] as? NSNumber)?.doubleValue ?? (json["start"] as? Double) ?? -1.0
 
-        if isFinal || speechFinal {
-            if let start = json["start"] as? Double, let duration = json["duration"] as? Double {
-                let range = "\(start):\(duration)"
-                guard deepgramFinalRanges.insert(range).inserted else { return }
+        if start >= 0 {
+            let segmentKey = String(format: "%.2f", start)
+            if deepgramFinalRanges.contains(segmentKey) {
+                // This segment has already been finalized/committed.
+                return
             }
-            if !cleaned.isEmpty { interimTranscript = cleaned }
-            commitInterim()
-        } else if !cleaned.isEmpty {
+
+            // If the segment timestamp shifted forward to a new utterance while interim text was pending,
+            // commit the interim text so it is never dropped, cut off, or overwritten!
+            if lastSegmentStart >= 0 && start > (lastSegmentStart + 0.08) && !interimTranscript.isEmpty {
+                let prevKey = String(format: "%.2f", lastSegmentStart)
+                deepgramFinalRanges.insert(prevKey)
+                commitInterim()
+            }
+            lastSegmentStart = start
+
+            if isFinal || speechFinal {
+                deepgramFinalRanges.insert(segmentKey)
+                if !cleaned.isEmpty { interimTranscript = cleaned }
+                commitInterim()
+                return
+            }
+        } else {
+            if isFinal || speechFinal {
+                if !cleaned.isEmpty { interimTranscript = cleaned }
+                commitInterim()
+                return
+            }
+        }
+
+        if !cleaned.isEmpty {
             interimTranscript = cleaned
             transcript = [confirmedTranscript, interimTranscript].filter { !$0.isEmpty }.joined(separator: " ")
         }

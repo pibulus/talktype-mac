@@ -105,6 +105,24 @@ extension SpeechEngine {
         expect(engine.currentSessionId == blockedSession && engine.phase == .processing, "Restart discarded a pending take")
         print("PASS late Deepgram final, duplicate final, double stop, stale completion, processing guard")
 
+        // Multi-utterance pause transition where interim text must be retained across segment shifts
+        let multiEngine = SpeechEngine()
+        var multiDelivered: [String] = []
+        multiEngine.onFinal = { text in multiDelivered.append(text); multiEngine.phase = .ready }
+        let multiSocket = URLSession.shared.webSocketTask(with: URL(string: "wss://example.invalid")!)
+        multiEngine.webSocketTask = multiSocket
+        multiEngine.activeBackend = .deepgram
+        multiEngine.isRecording = true
+        multiEngine.phase = .listening
+        multiEngine.parseDeepgramJSON(fixture("first sentence", final: false, start: 0.0))
+        expect(multiEngine.transcript == "first sentence", "Initial interim missing")
+        multiEngine.parseDeepgramJSON(fixture("second sentence", final: false, start: 1.5))
+        expect(multiEngine.transcript == "first sentence second sentence", "Segment transition dropped earlier words")
+        multiEngine.stopRecording()
+        multiEngine.parseDeepgramJSON("{\"type\":\"Metadata\"}")
+        expect(multiDelivered.last == "first sentence second sentence", "Delivery dropped transitioned interim")
+        print("PASS Deepgram multi-utterance pause transition retained without drop")
+
         // The deadline must exist even if conversion has not drained.
         let blocked = DispatchSemaphore(value: 0)
         engine.audioProcessingQueue.async { blocked.wait() }
