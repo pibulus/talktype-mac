@@ -203,6 +203,7 @@ if [ "${TARGET_MODE}" = "mas" ]; then
 
     if [ -n "${MAS_IDENTITY}" ] && [ -n "${INSTALLER_ID}" ]; then
         productbuild --component "${APP_DIR}" /Applications \
+                     --product "${APP_DIR}/Contents/Info.plist" \
                      --sign "${INSTALLER_ID}" \
                      "${DIST_DIR}/${APP_NAME}-${VERSION}.pkg"
         echo "✨ Mac App Store PKG ready at ${DIST_DIR}/${APP_NAME}-${VERSION}.pkg"

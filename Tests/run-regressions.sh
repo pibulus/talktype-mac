@@ -19,4 +19,7 @@ TEST_ARCH=$(uname -m)
 xcrun swiftc -parse-as-library -D TALKTYPE_TESTING -target "${TEST_ARCH}-apple-macos13.0" \
     "$AUDIT_TMP/Regression.swift" -o "$AUDIT_TMP/Regression.app/Contents/MacOS/Regression"
 "$AUDIT_TMP/Regression.app/Contents/MacOS/Regression"
+xcrun swiftc -parse-as-library -D TALKTYPE_TESTING -D MAS_BUILD -target "${TEST_ARCH}-apple-macos13.0" \
+    "$AUDIT_TMP/Regression.swift" -o "$AUDIT_TMP/Regression.app/Contents/MacOS/Regression"
+"$AUDIT_TMP/Regression.app/Contents/MacOS/Regression"
 python3 Tests/build_regressions.py

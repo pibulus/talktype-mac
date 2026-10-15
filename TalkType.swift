@@ -50,6 +50,7 @@ enum PermissionHelpIssue: Equatable {
     }
 }
 
+#if !MAS_BUILD
 // MARK: - PTT Shortcut Trigger Options (Full Keyboard & Mobility Accessibility)
 enum PTTTrigger: String, CaseIterable, Identifiable {
     case rightOption = "rightOption"
@@ -106,6 +107,7 @@ enum PTTTrigger: String, CaseIterable, Identifiable {
         }
     }
 }
+#endif
 
 // MARK: - Transcription Language
 enum TranscriptionLanguage: String, CaseIterable {
@@ -154,28 +156,40 @@ enum L10n {
     static func t(_ key: String) -> String {
         let isSpanish = TalkTypeConfig.language == .es || (TalkTypeConfig.language == .auto && (Locale.current.identifier.starts(with: "es") || Locale.preferredLanguages.first?.starts(with: "es") == true))
         let lang = isSpanish ? "es" : "en"
+        if let val = modeStrings[key]?[lang] ?? modeStrings[key]?["en"] {
+            return val
+        }
         return strings[key]?[lang] ?? strings[key]?["en"] ?? key
     }
 
-    static let strings: [String: [String: String]] = [
-        "auto": ["en": "Auto-detect", "es": "Detección automática"],
-        "english": ["en": "English", "es": "Inglés"],
-        "spanish": ["en": "Spanish", "es": "Español"],
-        "language": ["en": "Language", "es": "Idioma"],
+    #if MAS_BUILD
+    static let modeStrings: [String: [String: String]] = [
+        "changePass": ["en": "Configure API Key…", "es": "Configurar clave API…"],
+        "deepgramNova": ["en": "Deepgram Nova-3 (Cloud API)", "es": "Deepgram Nova-3 (API en la nube)"],
+        "deepgramApiKey": ["en": "Deepgram API Key…", "es": "Clave API de Deepgram…"],
+        "unlockSupercharged": ["en": "Deepgram Nova-3 (API Key)…", "es": "Deepgram Nova-3 (Clave API)…"],
+        "superchargedConnected": ["en": "Deepgram Connected (API Key…)", "es": "Deepgram conectado (Clave API…)"],
+        "trySuperchargedBadge": ["en": "Deepgram API Key", "es": "Clave API de Deepgram"],
+        "superchargedActiveBadge": ["en": "Deepgram Active", "es": "Deepgram activo"],
+        "trySuperchargedHelp": ["en": "Configure your own Deepgram API key for cloud streaming transcription", "es": "Configura tu propia clave API de Deepgram para transcripción en la nube"],
+        "superchargedHelp": ["en": "Deepgram Nova-3 active. Click to manage API key.", "es": "Deepgram Nova-3 activo. Clic para gestionar clave API."],
+        "dgAlertTitle": ["en": "Deepgram API Key (Optional)", "es": "Clave API de Deepgram (Opcional)"],
+        "dgAlertInfo": ["en": "TalkType uses your Mac's built-in speech recognition by default (works 100% offline and privately).\n\nOptionally enter your own Deepgram API key for real-time cloud streaming transcription. When enabled, microphone audio is streamed directly to Deepgram (api.deepgram.com) with model training opted out (mip_opt_out=true).", "es": "TalkType usa el reconocimiento de voz integrado de tu Mac por defecto (funciona 100% sin conexión y en privado).\n\nOpcionalmente introduce tu propia clave API de Deepgram para transcripción en la nube en tiempo real. Al activarse, el audio del micrófono se transmite directamente a Deepgram (api.deepgram.com) sin entrenamiento de modelos (mip_opt_out=true)."],
+        "save": ["en": "Save", "es": "Guardar"],
+        "updatePass": ["en": "Update Key", "es": "Actualizar clave"],
+        "getKey": ["en": "Get API Key ↗", "es": "Obtener clave API ↗"],
+        "pasteKey": ["en": "Paste your Deepgram API key", "es": "Pega tu clave API de Deepgram"],
+        "pasteKeyOrClear": ["en": "Paste new API key, or leave blank to remove", "es": "Pega una clave nueva, o déjalo vacío para eliminarla"],
+        "geminiPass": ["en": "Google Gemini API Key…", "es": "Clave API de Google Gemini…"],
+        "pasteGeminiKey": ["en": "Paste your Gemini API key", "es": "Pega tu clave API de Gemini"],
+        "geminiAlertTitle": ["en": "Google Gemini API Key (Optional)", "es": "Clave API de Google Gemini (Opcional)"],
+        "geminiAlertInfo": ["en": "TalkType operates completely standalone. Optionally enter your own Google Gemini API key to format and polish transcripts into clean prose. When enabled, dictated transcript text is sent directly to Google's Gemini API (generativelanguage.googleapis.com).", "es": "TalkType funciona de forma completamente independiente. Opcionalmente introduce tu propia clave API de Google Gemini para dar formato y pulir tus transcripciones. Al activarse, el texto transcrito se envía directamente a la API de Google Gemini (generativelanguage.googleapis.com)."]
+    ]
+    #else
+    static let modeStrings: [String: [String: String]] = [
         "accessibilityDisabled": ["en": "Accessibility Disabled (Click to Enable ⌘V)", "es": "Accesibilidad desactivada (Clic para activar ⌘V)"],
-        "copyLast": ["en": "Copy Last Take", "es": "Copiar última toma"],
         "changePass": ["en": "Change Pass…", "es": "Cambiar pase…"],
-        "polishTranscripts": ["en": "Polish Transcripts", "es": "Pulir transcripciones"],
-        "noRecentTranscripts": ["en": "No Recent Transcripts", "es": "Sin transcripciones recientes"],
-        "recentTranscripts": ["en": "Recent Transcripts", "es": "Transcripciones recientes"],
-        "historyEmpty": ["en": "History empty", "es": "Historial vacío"],
-        "pushToTalkKey": ["en": "Push to Talk Key", "es": "Tecla pulsar para hablar"],
-        "transcriptionEngine": ["en": "Voice Mode", "es": "Modo de voz"],
-        "appleSpeech": ["en": "Mac Built-in (Offline · Private)", "es": "Integrado en Mac (sin conexión · privado)"],
         "deepgramNova": ["en": "Supercharged (Nova-3 · Real-Time)", "es": "Sobrealimentado (Nova-3 · en vivo)"],
-        "hudPosition": ["en": "HUD Position", "es": "Posición del HUD"],
-        "bottomOfScreen": ["en": "Bottom of Screen", "es": "Parte inferior de la pantalla"],
-        "topOfScreen": ["en": "Top of Screen", "es": "Parte superior de la pantalla"],
         "deepgramApiKey": ["en": "Unlock Supercharged Voice (Free $200 Pass)…", "es": "Desbloquear voz sobrealimentada (Pase de $200 gratis)…"],
         "unlockSupercharged": ["en": "Supercharged (Free $200 Pass)…", "es": "Voz sobrealimentada (Pase de $200 gratis)…"],
         "superchargedConnected": ["en": "Supercharged Connected (Change Code…)", "es": "Voz sobrealimentada conectada (cambiar código…)"],
@@ -183,15 +197,40 @@ enum L10n {
         "superchargedActiveBadge": ["en": "Supercharged Voice Active", "es": "Voz sobrealimentada activa"],
         "trySuperchargedHelp": ["en": "Get $200 free credit (~45,000 mins) for ultra-accurate streaming transcription", "es": "Consigue $200 de crédito gratis (~45.000 mins) para transcripción ultraprecisa"],
         "superchargedHelp": ["en": "Supercharged voice active (Deepgram Nova-3). Click to manage pass.", "es": "Voz sobrealimentada activa (Deepgram Nova-3). Clic para gestionar pase."],
-        "quit": ["en": "Quit TalkType", "es": "Salir de TalkType"],
         "dgAlertTitle": ["en": "Unlock Supercharged Voice (100% Free)", "es": "Desbloquear voz sobrealimentada (100% gratis)"],
-        "dgAlertInfo": ["en": "TalkType uses your Mac's built-in voice by default (works offline, completely private).\n\nWant mind-blowing accuracy and instant real-time streaming? Deepgram gives everyone a free $200 pass (~45,000 minutes of speech, no credit card required).\n\n1. Click 'Get Free Pass' to grab your code on their site.\n2. Paste it below to activate.", "es": "TalkType usa la voz integrada de tu Mac por defecto (funciona sin conexión y es 100% privada).\n\n¿Quieres una precisión asombrosa y transcripción en tiempo real? Deepgram regala un pase de $200 a todo el mundo (~45.000 minutos de voz, sin tarjeta de crédito).\n\n1. Haz clic en 'Obtener pase gratis' para conseguir tu código.\n2. Pégalo a continuación para activarlo."],
+        "dgAlertInfo": ["en": "TalkType uses your Mac's built-in voice by default (works offline, completely private).\n\nWant mind-blowing accuracy and instant real-time streaming? Deepgram gives everyone a free $200 pass (~45,000 minutes of speech, no credit card required). When active, microphone audio streams directly to Deepgram (api.deepgram.com) with model training opted out.\n\n1. Click 'Get Free Pass' to grab your code on their site.\n2. Paste it below to activate.", "es": "TalkType usa la voz integrada de tu Mac por defecto (funciona sin conexión y es 100% privada).\n\n¿Quieres una precisión asombrosa y transcripción en tiempo real? Deepgram regala un pase de $200 a todo el mundo (~45.000 minutos de voz, sin tarjeta de crédito). Al activarse, el audio del micrófono se envía directamente a Deepgram (api.deepgram.com) sin entrenamiento de modelos.\n\n1. Haz clic en 'Obtener pase gratis' para conseguir tu código.\n2. Pégalo a continuación para activarlo."],
         "save": ["en": "Activate Pass", "es": "Activar pase"],
         "updatePass": ["en": "Update Pass", "es": "Actualizar pase"],
         "getKey": ["en": "Get Free Pass ↗", "es": "Obtener pase gratis ↗"],
-        "cancel": ["en": "Cancel", "es": "Cancelar"],
         "pasteKey": ["en": "Paste your code here", "es": "Pega tu código aquí"],
         "pasteKeyOrClear": ["en": "Paste new code, or leave blank to remove", "es": "Pega un código nuevo, o déjalo vacío para eliminarlo"],
+        "geminiPass": ["en": "Free Polish Pass…", "es": "Pase de pulido gratis…"],
+        "pasteGeminiKey": ["en": "Paste your pass code here", "es": "Pega tu código de pase aquí"],
+        "geminiAlertTitle": ["en": "Auto-Polish Transcripts (Free Pass)", "es": "Pulido automático (Pase gratis)"],
+        "geminiAlertInfo": ["en": "TalkType operates completely standalone. Optionally add a free pass from Google AI Studio (no credit card required) to automatically format and polish your transcripts into clean prose. When active, dictated transcript text is sent directly to Google's Gemini API (generativelanguage.googleapis.com).", "es": "TalkType funciona de forma completamente independiente. Opcionalmente añade un pase gratuito de Google AI Studio (sin tarjeta de crédito) para dar formato y pulir tus transcripciones. Al activarse, el texto transcrito se envía directamente a la API de Google Gemini (generativelanguage.googleapis.com)."],
+        "permissionPasteTitle": ["en": "Automatic paste is off", "es": "El pegado automático está desactivado"],
+        "permissionPasteDetail": ["en": "Text still copies. Allow access to paste it for you.", "es": "El texto se copia. Permite el acceso para pegarlo automáticamente."]
+    ]
+    #endif
+
+    static let strings: [String: [String: String]] = [
+        "auto": ["en": "Auto-detect", "es": "Detección automática"],
+        "english": ["en": "English", "es": "Inglés"],
+        "spanish": ["en": "Spanish", "es": "Español"],
+        "language": ["en": "Language", "es": "Idioma"],
+        "copyLast": ["en": "Copy Last Take", "es": "Copiar última toma"],
+        "polishTranscripts": ["en": "Polish Transcripts", "es": "Pulir transcripciones"],
+        "noRecentTranscripts": ["en": "No Recent Transcripts", "es": "Sin transcripciones recientes"],
+        "recentTranscripts": ["en": "Recent Transcripts", "es": "Transcripciones recientes"],
+        "historyEmpty": ["en": "History empty", "es": "Historial vacío"],
+        "pushToTalkKey": ["en": "Push to Talk Key", "es": "Tecla pulsar para hablar"],
+        "transcriptionEngine": ["en": "Voice Mode", "es": "Modo de voz"],
+        "appleSpeech": ["en": "Mac Built-in (Offline · Private)", "es": "Integrado en Mac (sin conexión · privado)"],
+        "hudPosition": ["en": "HUD Position", "es": "Posición del HUD"],
+        "bottomOfScreen": ["en": "Bottom of Screen", "es": "Parte inferior de la pantalla"],
+        "topOfScreen": ["en": "Top of Screen", "es": "Parte superior de la pantalla"],
+        "quit": ["en": "Quit TalkType", "es": "Salir de TalkType"],
+        "cancel": ["en": "Cancel", "es": "Cancelar"],
         "listeningSpeak": ["en": "Listening… speak freely", "es": "Escuchando… habla con libertad"],
         "listening": ["en": "Listening…", "es": "Escuchando…"],
         "live": ["en": "Live", "es": "En vivo"],
@@ -212,10 +251,6 @@ enum L10n {
         "polishing": ["en": "Polishing…", "es": "Puliendo…"],
         "autoPolish": ["en": "Auto-Polish", "es": "Pulido automático"],
         "autoPolishTranscripts": ["en": "Auto-Polish Transcripts", "es": "Pulir transcripciones automáticamente"],
-        "geminiPass": ["en": "Free Polish Pass…", "es": "Pase de pulido gratis…"],
-        "pasteGeminiKey": ["en": "Paste your pass code here", "es": "Pega tu código de pase aquí"],
-        "geminiAlertTitle": ["en": "Auto-Polish Transcripts (Free Pass)", "es": "Pulido automático (Pase gratis)"],
-        "geminiAlertInfo": ["en": "TalkType operates completely standalone. Optionally add a free pass from Google AI Studio (no credit card required) to automatically format and polish your transcripts into clean prose.", "es": "TalkType funciona de forma completamente independiente. Opcionalmente añade un pase gratuito de Google AI Studio (sin tarjeta de crédito) para dar formato y pulir tus transcripciones."],
         "talkTypeWeb": ["en": "TalkType on the Web…", "es": "TalkType en la Web…"],
         "customKeywords": ["en": "Custom Vocabulary…", "es": "Vocabulario personalizado…"],
         "keywordsAlertTitle": ["en": "Custom Vocabulary & Keywords", "es": "Vocabulario y palabras clave"],
@@ -230,8 +265,6 @@ enum L10n {
         "permissionSpeechTitle": ["en": "Speech Recognition is off", "es": "El reconocimiento de voz está desactivado"],
         "permissionSpeechDetail": ["en": "Turn it on to use Apple Speech.", "es": "Actívalo para usar Voz de Apple."],
         "permissionsReadyShortcut": ["en": "All set. Press your shortcut again to talk.", "es": "Todo listo. Pulsa el atajo otra vez para hablar."],
-        "permissionPasteTitle": ["en": "Automatic paste is off", "es": "El pegado automático está desactivado"],
-        "permissionPasteDetail": ["en": "Text still copies. Allow access to paste it for you.", "es": "El texto se copia. Permite el acceso para pegarlo automáticamente."],
         "fixPermission": ["en": "Fix", "es": "Ajustes"],
         "delete": ["en": "Delete", "es": "Eliminar"],
         "paste": ["en": "Paste", "es": "Pegar"],
@@ -306,10 +339,12 @@ enum TalkTypeConfig {
         return UserDefaults.standard.string(forKey: hudPositionStorageKey) ?? "bottom"
     }
     
+    #if !MAS_BUILD
     static var pttTrigger: PTTTrigger {
         let raw = UserDefaults.standard.string(forKey: pttTriggerStorageKey) ?? PTTTrigger.eitherOption.rawValue
         return PTTTrigger(rawValue: raw) ?? .eitherOption
     }
+    #endif
 
     static var language: TranscriptionLanguage {
         get {
@@ -751,6 +786,36 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         #else
         setupPushToTalk()
         #endif
+
+        // Minimal mainMenu so ⌘Q works cleanly whenever the popover is focused
+        let mainMenu = NSMenu()
+        let appMenuItem = NSMenuItem()
+        let appMenu = NSMenu()
+        appMenu.addItem(withTitle: L10n.t("quit"), action: #selector(quitApp), keyEquivalent: "q").target = self
+        appMenuItem.submenu = appMenu
+        mainMenu.addItem(appMenuItem)
+        NSApp.mainMenu = mainMenu
+
+        // Open the card on first launch (and on MAS launch) so LSUIElement never appears unresponsive
+        #if MAS_BUILD
+        let shouldShowInitialPopover = true
+        #else
+        let shouldShowInitialPopover = !UserDefaults.standard.bool(forKey: "talktypeHasLaunchedBefore")
+        #endif
+        if shouldShowInitialPopover {
+            UserDefaults.standard.set(true, forKey: "talktypeHasLaunchedBefore")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+                guard let self = self, !self.popover.isShown else { return }
+                self.openVisualPopover()
+            }
+        }
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !popover.isShown {
+            openVisualPopover()
+        }
+        return true
     }
     
     // MARK: - Menu Bar Icon (Serene When Idle, Living & Blinking While Dictating)
@@ -805,14 +870,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menubarActiveBlinkTimer?.invalidate()
         let interval = Double.random(in: 1.6...2.4)
         menubarActiveBlinkTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
-            guard let self = self, self.engine.isRecording || self.pttHeld else { return }
+            guard let self = self, self.engine.isRecording || self.pttHeld || self.hotKeyHeld else { return }
             self.isRecordingBlink = true
 
             // Cute 130ms quick blink
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.13) { [weak self] in
                 guard let self = self else { return }
                 self.isRecordingBlink = false
-                if self.engine.isRecording || self.pttHeld {
+                if self.engine.isRecording || self.pttHeld || self.hotKeyHeld {
                     self.scheduleActiveBlink()
                 }
             }
@@ -862,15 +927,42 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func handleCarbonHotKey(down: Bool) {
+    func handleCarbonHotKey(down: Bool) {
+        guard !down || !hotKeyHeld else { return }
         if down {
-            guard !hotKeyHeld, !engine.isRecording, engine.phase != .processing else { return }
-            deliverySessionId = UUID()
-            engine.startRecording(resumeAfterPermission: false)
-            hotKeyHeld = engine.isRecording
+            guard engine.phase != .processing else { return }
+            if isHandsFreeMode || (engine.isRecording && !hotKeyHeld) {
+                if let startTime = handsFreeStartTime, Date().timeIntervalSince(startTime) < 0.20 {
+                    return
+                }
+                isHandsFreeMode = false
+                handsFreeStartTime = nil
+                hotKeyHeld = false
+                requestPaste()
+                return
+            }
+            if !hotKeyHeld {
+                hotKeyHeld = true
+                deliverySessionId = UUID()
+                pttPressTime = Date()
+                pendingPaste = true
+                engine.startRecording(resumeAfterPermission: false)
+                if !engine.isRecording {
+                    hotKeyHeld = false
+                    pendingPaste = false
+                }
+            }
         } else if hotKeyHeld {
             hotKeyHeld = false
-            requestPaste()
+            let pressDuration = Date().timeIntervalSince(pttPressTime ?? Date())
+            if pressDuration < 0.28 {
+                isHandsFreeMode = true
+                handsFreeStartTime = Date()
+            } else {
+                isHandsFreeMode = false
+                handsFreeStartTime = nil
+                requestPaste()
+            }
         }
     }
 
@@ -1059,9 +1151,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 )
                 item.target = self
                 item.representedObject = clean
+                #if MAS_BUILD
+                item.toolTip = "\(L10n.t("copy")): \"\(clean)\""
+                #else
                 item.toolTip = "Paste into active app: \"\(clean)\""
+                #endif
                 menu.addItem(item)
 
+                #if !MAS_BUILD
                 // Alternate: Hold Option to copy without pasting
                 let altItem = NSMenuItem(
                     title: "Copy: \(preview)",
@@ -1073,6 +1170,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 altItem.target = self
                 altItem.representedObject = clean
                 menu.addItem(altItem)
+                #endif
             }
 
             // Older takes submenu if > 5
@@ -1088,7 +1186,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     )
                     item.target = self
                     item.representedObject = clean
+                    #if MAS_BUILD
+                    item.toolTip = "\(L10n.t("copy")): \"\(clean)\""
+                    #else
                     item.toolTip = "Paste into active app: \"\(clean)\""
+                    #endif
                     olderMenu.addItem(item)
                 }
                 let olderParent = NSMenuItem(title: "More Takes (\(history.records.count - 5))…", action: nil, keyEquivalent: "")
@@ -1283,6 +1385,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         webItem.target = self
         menu.addItem(webItem)
 
+        let privacyItem = NSMenuItem(title: L10n.t("privacyPolicy"), action: #selector(openPrivacyPolicy), keyEquivalent: "")
+        privacyItem.target = self
+        menu.addItem(privacyItem)
+
         let quitItem = NSMenuItem(title: L10n.t("quit"), action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
@@ -1318,11 +1424,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    #if !MAS_BUILD
     @objc func selectShortcutTrigger(_ sender: NSMenuItem) {
         if let raw = sender.representedObject as? String {
             UserDefaults.standard.set(raw, forKey: TalkTypeConfig.pttTriggerStorageKey)
         }
     }
+    #endif
 
     @objc func selectLanguage(_ sender: NSMenuItem) {
         if let raw = sender.representedObject as? String,
@@ -1413,7 +1521,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         alert.alertStyle = .informational
         let hasKey = !TalkTypeConfig.deepgramApiKey.isEmpty
         alert.addButton(withTitle: hasKey ? L10n.t("updatePass") : L10n.t("save"))
+        #if !MAS_BUILD
         alert.addButton(withTitle: L10n.t("getKey"))
+        #endif
         alert.addButton(withTitle: L10n.t("cancel"))
 
         let input = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
@@ -1438,6 +1548,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 UserDefaults.standard.removeObject(forKey: TalkTypeConfig.deepgramKeyStorageKey)
                 UserDefaults.standard.set("deepgram", forKey: TalkTypeConfig.engineStorageKey)
             }
+        #if !MAS_BUILD
         case .alertSecondButtonReturn:
             if let url = URL(string: "https://console.deepgram.com/signup") {
                 NSWorkspace.shared.open(url)
@@ -1445,6 +1556,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
                 self?.promptDeepgramKey()
             }
+        #endif
         default:
             break
         }
@@ -1475,7 +1587,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         alert.alertStyle = .informational
         let hasKey = !TalkTypeConfig.geminiApiKey.isEmpty
         alert.addButton(withTitle: hasKey ? L10n.t("updatePass") : L10n.t("save"))
+        #if !MAS_BUILD
         alert.addButton(withTitle: L10n.t("getKey"))
+        #endif
         alert.addButton(withTitle: L10n.t("cancel"))
 
         let input = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
@@ -1498,6 +1612,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 guard KeychainHelper.save(key, service: TalkTypeConfig.keychainService, account: TalkTypeConfig.keychainAccountGemini) else { return }
                 TalkTypeConfig.isPolishing = true
             }
+        #if !MAS_BUILD
         case .alertSecondButtonReturn:
             if let url = URL(string: "https://aistudio.google.com/app/apikey") {
                 NSWorkspace.shared.open(url)
@@ -1505,6 +1620,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
                 self?.promptGeminiKey()
             }
+        #endif
         default:
             break
         }
@@ -3279,7 +3395,11 @@ struct ContentView: View {
     }
 
     private var shouldShowSuperchargedPrompt: Bool {
-        !isSupercharged && !superchargeDismissed && dictationCount < 5
+        #if MAS_BUILD
+        return false
+        #else
+        return !isSupercharged && !superchargeDismissed && dictationCount < 5
+        #endif
     }
 
     private var sortedRecords: [TranscriptRecord] {
@@ -3301,7 +3421,13 @@ struct ContentView: View {
 
     private var p: Palette { scheme == .dark ? .dark : .light }
     private var isRec: Bool { speechEngine.isRecording }
-    private var pttKeyName: String { TalkTypeConfig.pttTrigger.shortTitle }
+    private var pttKeyName: String {
+        #if MAS_BUILD
+        return "⌃⌥ Space"
+        #else
+        return TalkTypeConfig.pttTrigger.shortTitle
+        #endif
+    }
 
     private var permissionHelpIssue: PermissionHelpIssue? {
         _ = permissionRefreshVersion
@@ -3575,18 +3701,10 @@ struct ContentView: View {
         let style: AnyShapeStyle
         switch speechEngine.phase {
         case .idle:
-#if MAS_BUILD
-            label = L10n.t("holdGhost")
-#else
             label = L10n.t("clickGhostHold") + pttKeyName
-#endif
             style = AnyShapeStyle(p.inkSoft.opacity(0.75))
         case .listening:
-#if MAS_BUILD
-            label = L10n.t("clickAgainToFinish")
-#else
             label = L10n.t("listening")
-#endif
             style = AnyShapeStyle(TT.hot)
         case .processing:
             label = L10n.t("thinking")

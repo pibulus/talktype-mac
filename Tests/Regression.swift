@@ -223,10 +223,19 @@ extension SpeechEngine {
     }
 }
 
-#if !MAS_BUILD
 extension AppDelegate {
     static func regressionChecks() {
         let app = AppDelegate()
+        #if MAS_BUILD
+        app.hotKeyHeld = true
+        app.pttPressTime = Date()
+        app.engine.isRecording = true
+        app.engine.phase = .listening
+        app.handleCarbonHotKey(down: false)
+        expect(!app.hotKeyHeld && app.isHandsFreeMode, "Rapid Carbon hotkey release was swallowed instead of applying tap semantics")
+        app.engine.isRecording = false
+        print("PASS rapid Carbon hotkey release (MAS_BUILD)")
+        #else
         UserDefaults.standard.set(PTTTrigger.eitherOption.rawValue, forKey: TalkTypeConfig.pttTriggerStorageKey)
         app.pttHeld = true
         app.pttPressTime = Date()
@@ -239,9 +248,9 @@ extension AppDelegate {
         expect(!app.pttHeld && app.isHandsFreeMode, "Rapid release was swallowed instead of applying tap semantics")
         app.engine.isRecording = false
         print("PASS rapid modifier release")
+        #endif
     }
 }
-#endif
 
 @main struct AuditRegression {
     static func main() {
@@ -257,8 +266,6 @@ extension AppDelegate {
         expect(items.filter { $0.name == "language" }.map { $0.value! } == ["en"], "Vocabulary injected a parameter")
         expect(items.last?.value == "R&D&language=fr", "Vocabulary value did not round trip")
         print("PASS vocabulary query escaping")
-        #if !MAS_BUILD
         AppDelegate.regressionChecks()
-        #endif
     }
 }
