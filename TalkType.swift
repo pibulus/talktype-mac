@@ -284,9 +284,13 @@ enum TalkTypeConfig {
     }
     
     static var isUsingDeepgram: Bool {
-        let selected = UserDefaults.standard.string(forKey: engineStorageKey) ?? "apple"
-        // Deepgram is only active if user selected it AND provided a valid key
-        return selected == "deepgram" && !deepgramApiKey.isEmpty
+        let hasKey = !deepgramApiKey.isEmpty
+        guard hasKey else { return false }
+        if let selected = UserDefaults.standard.string(forKey: engineStorageKey) {
+            return selected == "deepgram"
+        }
+        UserDefaults.standard.set("deepgram", forKey: engineStorageKey)
+        return true
     }
 
     static var geminiApiKey: String {
@@ -2012,6 +2016,7 @@ class SpeechEngine: NSObject, ObservableObject {
     private var recognitionTask: SFSpeechRecognitionTask?
     private var appleTaskID = UUID()
     private var appleSegmentText = ""
+    private var lastApplePartialTime: TimeInterval = 0
     private let audioEngine = AVAudioEngine()
     private var hasInstalledAudioTap = false
     private var lastMeterPublishTime: TimeInterval = 0
@@ -2025,10 +2030,12 @@ class SpeechEngine: NSObject, ObservableObject {
     private final class DeepgramCapture {
         var converter: AVAudioConverter
         let format: AVAudioFormat
+        var socket: URLSessionWebSocketTask
         var closed = false // Owned by audioProcessingQueue, including the close marker.
-        init(converter: AVAudioConverter, format: AVAudioFormat) {
+        init(converter: AVAudioConverter, format: AVAudioFormat, socket: URLSessionWebSocketTask) {
             self.converter = converter
             self.format = format
+            self.socket = socket
         }
     }
     private final class AppleCapture {
@@ -2085,6 +2092,7 @@ class SpeechEngine: NSObject, ObservableObject {
     private var deepgramStopDeadline: DispatchWorkItem?
     private var deepgramFinalRanges = Set<String>()
     private var lastSegmentStart: Double = -1
+    private var deepgramReconnectCount = 0
     private var permissionRequestInProgress = false
     private enum CaptureBackend { case apple, deepgram }
     private var activeBackend: CaptureBackend = .apple
@@ -2120,6 +2128,42 @@ class SpeechEngine: NSObject, ObservableObject {
         }
         interimTranscript = ""
         transcript = confirmedTranscript
+    }
+
+    /// Detects when a streaming recognizer (Apple on-device SFSpeechRecognizer or Deepgram)
+    /// silently resets its live utterance buffer after a pause without emitting `isFinal = true`.
+    static func didUtteranceReset(previous: String, current: String, pauseSeconds: TimeInterval) -> Bool {
+        let prev = previous.trimmingCharacters(in: .whitespacesAndNewlines)
+        let curr = current.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !prev.isEmpty, !curr.isEmpty else { return false }
+
+        let prevLower = prev.lowercased()
+        let currLower = curr.lowercased()
+        if currLower == prevLower || currLower.hasPrefix(prevLower) {
+            return false
+        }
+
+        let prevWords = prevLower.split { $0.isWhitespace || $0.isPunctuation }
+        let currWords = currLower.split { $0.isWhitespace || $0.isPunctuation }
+        guard let prevFirst = prevWords.first, let currFirst = currWords.first else { return false }
+
+        // 1. If an established phrase (3+ words) suddenly lost at least 2 words and over half its length,
+        // the recognizer wiped the previous utterance and started a new one (even if the first word matches).
+        if prevWords.count >= 3 && currWords.count <= prevWords.count - 2 && currLower.count * 2 < prevLower.count {
+            return true
+        }
+
+        // 2. If the starting word changed completely (not a prefix revision of the first word):
+        if prevFirst != currFirst && !currFirst.hasPrefix(prevFirst) && !prevFirst.hasPrefix(currFirst) {
+            if prevWords.count >= 2 && currWords.count <= prevWords.count {
+                return true
+            }
+            if pauseSeconds >= 0.55 {
+                return true
+            }
+        }
+
+        return false
     }
     
     @Published var failureMessage: String?
@@ -2402,7 +2446,10 @@ class SpeechEngine: NSObject, ObservableObject {
         transcript = ""
         confirmedTranscript = ""
         interimTranscript = ""
+        appleSegmentText = ""
+        lastApplePartialTime = 0
         lastSegmentStart = -1
+        deepgramReconnectCount = 0
         deepgramFinalRanges.removeAll()
         failureMessage = nil
         armStreamWatchdog()
@@ -2427,24 +2474,29 @@ class SpeechEngine: NSObject, ObservableObject {
     }
     
     // MARK: - Deepgram WebSocket Streaming
-    private func startDeepgramStreaming() {
-        activeBackend = .deepgram
-        isStopping = false
+    private func makeDeepgramWebSocket() -> URLSessionWebSocketTask? {
         let apiKey = TalkTypeConfig.deepgramApiKey
         let keywordsParam = VocabularyManager.deepgramKeywordsParam
         guard !apiKey.isEmpty,
               let url = URL(string: "wss://api.deepgram.com/v1/listen?model=nova-3&smart_format=true&interim_results=true&encoding=linear16&sample_rate=16000&channels=1&mip_opt_out=true&language=\(TalkTypeConfig.language.deepgramLanguage)\(keywordsParam)") else {
-            startAppleSpeechRecognition()
-            return
+            return nil
         }
-        
         var request = URLRequest(url: url)
         var authHeader = "Token "
         authHeader.append(apiKey)
         request.setValue(authHeader, forHTTPHeaderField: "Authorization")
-        
-        guard let socket = urlSession?.webSocketTask(with: request) else {
-            failRecognition("Could not open the transcription connection.")
+        return urlSession?.webSocketTask(with: request)
+    }
+
+    private func startDeepgramStreaming() {
+        activeBackend = .deepgram
+        isStopping = false
+        guard let socket = makeDeepgramWebSocket() else {
+            if TalkTypeConfig.deepgramApiKey.isEmpty {
+                startAppleSpeechRecognition()
+            } else {
+                failRecognition("Could not open the transcription connection.")
+            }
             return
         }
         let sessionID = currentSessionId
@@ -2475,7 +2527,7 @@ class SpeechEngine: NSObject, ObservableObject {
             return
         }
         
-        let capture = DeepgramCapture(converter: converter, format: targetFormat)
+        let capture = DeepgramCapture(converter: converter, format: targetFormat, socket: socket)
         deepgramCapture = capture
         
         safeRemoveTap()
@@ -2518,7 +2570,7 @@ class SpeechEngine: NSObject, ObservableObject {
                 
                 if error == nil, convertedBuffer.frameLength > 0, let channelData = convertedBuffer.int16ChannelData {
                     let data = Data(bytes: channelData.pointee, count: Int(convertedBuffer.frameLength) * 2)
-                    socket.send(.data(data)) { _ in }
+                    capture.socket.send(.data(data)) { _ in }
                 }
             }
         }
@@ -2557,12 +2609,34 @@ class SpeechEngine: NSObject, ObservableObject {
                 case .failure:
                     if self.isStopping {
                         self.finishDeepgram(sessionID: sessionID, socket: socket)
-                    } else {
+                    } else if !self.reconnectDeepgramWebSocket(sessionID: sessionID) {
                         self.fallbackToApple()
                     }
                 }
             }
         }
+    }
+
+    private func reconnectDeepgramWebSocket(sessionID: UUID) -> Bool {
+        guard isRecording, !isStopping, currentSessionId == sessionID,
+              deepgramReconnectCount < 2,
+              let capture = deepgramCapture,
+              let newSocket = makeDeepgramWebSocket() else {
+            return false
+        }
+        deepgramReconnectCount += 1
+        commitInterim()
+        lastSegmentStart = -1
+        webSocketTask?.cancel(with: .goingAway, reason: nil)
+        webSocketTask = newSocket
+        audioProcessingQueue.async {
+            guard !capture.closed else { return }
+            capture.socket = newSocket
+        }
+        newSocket.resume()
+        listenWebSocket(newSocket, sessionID: sessionID)
+        NSLog("🔄 TalkType: Reconnected Deepgram WebSocket mid-take (attempt %d) without losing transcript.", deepgramReconnectCount)
+        return true
     }
 
     private func fallbackToApple() {
@@ -2599,35 +2673,36 @@ class SpeechEngine: NSObject, ObservableObject {
         let isFinal = (json["is_final"] as? Bool) ?? false
         let speechFinal = (json["speech_final"] as? Bool) ?? false
         let start = (json["start"] as? NSNumber)?.doubleValue ?? (json["start"] as? Double) ?? -1.0
+        let duration = (json["duration"] as? NSNumber)?.doubleValue ?? (json["duration"] as? Double) ?? 0.0
 
+        // If Deepgram shifted to a new utterance segment without emitting is_final for the pending interim,
+        // or reset the interim buffer to a new utterance, commit the pending interim text first.
+        let segmentShifted = start >= 0 && lastSegmentStart >= 0 && start > (lastSegmentStart + 0.35)
+        if !interimTranscript.isEmpty {
+            if segmentShifted && (cleaned.isEmpty || Self.didUtteranceReset(previous: interimTranscript, current: cleaned, pauseSeconds: start - lastSegmentStart)) {
+                commitInterim()
+            } else if !isFinal && !speechFinal && !cleaned.isEmpty && Self.didUtteranceReset(previous: interimTranscript, current: cleaned, pauseSeconds: max(0, start - lastSegmentStart)) {
+                commitInterim()
+            }
+        }
         if start >= 0 {
-            let segmentKey = String(format: "%.2f", start)
-            if deepgramFinalRanges.contains(segmentKey) {
-                // This segment has already been finalized/committed.
-                return
-            }
-
-            // If the segment timestamp shifted forward to a new utterance while interim text was pending,
-            // commit the interim text so it is never dropped, cut off, or overwritten!
-            if lastSegmentStart >= 0 && start > (lastSegmentStart + 0.08) && !interimTranscript.isEmpty {
-                let prevKey = String(format: "%.2f", lastSegmentStart)
-                deepgramFinalRanges.insert(prevKey)
-                commitInterim()
-            }
             lastSegmentStart = start
+        }
 
-            if isFinal || speechFinal {
-                deepgramFinalRanges.insert(segmentKey)
-                if !cleaned.isEmpty { interimTranscript = cleaned }
-                commitInterim()
-                return
+        if isFinal || speechFinal {
+            let finalCandidate = !cleaned.isEmpty ? cleaned : interimTranscript
+            guard !finalCandidate.isEmpty else { return }
+            if start >= 0 {
+                let dedupKey = String(format: "%.2f:%.2f:%@", start, duration, finalCandidate)
+                guard deepgramFinalRanges.insert(dedupKey).inserted else {
+                    interimTranscript = ""
+                    transcript = confirmedTranscript
+                    return
+                }
             }
-        } else {
-            if isFinal || speechFinal {
-                if !cleaned.isEmpty { interimTranscript = cleaned }
-                commitInterim()
-                return
-            }
+            if !cleaned.isEmpty { interimTranscript = cleaned }
+            commitInterim()
+            return
         }
 
         if !cleaned.isEmpty {
@@ -2669,8 +2744,8 @@ class SpeechEngine: NSObject, ObservableObject {
                     return nil
                 }
                 if error == nil, buffer.frameLength > 0, let channel = buffer.int16ChannelData {
-                    socket.send(.data(Data(bytes: channel.pointee,
-                                           count: Int(buffer.frameLength) * 2))) { _ in }
+                    capture.socket.send(.data(Data(bytes: channel.pointee,
+                                                   count: Int(buffer.frameLength) * 2))) { _ in }
                 }
                 converter.reset()
             }
@@ -2709,6 +2784,8 @@ class SpeechEngine: NSObject, ObservableObject {
         if !appendingToExisting {
             confirmedTranscript = ""
             interimTranscript = ""
+            appleSegmentText = ""
+            lastApplePartialTime = 0
             transcript = ""
         }
         let sessionId = self.currentSessionId
@@ -2767,6 +2844,7 @@ class SpeechEngine: NSObject, ObservableObject {
         let taskID = UUID()
         appleTaskID = taskID
         appleSegmentText = ""
+        lastApplePartialTime = 0
         recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
             DispatchQueue.main.async {
                 self?.receiveAppleResult(text: result?.bestTranscription.formattedString,
@@ -2780,7 +2858,20 @@ class SpeechEngine: NSObject, ObservableObject {
         guard currentSessionId == sessionID, appleTaskID == taskID else { return }
         if let text = text {
             let cleaned = VocabularyManager.clean(text.trimmingCharacters(in: .whitespacesAndNewlines))
-            if !cleaned.isEmpty { appleSegmentText = cleaned }
+            if cleaned.isEmpty {
+                if !isFinal && !appleSegmentText.isEmpty {
+                    confirmedTranscript = [confirmedTranscript, appleSegmentText].filter { !$0.isEmpty }.joined(separator: " ")
+                    appleSegmentText = ""
+                }
+            } else {
+                let now = ProcessInfo.processInfo.systemUptime
+                let pause = lastApplePartialTime > 0 ? (now - lastApplePartialTime) : 0
+                if !appleSegmentText.isEmpty && Self.didUtteranceReset(previous: appleSegmentText, current: cleaned, pauseSeconds: pause) {
+                    confirmedTranscript = [confirmedTranscript, appleSegmentText].filter { !$0.isEmpty }.joined(separator: " ")
+                }
+                appleSegmentText = cleaned
+                lastApplePartialTime = now
+            }
             transcript = [confirmedTranscript, appleSegmentText].filter { !$0.isEmpty }.joined(separator: " ")
         }
         guard error != nil || isFinal else { return }

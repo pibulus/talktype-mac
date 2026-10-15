@@ -116,12 +116,15 @@ extension SpeechEngine {
         multiEngine.phase = .listening
         multiEngine.parseDeepgramJSON(fixture("first sentence", final: false, start: 0.0))
         expect(multiEngine.transcript == "first sentence", "Initial interim missing")
+        // VAD start-time jitter on the same utterance must not duplicate or poison final range dedup
+        multiEngine.parseDeepgramJSON(fixture("first sentence extended", final: false, start: 0.12))
+        expect(multiEngine.transcript == "first sentence extended", "VAD start jitter duplicated interim words")
         multiEngine.parseDeepgramJSON(fixture("second sentence", final: false, start: 1.5))
-        expect(multiEngine.transcript == "first sentence second sentence", "Segment transition dropped earlier words")
+        expect(multiEngine.transcript == "first sentence extended second sentence", "Segment transition dropped earlier words")
         multiEngine.stopRecording()
         multiEngine.parseDeepgramJSON("{\"type\":\"Metadata\"}")
-        expect(multiDelivered.last == "first sentence second sentence", "Delivery dropped transitioned interim")
-        print("PASS Deepgram multi-utterance pause transition retained without drop")
+        expect(multiDelivered.last == "first sentence extended second sentence", "Delivery dropped transitioned interim")
+        print("PASS Deepgram multi-utterance pause transition & VAD jitter retained without drop")
 
         // The deadline must exist even if conversion has not drained.
         let blocked = DispatchSemaphore(value: 0)
@@ -154,6 +157,23 @@ extension SpeechEngine {
         expect(delivered.last == "Earlier sentence. Trailing words.", "Empty Apple final erased words")
         engine.receiveAppleResult(text: "duplicate", isFinal: true, error: nil, sessionID: sessionID, taskID: taskID)
         expect(delivered.count == count, "Finished Apple task delivered twice")
+
+        // Apple on-device speech silent utterance reset mid-task (isFinal == false across pause)
+        engine.currentSessionId = UUID()
+        engine.appleTaskID = UUID()
+        let pauseSession = engine.currentSessionId
+        let pauseTask = engine.appleTaskID
+        engine.confirmedTranscript = ""
+        engine.appleSegmentText = ""
+        engine.isRecording = true
+        engine.isStopping = false
+        engine.receiveAppleResult(text: "Showing the text, but then sometimes", isFinal: false, error: nil, sessionID: pauseSession, taskID: pauseTask)
+        expect(engine.transcript == "Showing the text, but then sometimes", "Apple initial partial missing")
+        engine.receiveAppleResult(text: "And", isFinal: false, error: nil, sessionID: pauseSession, taskID: pauseTask)
+        expect(engine.transcript == "Showing the text, but then sometimes And", "Apple mid-task reset wiped previous sentence")
+        engine.receiveAppleResult(text: "And it starts a brand new line.", isFinal: false, error: nil, sessionID: pauseSession, taskID: pauseTask)
+        expect(engine.transcript == "Showing the text, but then sometimes And it starts a brand new line.", "Apple mid-task continuation corrupted")
+
         engine.currentSessionId = UUID()
         engine.appleTaskID = UUID()
         engine.confirmedTranscript = ""
@@ -164,7 +184,7 @@ extension SpeechEngine {
         engine.receiveAppleResult(text: nil, isFinal: false, error: NSError(domain: "Fixture", code: 1),
                                   sessionID: engine.currentSessionId, taskID: engine.appleTaskID)
         expect(!engine.isRecording && failures == 1 && delivered.last == "Kept before error.", "Speech error lost text or retried")
-        print("PASS empty Apple final, stale Apple task, fatal service error retention")
+        print("PASS empty Apple final, mid-task pause reset retention, stale Apple task, fatal service error retention")
 
         engine.activeBackend = .apple
         engine.isRecording = true
