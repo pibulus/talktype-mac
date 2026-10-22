@@ -248,7 +248,58 @@ extension AppDelegate {
         expect(!app.pttHeld && app.isHandsFreeMode, "Rapid release was swallowed instead of applying tap semantics")
         app.engine.isRecording = false
         print("PASS rapid modifier release")
+
+        // Verify CGEventSource(.privateState) & modifier stripping on synthetic ⌘V
+        if let events = AppDelegate.makePasteKeyEvents(vKeyCode: 9) {
+            expect(events.keyDown.flags.contains(.maskCommand), "keyDown missing .maskCommand")
+            expect(!events.keyDown.flags.contains(.maskAlternate), "keyDown leaked Option (.maskAlternate)")
+            expect(!events.keyDown.flags.contains(.maskShift), "keyDown leaked Shift (.maskShift)")
+            expect(!events.keyDown.flags.contains(.maskControl), "keyDown leaked Control (.maskControl)")
+            expect(events.keyUp.flags.contains(.maskCommand) && !events.keyUp.flags.contains(.maskAlternate), "keyUp flags corrupted")
+            print("PASS synthetic ⌘V uses .privateState and strips Option/Shift/Control modifiers")
+        }
+
+        // Verify untrusted Accessibility fallback does not fail silently
+        AppDelegate.testAccessibilityTrustedOverride = false
+        let initialPrompts = AppDelegate.accessibilityPromptCount
+        app.pasteToActiveApp(text: "Uncle test transcript")
+        expect(NSPasteboard.general.string(forType: .string) == "Uncle test transcript", "Untrusted paste failed to copy to clipboard")
+        expect(AppDelegate.accessibilityPromptCount == initialPrompts + 1, "Untrusted paste did not prompt Accessibility")
+        expect(app.engine.needsAccessibilityForPaste && app.uiState.needsAccessibilityBanner, "Untrusted paste did not flag Accessibility helper")
+        expect(app.engine.transcript == L10n.t("copiedNeedAccessibility"), "Untrusted paste did not surface feedback message")
+        AppDelegate.testAccessibilityTrustedOverride = nil
+        print("PASS untrusted Accessibility fallback prompts and surfaces explicit feedback")
         #endif
+
+        // Verify Onboarding Step 3 in-popover sandbox self-test auto-paste
+        app.uiState.startOnboarding()
+        expect(app.uiState.showOnboarding && app.uiState.onboardingStep == 0 && !TalkTypeConfig.isOnboardingCompleted, "startOnboarding state invalid")
+        app.uiState.onboardingStep = 2
+        app.uiState.isSandboxFocused = true
+        app.deliver(text: "Hola desde TalkType")
+        expect(app.uiState.sandboxText == "Hola desde TalkType" && app.uiState.sandboxSuccess, "Onboarding sandbox did not receive dictated text")
+        app.uiState.completeOnboarding()
+        expect(!app.uiState.showOnboarding && TalkTypeConfig.isOnboardingCompleted, "completeOnboarding did not persist")
+        print("PASS onboarding lifecycle & Step 3 live sandbox auto-paste")
+
+        // Verify Bilingual language routing & Deepgram key validation
+        expect(TranscriptionLanguage.auto.deepgramLanguage == "multi", "Bilingual auto mode must route to Deepgram language=multi")
+        expect(TranscriptionLanguage.en.deepgramLanguage == "en" && TranscriptionLanguage.es.deepgramLanguage == "es", "Explicit language codes mismatch")
+        app.promptDeepgramKey()
+        expect(app.uiState.activeKeySetup == .deepgram, "promptDeepgramKey did not activate in-popover Deepgram setup")
+        app.promptGeminiKey()
+        expect(app.uiState.activeKeySetup == .gemini, "promptGeminiKey did not activate in-popover Gemini setup")
+
+        var validationResults: [APIKeyValidationResult] = []
+        APIKeyValidator.validateDeepgramKey("") { validationResults.append($0) }
+        APIKeyValidator.validateDeepgramKey("bad key with spaces") { validationResults.append($0) }
+        APIKeyValidator.customValidator = { modal, key, done in
+            done(modal == .deepgram && key == "dg-valid-token-1234567890" ? .valid : .invalid("bad"))
+        }
+        APIKeyValidator.validateDeepgramKey("dg-valid-token-1234567890") { validationResults.append($0) }
+        APIKeyValidator.customValidator = nil
+        expect(validationResults.count == 3 && validationResults.last == .valid, "APIKeyValidator checks failed")
+        print("PASS bilingual language=multi routing & live API key validation")
     }
 }
 

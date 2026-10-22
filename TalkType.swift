@@ -123,12 +123,28 @@ enum TranscriptionLanguage: String, CaseIterable {
         }
     }
 
+    var shortBadge: String {
+        switch self {
+        case .auto: return "EN·ES"
+        case .en: return "EN"
+        case .es: return "ES"
+        }
+    }
+
+    var pillLabel: String {
+        switch self {
+        case .auto: return "Bilingual"
+        case .en: return "English"
+        case .es: return "Español"
+        }
+    }
+
     var appleLocale: Locale {
         switch self {
         case .auto:
             let isSpanish = Locale.current.identifier.starts(with: "es") || Locale.preferredLanguages.first?.starts(with: "es") == true
             if isSpanish {
-                return Locale.current.identifier.starts(with: "es") ? Locale.current : Locale(identifier: "es-ES")
+                return Locale.current.identifier.starts(with: "es") ? Locale.current : Locale(identifier: "es-MX")
             }
             return Locale(identifier: "en-US")
         case .en: return Locale(identifier: "en-US")
@@ -136,15 +152,20 @@ enum TranscriptionLanguage: String, CaseIterable {
             if Locale.current.identifier.starts(with: "es") {
                 return Locale.current
             }
+            if SFSpeechRecognizer.supportedLocales().contains(Locale(identifier: "es-MX")) {
+                return Locale(identifier: "es-MX")
+            }
             return Locale(identifier: "es-ES")
         }
     }
 
+    var offlineActiveCode: String {
+        appleLocale.identifier.lowercased().starts(with: "es") ? "ES" : "EN"
+    }
+
     var deepgramLanguage: String {
         switch self {
-        case .auto:
-            let isSpanish = Locale.current.identifier.starts(with: "es") || Locale.preferredLanguages.first?.starts(with: "es") == true
-            return isSpanish ? "es" : "en"
+        case .auto: return "multi"
         case .en: return "en"
         case .es: return "es"
         }
@@ -214,7 +235,7 @@ enum L10n {
     #endif
 
     static let strings: [String: [String: String]] = [
-        "auto": ["en": "Auto-detect", "es": "Detección automática"],
+        "auto": ["en": "Bilingual (English + Español)", "es": "Bilingüe (Español + Inglés)"],
         "english": ["en": "English", "es": "Inglés"],
         "spanish": ["en": "Spanish", "es": "Español"],
         "language": ["en": "Language", "es": "Idioma"],
@@ -270,7 +291,34 @@ enum L10n {
         "paste": ["en": "Paste", "es": "Pegar"],
         "menuBarClick": ["en": "Left / Right Click", "es": "Clic izquierdo / derecho"],
         "clickDefault": ["en": "Left: Card · Right: Menu", "es": "Izquierdo: Tarjeta · Derecho: Menú"],
-        "clickSwapped": ["en": "Left: Menu · Right: Card", "es": "Izquierdo: Menú · Derecho: Tarjeta"]
+        "clickSwapped": ["en": "Left: Menu · Right: Card", "es": "Izquierdo: Menú · Derecho: Tarjeta"],
+        "runSetupGuide": ["en": "Run Setup Guide…", "es": "Guía de configuración…"],
+        "copiedNeedAccessibility": ["en": "Copied to clipboard — enable Accessibility to auto-paste", "es": "Copiado al portapapeles — activa Accesibilidad para pegar automáticamente"],
+        "enableAutoPaste": ["en": "Enable", "es": "Activar"],
+        "grantMicrophone": ["en": "Allow", "es": "Permitir"],
+        "microphoneReady": ["en": "Ready", "es": "Listo"],
+        "autoPasteReady": ["en": "Ready", "es": "Listo"],
+        "pasteFromClipboard": ["en": "Paste", "es": "Pegar"],
+        "pasteKeyBtn": ["en": "Paste", "es": "Pegar"],
+        "connectedDeepgram": ["en": "Connected to Nova-3", "es": "Conectado a Nova-3"],
+        "connectedGemini": ["en": "Connected to Gemini", "es": "Conectado a Gemini"],
+        "verifyingKey": ["en": "Checking…", "es": "Verificando…"],
+        "dgInvalidKeyError": ["en": "Invalid Deepgram key — check for typos or paste the full key.", "es": "Clave de Deepgram no válida — revisa o pega la clave completa."],
+        "geminiInvalidKeyError": ["en": "Invalid Gemini key — check for typos or paste the full key.", "es": "Clave de Gemini no válida — revisa o pega la clave completa."],
+        "keySpacesError": ["en": "Key contains spaces or invalid characters.", "es": "La clave contiene espacios o caracteres no válidos."],
+        "keyEmptyError": ["en": "Paste your key first.", "es": "Pega tu clave primero."],
+        "removeKey": ["en": "Remove Key", "es": "Eliminar clave"],
+        "onboardWelcome": ["en": "Setup", "es": "Ajustes"],
+        "onboardStep1Title": ["en": "Ready when you are.", "es": "Listo cuando quieras."],
+        "onboardStep1Sub": ["en": "Two quick switches so TalkType can hear and paste.", "es": "Dos permisos rápidos para escuchar y pegar al soltar."],
+        "onboardStep2Title": ["en": "How do you talk?", "es": "¿En qué idioma hablas?"],
+        "onboardStep2Sub": ["en": "Pick your language and voice engine.", "es": "Elige tu idioma y el motor de voz."],
+        "onboardStep3Title": ["en": "Take it for a spin.", "es": "Pruébalo ahora."],
+        "onboardStep3Sub": ["en": "Hold your shortcut, say something, and let go.", "es": "Mantén tu atajo, di algo y suelta."],
+        "onboardSandboxPlaceholder": ["en": "Hold Right ⌥ Option, speak, and let go — your words land right here…", "es": "Mantén ⌥ Option, habla y suelta — tus palabras aparecerán aquí…"],
+        "onboardSandboxSuccess": ["en": "Auto-paste works!", "es": "¡El pegado automático funciona!"],
+        "startUsingTalkType": ["en": "Start Talking", "es": "Empezar a hablar"],
+        "offlineSingleLangHint": ["en": "Offline mode listens to one language at a time.", "es": "El modo sin conexión escucha un idioma a la vez."]
     ]
 }
 
@@ -285,6 +333,12 @@ enum TalkTypeConfig {
     static let languageStorageKey = "talktypeLanguage"
     static let customKeywordsStorageKey = "talktypeCustomKeywords"
     static let swapClicksStorageKey = "talktypeSwapClicks"
+    static let onboardingCompletedStorageKey = "talktypeOnboardingCompleted"
+
+    static var isOnboardingCompleted: Bool {
+        get { UserDefaults.standard.bool(forKey: onboardingCompletedStorageKey) }
+        set { UserDefaults.standard.set(newValue, forKey: onboardingCompletedStorageKey) }
+    }
 
     static var isClicksSwapped: Bool {
         get { UserDefaults.standard.bool(forKey: swapClicksStorageKey) }
@@ -634,6 +688,145 @@ class HistoryStore: ObservableObject {
     }
 }
 
+// MARK: - Key Setup & Onboarding UI State
+enum KeySetupModal: Identifiable, Equatable {
+    case deepgram
+    case gemini
+    var id: Self { self }
+}
+
+enum APIKeyValidationResult: Equatable {
+    case valid
+    case invalid(String)
+}
+
+enum APIKeyValidator {
+    static var customValidator: ((KeySetupModal, String, @escaping (APIKeyValidationResult) -> Void) -> Void)?
+
+    static func validateDeepgramKey(_ rawKey: String, completion: @escaping (APIKeyValidationResult) -> Void) {
+        let key = rawKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else {
+            completion(.invalid(L10n.t("keyEmptyError")))
+            return
+        }
+        guard key.rangeOfCharacter(from: .whitespacesAndNewlines.union(.controlCharacters)) == nil else {
+            completion(.invalid(L10n.t("keySpacesError")))
+            return
+        }
+        if let custom = customValidator {
+            custom(.deepgram, key, completion)
+            return
+        }
+        guard let url = URL(string: "https://api.deepgram.com/v1/projects") else {
+            completion(.invalid("Invalid validation URL."))
+            return
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 6.0
+        request.setValue("Token \(key)", forHTTPHeaderField: "Authorization")
+
+        URLSession.shared.dataTask(with: request) { _, response, error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    completion(.invalid("Could not reach Deepgram (\(error.localizedDescription)). Check your internet connection."))
+                    return
+                }
+                if let http = response as? HTTPURLResponse {
+                    if (200...299).contains(http.statusCode) {
+                        completion(.valid)
+                    } else if http.statusCode == 401 || http.statusCode == 403 {
+                        completion(.invalid(L10n.t("dgInvalidKeyError")))
+                    } else {
+                        completion(.invalid("Deepgram returned HTTP \(http.statusCode). Please check your key."))
+                    }
+                } else {
+                    completion(.invalid("Unexpected response from Deepgram."))
+                }
+            }
+        }.resume()
+    }
+
+    static func validateGeminiKey(_ rawKey: String, completion: @escaping (APIKeyValidationResult) -> Void) {
+        let key = rawKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else {
+            completion(.invalid(L10n.t("keyEmptyError")))
+            return
+        }
+        guard key.rangeOfCharacter(from: .whitespacesAndNewlines.union(.controlCharacters)) == nil else {
+            completion(.invalid(L10n.t("keySpacesError")))
+            return
+        }
+        if let custom = customValidator {
+            custom(.gemini, key, completion)
+            return
+        }
+        guard let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models") else {
+            completion(.invalid("Invalid validation URL."))
+            return
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 6.0
+        request.setValue(key, forHTTPHeaderField: "x-goog-api-key")
+
+        URLSession.shared.dataTask(with: request) { _, response, error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    completion(.invalid("Could not reach Google Gemini (\(error.localizedDescription))."))
+                    return
+                }
+                if let http = response as? HTTPURLResponse {
+                    if (200...299).contains(http.statusCode) {
+                        completion(.valid)
+                    } else if http.statusCode == 400 || http.statusCode == 401 || http.statusCode == 403 {
+                        completion(.invalid(L10n.t("geminiInvalidKeyError")))
+                    } else {
+                        completion(.invalid("Gemini API returned HTTP \(http.statusCode)."))
+                    }
+                } else {
+                    completion(.invalid("Unexpected response from Gemini API."))
+                }
+            }
+        }.resume()
+    }
+}
+
+final class AppUIState: ObservableObject {
+    @Published var activeKeySetup: KeySetupModal? = nil
+    @Published var showOnboarding: Bool = !UserDefaults.standard.bool(forKey: TalkTypeConfig.onboardingCompletedStorageKey)
+    @Published var onboardingStep: Int = 0
+    @Published var isSandboxFocused: Bool = false
+    @Published var sandboxText: String = ""
+    @Published var sandboxSuccess: Bool = false
+    @Published var needsAccessibilityBanner: Bool = false
+
+    func startOnboarding() {
+        onboardingStep = 0
+        sandboxText = ""
+        sandboxSuccess = false
+        TalkTypeConfig.isOnboardingCompleted = false
+        showOnboarding = true
+    }
+
+    func completeOnboarding() {
+        TalkTypeConfig.isOnboardingCompleted = true
+        showOnboarding = false
+        isSandboxFocused = false
+    }
+
+    func recordSandboxPaste(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        if sandboxText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            sandboxText = trimmed
+        } else {
+            sandboxText += " " + trimmed
+        }
+        sandboxSuccess = true
+    }
+}
+
 // MARK: - App Delegate & Entry Point
 #if !TALKTYPE_TESTING
 @main
@@ -643,9 +836,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var popover: NSPopover!
     let engine = SpeechEngine()
     let history = HistoryStore.shared
+    let uiState = AppUIState()
     private var liveHUDController: LiveHUDWindowController?
     private var dictationTargetApp: NSRunningApplication?
     private var lastExternalApp: NSRunningApplication?
+    static var testAccessibilityTrustedOverride: Bool? = nil
+    static var accessibilityPromptCount: Int = 0
 
     private var hotKeyRef: EventHotKeyRef?
     private var hotKeyHandler: EventHandlerRef?
@@ -685,18 +881,65 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         liveHUDController?.hide()
     }
 
+    func isAccessibilityTrusted() -> Bool {
+        #if MAS_BUILD
+        return false
+        #else
+        if let override = Self.testAccessibilityTrustedOverride {
+            return override
+        }
+        return AXIsProcessTrusted()
+        #endif
+    }
+
+    #if !MAS_BUILD
+    func promptAccessibilityTrust(openSettings: Bool = false) {
+        Self.accessibilityPromptCount += 1
+        #if !TALKTYPE_TESTING
+        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+        _ = AXIsProcessTrustedWithOptions(options)
+        if openSettings {
+            openAccessibilitySettings()
+        }
+        #endif
+    }
+    #endif
+
+    func updateTargetAppFromFrontmost() {
+        if let front = NSWorkspace.shared.frontmostApplication,
+           front.bundleIdentifier != Bundle.main.bundleIdentifier {
+            dictationTargetApp = front
+            lastExternalApp = front
+        } else {
+            dictationTargetApp = lastExternalApp
+        }
+    }
+
     func applicationDidFinishLaunching(_ aNotification: Notification) {
-        // Track the active user application so menu take pasting hits the right window
-        NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didDeactivateApplicationNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] note in
+        // Initialize and continuously track the last non-TalkType app that had focus,
+        // even if the user clicked the TalkType popover first.
+        if let front = NSWorkspace.shared.frontmostApplication,
+           front.bundleIdentifier != Bundle.main.bundleIdentifier {
+            lastExternalApp = front
+        }
+        let trackExternalApp: (Notification) -> Void = { [weak self] note in
             if let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
                app.bundleIdentifier != Bundle.main.bundleIdentifier {
                 self?.lastExternalApp = app
             }
         }
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main,
+            using: trackExternalApp
+        )
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didDeactivateApplicationNotification,
+            object: nil,
+            queue: .main,
+            using: trackExternalApp
+        )
 
         // Setup Menu Bar Item
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -710,15 +953,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Setup Popover
         popover = NSPopover()
-        popover.contentSize = NSSize(width: 330, height: 440)
+        popover.contentSize = NSSize(width: 346, height: 440)
         popover.behavior = .transient
         
         // Host the SwiftUI View
-        let contentView = ContentView(speechEngine: engine, history: history, appDelegate: self)
+        let contentView = ContentView(speechEngine: engine, history: history, uiState: uiState, appDelegate: self)
         popover.contentViewController = NSHostingController(rootView: contentView)
         
         // Live HUD controller
-        liveHUDController = LiveHUDWindowController(speechEngine: engine)
+        liveHUDController = LiveHUDWindowController(speechEngine: engine, appDelegate: self)
 
         engine.onFailure = { [weak self] message in self?.showFailure(message) }
         KeychainHelper.onFailure = { [weak self] message in self?.showFailure(message) }
@@ -765,6 +1008,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     self.deliverySessionId = UUID()
                     self.feedbackID = UUID()
                     self.engine.failureMessage = nil
+                    self.engine.needsAccessibilityForPaste = false
+                    self.liveHUDController?.setInteractive(false)
                     self.startMenubarBounce()
                     self.liveHUDController?.show()
                     NSSound(named: "Tink")?.play()
@@ -787,23 +1032,39 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         setupPushToTalk()
         #endif
 
-        // Minimal mainMenu so ⌘Q works cleanly whenever the popover is focused
+        // Minimal mainMenu so ⌘Q and standard text editing (⌘V, ⌘C, ⌘X, ⌘A, ⌘Z) work in modals/popovers
         let mainMenu = NSMenu()
         let appMenuItem = NSMenuItem()
         let appMenu = NSMenu()
         appMenu.addItem(withTitle: L10n.t("quit"), action: #selector(quitApp), keyEquivalent: "q").target = self
         appMenuItem.submenu = appMenu
         mainMenu.addItem(appMenuItem)
+
+        let editMenuItem = NSMenuItem()
+        let editMenu = NSMenu(title: "Edit")
+        editMenu.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        editMenu.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
+        editMenu.addItem(NSMenuItem.separator())
+        editMenu.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        editMenu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        editMenu.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        editMenu.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        editMenuItem.submenu = editMenu
+        mainMenu.addItem(editMenuItem)
+
         NSApp.mainMenu = mainMenu
 
-        // Open the card on first launch (and on MAS launch) so LSUIElement never appears unresponsive
+        // Open the card on first launch, when onboarding is incomplete, or on MAS launch
         #if MAS_BUILD
         let shouldShowInitialPopover = true
         #else
-        let shouldShowInitialPopover = !UserDefaults.standard.bool(forKey: "talktypeHasLaunchedBefore")
+        let shouldShowInitialPopover = !UserDefaults.standard.bool(forKey: "talktypeHasLaunchedBefore") || !TalkTypeConfig.isOnboardingCompleted
         #endif
         if shouldShowInitialPopover {
             UserDefaults.standard.set(true, forKey: "talktypeHasLaunchedBefore")
+            if !TalkTypeConfig.isOnboardingCompleted {
+                uiState.showOnboarding = true
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
                 guard let self = self, !self.popover.isShown else { return }
                 self.openVisualPopover()
@@ -1006,8 +1267,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 deliverySessionId = UUID()
                 pttPressTime = Date()
                 pendingPaste = true
-                dictationTargetApp = NSWorkspace.shared.frontmostApplication
-                lastExternalApp = dictationTargetApp
+                updateTargetAppFromFrontmost()
                 engine.startRecording(resumeAfterPermission: false)
                 if !engine.isRecording {
                     pttHeld = false
@@ -1053,7 +1313,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func deliver(text: String) {
+    func deliver(text: String) {
         guard Thread.isMainThread else {
             DispatchQueue.main.async { [weak self] in self?.deliver(text: text) }
             return
@@ -1065,6 +1325,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         pasteboard.setString(text, forType: .string)
         engine.phase = .ready
 
+        // 2. If user is testing inside Onboarding Step 3 sandbox (or focused in the test box),
+        // insert directly into the sandbox field so they see Hold-to-Talk + Auto-Paste working immediately!
+        let inOnboardingSandbox = (uiState.showOnboarding && uiState.onboardingStep == 2) || uiState.isSandboxFocused
+        if inOnboardingSandbox {
+            uiState.recordSandboxPaste(text)
+            let isTalkTypeFrontmost = NSWorkspace.shared.frontmostApplication?.bundleIdentifier == Bundle.main.bundleIdentifier
+            if isTalkTypeFrontmost || uiState.isSandboxFocused || (dictationTargetApp == nil && lastExternalApp == nil) {
+                self.pendingPaste = false
+                self.engine.needsAccessibilityForPaste = false
+                self.engine.transcript = text
+                self.liveHUDController?.hide(after: 0.9)
+                scheduleIdleReset()
+                return
+            }
+        }
+
 #if MAS_BUILD
         // MAS uses Carbon or the menu bar to dictate; delivery is clipboard-only.
         self.pendingPaste = false
@@ -1075,10 +1351,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let shouldAutoPaste = self.pendingPaste || (targetApp != nil && targetApp?.bundleIdentifier != Bundle.main.bundleIdentifier)
         self.pendingPaste = false
 
-        if AXIsProcessTrusted() && shouldAutoPaste {
-            engine.transcript = text
+        if shouldAutoPaste {
             self.pasteToActiveApp(text: text)
-            self.liveHUDController?.hide(after: 0.9)
         } else {
             // Clipboard fallback with explicit visual feedback
             self.engine.transcript = L10n.t("copiedToClipboard")
@@ -1086,6 +1360,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 #endif
 
+        scheduleIdleReset()
+    }
+
+    private func scheduleIdleReset() {
         let delivery = deliverySessionId
         let resetReadyState = DispatchWorkItem { [weak self] in
             guard let self = self, self.deliverySessionId == delivery,
@@ -1381,6 +1659,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // ══════════════════════════════════════════════════════════
         menu.addItem(NSMenuItem.separator())
 
+        let setupGuideItem = NSMenuItem(title: L10n.t("runSetupGuide"), action: #selector(runSetupGuide), keyEquivalent: "")
+        setupGuideItem.target = self
+        menu.addItem(setupGuideItem)
+
         let webItem = NSMenuItem(title: L10n.t("talkTypeWeb"), action: #selector(openTalkTypeWeb), keyEquivalent: "")
         webItem.target = self
         menu.addItem(webItem)
@@ -1451,15 +1733,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func pasteSpecificRecord(_ sender: NSMenuItem) {
         guard let text = sender.representedObject as? String else { return }
         #if !MAS_BUILD
-        if AXIsProcessTrusted() {
-            pasteToActiveApp(text: text)
-            return
-        }
-        #endif
+        pasteToActiveApp(text: text)
+        #else
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
         NSSound(named: "Pop")?.play()
+        #endif
     }
 
     @objc func copySpecificRecord(_ sender: NSMenuItem) {
@@ -1499,13 +1779,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         TalkTypeConfig.isClicksSwapped = true
     }
 
+    @objc func runSetupGuide() {
+        uiState.activeKeySetup = nil
+        uiState.startOnboarding()
+        if popover != nil && !popover.isShown {
+            openVisualPopover()
+        }
+    }
+
     @objc func selectDeepgramModel() {
         if TalkTypeConfig.deepgramApiKey.isEmpty {
             promptDeepgramKey()
-            if TalkTypeConfig.deepgramApiKey.isEmpty {
-                UserDefaults.standard.set("apple", forKey: TalkTypeConfig.engineStorageKey)
-                return
-            }
+            return
         }
         UserDefaults.standard.set("deepgram", forKey: TalkTypeConfig.engineStorageKey)
     }
@@ -1515,50 +1800,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func promptDeepgramKey() {
-        let alert = NSAlert()
-        alert.messageText = L10n.t("dgAlertTitle")
-        alert.informativeText = L10n.t("dgAlertInfo")
-        alert.alertStyle = .informational
-        let hasKey = !TalkTypeConfig.deepgramApiKey.isEmpty
-        alert.addButton(withTitle: hasKey ? L10n.t("updatePass") : L10n.t("save"))
-        #if !MAS_BUILD
-        alert.addButton(withTitle: L10n.t("getKey"))
-        #endif
-        alert.addButton(withTitle: L10n.t("cancel"))
-
-        let input = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
-        input.stringValue = TalkTypeConfig.deepgramApiKey
-        input.placeholderString = hasKey ? L10n.t("pasteKeyOrClear") : L10n.t("pasteKey")
-        alert.accessoryView = input
-
-        let response = alert.runModal()
-        switch response {
-        case .alertFirstButtonReturn:
-            let key = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard key.rangeOfCharacter(from: .whitespacesAndNewlines.union(.controlCharacters)) == nil else {
-                showFailure("The API key contains spaces or control characters.")
-                return
-            }
-            if key.isEmpty {
-                guard KeychainHelper.delete(service: TalkTypeConfig.keychainService, account: TalkTypeConfig.keychainAccount) else { return }
-                UserDefaults.standard.removeObject(forKey: TalkTypeConfig.deepgramKeyStorageKey)
-                UserDefaults.standard.set("apple", forKey: TalkTypeConfig.engineStorageKey)
-            } else {
-                guard KeychainHelper.save(key, service: TalkTypeConfig.keychainService, account: TalkTypeConfig.keychainAccount) else { return }
-                UserDefaults.standard.removeObject(forKey: TalkTypeConfig.deepgramKeyStorageKey)
-                UserDefaults.standard.set("deepgram", forKey: TalkTypeConfig.engineStorageKey)
-            }
-        #if !MAS_BUILD
-        case .alertSecondButtonReturn:
-            if let url = URL(string: "https://console.deepgram.com/signup") {
-                NSWorkspace.shared.open(url)
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-                self?.promptDeepgramKey()
-            }
-        #endif
-        default:
-            break
+        uiState.activeKeySetup = .deepgram
+        if popover != nil && !popover.isShown {
+            openVisualPopover()
         }
     }
 
@@ -1581,48 +1825,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func promptGeminiKey() {
-        let alert = NSAlert()
-        alert.messageText = L10n.t("geminiAlertTitle")
-        alert.informativeText = L10n.t("geminiAlertInfo")
-        alert.alertStyle = .informational
-        let hasKey = !TalkTypeConfig.geminiApiKey.isEmpty
-        alert.addButton(withTitle: hasKey ? L10n.t("updatePass") : L10n.t("save"))
-        #if !MAS_BUILD
-        alert.addButton(withTitle: L10n.t("getKey"))
-        #endif
-        alert.addButton(withTitle: L10n.t("cancel"))
-
-        let input = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
-        input.stringValue = TalkTypeConfig.geminiApiKey
-        input.placeholderString = hasKey ? L10n.t("pasteKeyOrClear") : L10n.t("pasteGeminiKey")
-        alert.accessoryView = input
-
-        let response = alert.runModal()
-        switch response {
-        case .alertFirstButtonReturn:
-            let key = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard key.rangeOfCharacter(from: .whitespacesAndNewlines.union(.controlCharacters)) == nil else {
-                showFailure("The API key contains spaces or control characters.")
-                return
-            }
-            if key.isEmpty {
-                guard KeychainHelper.delete(service: TalkTypeConfig.keychainService, account: TalkTypeConfig.keychainAccountGemini) else { return }
-                TalkTypeConfig.isPolishing = false
-            } else {
-                guard KeychainHelper.save(key, service: TalkTypeConfig.keychainService, account: TalkTypeConfig.keychainAccountGemini) else { return }
-                TalkTypeConfig.isPolishing = true
-            }
-        #if !MAS_BUILD
-        case .alertSecondButtonReturn:
-            if let url = URL(string: "https://aistudio.google.com/app/apikey") {
-                NSWorkspace.shared.open(url)
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-                self?.promptGeminiKey()
-            }
-        #endif
-        default:
-            break
+        uiState.activeKeySetup = .gemini
+        if popover != nil && !popover.isShown {
+            openVisualPopover()
         }
     }
 
@@ -1638,6 +1843,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         input.stringValue = VocabularyManager.userKeywordsString
         input.placeholderString = "TalkType, pibulus, doctype -> TalkType"
         alert.accessoryView = input
+        alert.window.initialFirstResponder = input
 
         let response = alert.runModal()
         if response == .alertFirstButtonReturn {
@@ -1690,51 +1896,110 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return 9
     }
 
+    static func makePasteKeyEvents(vKeyCode: CGKeyCode) -> (keyDown: CGEvent, keyUp: CGEvent)? {
+        let src = CGEventSource(stateID: .privateState)
+        guard let keyDown = CGEvent(keyboardEventSource: src, virtualKey: vKeyCode, keyDown: true),
+              let keyUp = CGEvent(keyboardEventSource: src, virtualKey: vKeyCode, keyDown: false) else {
+            return nil
+        }
+        // Explicitly clear all physical modifier flags (.maskAlternate, .maskShift, .maskControl)
+        // and strictly assign only .maskCommand so releasing Option never turns ⌘V into ⌥⌘V.
+        let cleared: CGEventFlags = [.maskAlternate, .maskShift, .maskControl]
+        keyDown.flags = CGEventFlags.maskCommand.subtracting(cleared)
+        keyUp.flags = CGEventFlags.maskCommand.subtracting(cleared)
+        return (keyDown, keyUp)
+    }
+
     // Simulates Cmd+V to paste into the active app
     func pasteToActiveApp(text: String) {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         guard pasteboard.setString(text, forType: .string) else { return }
+
+        guard isAccessibilityTrusted() else {
+            // Do NOT fail silently when Accessibility is untrusted!
+            promptAccessibilityTrust(openSettings: false)
+            uiState.needsAccessibilityBanner = true
+            engine.needsAccessibilityForPaste = true
+            engine.transcript = L10n.t("copiedNeedAccessibility")
+            liveHUDController?.setInteractive(true)
+            liveHUDController?.show()
+            liveHUDController?.hide(after: 4.5)
+            return
+        }
+
+        uiState.needsAccessibilityBanner = false
+        engine.needsAccessibilityForPaste = false
+        engine.transcript = text
+        liveHUDController?.setInteractive(false)
+        liveHUDController?.hide(after: 0.9)
+
         let changeCount = pasteboard.changeCount
         let eventID = UUID()
         pasteEventID = eventID
         let deliveryID = deliverySessionId
-        let targetApp = self.dictationTargetApp ?? self.lastExternalApp
+        let rawTarget = self.dictationTargetApp ?? self.lastExternalApp
+        let targetApp = (rawTarget?.bundleIdentifier != Bundle.main.bundleIdentifier) ? rawTarget : self.lastExternalApp
         self.dictationTargetApp = nil
         
-        let wasPopoverShown = popover.isShown
+        let wasPopoverShown = popover != nil && popover.isShown
         if wasPopoverShown {
             popover.performClose(nil)
         }
         
-        // If an interfering window (e.g. expression script or system modal) stole focus,
-        // reactivate the original target application before simulating Cmd+V.
+        // If an interfering window (or our popover) had focus, reactivate the target application before simulating Cmd+V.
         if let target = targetApp, target.processIdentifier != NSRunningApplication.current.processIdentifier {
             target.activate(options: [.activateIgnoringOtherApps])
         }
         
         // Allow time for target app to gain focus and pasteboard propagation
         let delay: TimeInterval = (wasPopoverShown || targetApp != nil) ? 0.18 : 0.08
+        postPasteEventWhenReady(
+            targetApp: targetApp,
+            eventID: eventID,
+            deliveryID: deliveryID,
+            changeCount: changeCount,
+            delay: delay,
+            attempt: 0
+        )
+    }
+
+    private func postPasteEventWhenReady(
+        targetApp: NSRunningApplication?,
+        eventID: UUID,
+        deliveryID: UUID,
+        changeCount: Int,
+        delay: TimeInterval,
+        attempt: Int
+    ) {
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-            guard let self = self, self.pasteEventID == eventID,
+            guard let self = self,
+                  self.pasteEventID == eventID,
                   self.deliverySessionId == deliveryID,
-                  AXIsProcessTrusted(), pasteboard.changeCount == changeCount else { return }
-            let src = CGEventSource(stateID: .combinedSessionState)
-            let vKeyCode: CGKeyCode = self.resolvePasteKeyCode()
-            
-            guard let keyDown = CGEvent(keyboardEventSource: src, virtualKey: vKeyCode, keyDown: true),
-                  let keyUp = CGEvent(keyboardEventSource: src, virtualKey: vKeyCode, keyDown: false) else {
+                  self.isAccessibilityTrusted(),
+                  NSPasteboard.general.changeCount == changeCount else { return }
+
+            if let target = targetApp,
+               target.processIdentifier != NSRunningApplication.current.processIdentifier,
+               !target.isTerminated,
+               !target.isActive,
+               attempt < 3 {
+                target.activate(options: [.activateIgnoringOtherApps])
+                self.postPasteEventWhenReady(
+                    targetApp: targetApp,
+                    eventID: eventID,
+                    deliveryID: deliveryID,
+                    changeCount: changeCount,
+                    delay: 0.09,
+                    attempt: attempt + 1
+                )
                 return
             }
-            
-            // Explicitly clear all hardware modifiers and strictly assign Command
-            keyDown.flags = []
-            keyDown.flags = .maskCommand
-            keyUp.flags = []
-            keyUp.flags = .maskCommand
-            
-            keyDown.post(tap: .cghidEventTap)
-            keyUp.post(tap: .cghidEventTap)
+
+            let vKeyCode: CGKeyCode = self.resolvePasteKeyCode()
+            guard let events = Self.makePasteKeyEvents(vKeyCode: vKeyCode) else { return }
+            events.keyDown.post(tap: .cghidEventTap)
+            events.keyUp.post(tap: .cghidEventTap)
         }
     }
     #endif
@@ -1747,7 +2012,7 @@ final class LiveHUDWindowController: NSWindowController {
     private let speechEngine: SpeechEngine
     private var pendingHideItem: DispatchWorkItem?
 
-    init(speechEngine: SpeechEngine) {
+    init(speechEngine: SpeechEngine, appDelegate: AppDelegate? = nil) {
         self.speechEngine = speechEngine
         let mouseLoc = NSEvent.mouseLocation
         let screenWithMouse = NSScreen.screens.first(where: { NSMouseInRect(mouseLoc, $0.frame, false) })
@@ -1778,7 +2043,12 @@ final class LiveHUDWindowController: NSWindowController {
         window.contentView = NSHostingView(
             rootView: LiveTranscriptHUDView(
                 speechEngine: speechEngine,
-                audioMeter: speechEngine.audioMeter
+                audioMeter: speechEngine.audioMeter,
+                onOpenAccessibility: { [weak appDelegate] in
+                    #if !MAS_BUILD
+                    appDelegate?.promptAccessibilityTrust(openSettings: true)
+                    #endif
+                }
             ))
 
         super.init(window: window)
@@ -1789,6 +2059,10 @@ final class LiveHUDWindowController: NSWindowController {
             name: NSApplication.didChangeScreenParametersNotification,
             object: nil
         )
+    }
+
+    func setInteractive(_ interactive: Bool) {
+        window?.ignoresMouseEvents = !interactive
     }
     
     deinit {
@@ -1875,6 +2149,7 @@ final class LiveHUDWindowController: NSWindowController {
 struct LiveTranscriptHUDView: View {
     @ObservedObject var speechEngine: SpeechEngine
     @ObservedObject var audioMeter: AudioLevelMeter
+    var onOpenAccessibility: (() -> Void)? = nil
     @State private var wavePhase: Double = 0
     @State private var borderAngle: Double = 0
     @State private var ghostBounce: CGFloat = 1.0
@@ -2029,7 +2304,20 @@ struct LiveTranscriptHUDView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             
-            activityIndicator
+            if speechEngine.needsAccessibilityForPaste, let onOpenAccessibility = onOpenAccessibility {
+                Button(action: onOpenAccessibility) {
+                    Text(L10n.t("enableAutoPaste"))
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundStyle(Color.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(TT.hot)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            } else {
+                activityIndicator
+            }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
@@ -2286,6 +2574,7 @@ class SpeechEngine: NSObject, ObservableObject {
     @Published var transcript = ""
     @Published var isRecording = false
     @Published var phase: SpeechPhase = .idle
+    @Published var needsAccessibilityForPaste = false
 
     var hasActiveCapture: Bool {
         isRecording || audioEngine.isRunning
@@ -3370,10 +3659,957 @@ struct HistoryRecordCard: View {
     }
 }
 
+// MARK: - In-Popover API Key Setup & Live Validation Card
+struct KeySetupCardView: View {
+    let kind: KeySetupModal
+    let p: Palette
+    let embedded: Bool
+    var onSaved: () -> Void
+    var onCancel: (() -> Void)? = nil
+
+    @State private var keyInput: String = ""
+    @State private var revealKey: Bool = true
+    @State private var isValidating: Bool = false
+    @State private var validationSuccess: String? = nil
+    @State private var validationError: String? = nil
+
+    private var existingKey: String {
+        switch kind {
+        case .deepgram: return TalkTypeConfig.deepgramApiKey
+        case .gemini: return TalkTypeConfig.geminiApiKey
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: embedded ? 10 : 12) {
+            if !embedded {
+                HStack(alignment: .center) {
+                    HStack(spacing: 0) {
+                        Text("Talk").foregroundStyle(p.ink)
+                        Text("Type").foregroundStyle(TT.hot)
+                    }
+                    .font(.system(size: 22, weight: .heavy, design: .rounded))
+                    .kerning(-0.5)
+
+                    Spacer()
+
+                    if let onCancel = onCancel {
+                        Button(action: onCancel) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(p.inkSoft.opacity(0.6))
+                                .frame(width: 24, height: 24)
+                                .background(p.card)
+                                .clipShape(Circle())
+                                .overlay(Circle().strokeBorder(p.border.opacity(0.6), lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(kind == .deepgram ? "Supercharged Nova-3" : "Auto-Polish with Gemini")
+                        .font(.system(size: 15, weight: .heavy, design: .rounded))
+                        .foregroundStyle(p.ink)
+
+                    Text(kind == .deepgram
+                         ? "Real-time cloud streaming with native bilingual EN + ES. Paste your free $200 Deepgram pass below."
+                         : "Paste a free Google AI Studio key to automatically format transcripts into clean prose.")
+                        .font(.system(size: 11.5, weight: .medium, design: .rounded))
+                        .foregroundStyle(p.inkSoft.opacity(0.8))
+                        .lineSpacing(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            // Single-line monospaced input + inline Paste pill & eye toggle
+            HStack(spacing: 6) {
+                Group {
+                    if revealKey {
+                        TextField(
+                            kind == .deepgram ? L10n.t("pasteKey") : L10n.t("pasteGeminiKey"),
+                            text: $keyInput
+                        )
+                    } else {
+                        SecureField(
+                            kind == .deepgram ? L10n.t("pasteKey") : L10n.t("pasteGeminiKey"),
+                            text: $keyInput
+                        )
+                    }
+                }
+                .textFieldStyle(.plain)
+                .font(.system(size: 11.5, weight: .medium, design: .monospaced))
+                .foregroundStyle(p.ink)
+                .lineLimit(1)
+
+                Button(action: { revealKey.toggle() }) {
+                    Image(systemName: revealKey ? "eye.slash" : "eye")
+                        .font(.system(size: 10.5, weight: .semibold))
+                        .foregroundStyle(p.inkSoft.opacity(0.55))
+                }
+                .buttonStyle(.plain)
+                .help(revealKey ? "Hide key" : "Show key")
+
+                Button(action: pasteFromClipboardAndValidate) {
+                    HStack(spacing: 3) {
+                        Image(systemName: "doc.on.clipboard")
+                            .font(.system(size: 9.5, weight: .bold))
+                        Text(L10n.t("pasteKeyBtn"))
+                            .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                            .lineLimit(1)
+                    }
+                    .fixedSize(horizontal: true, vertical: false)
+                    .foregroundStyle(TT.pink)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(TT.pink.opacity(0.18))
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.leading, 10)
+            .padding(.trailing, 6)
+            .padding(.vertical, 6)
+            .background(p.paperLit)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(p.border, lineWidth: 1.5)
+            )
+
+            // Full-width single-line Activate CTA
+            Button(action: validateAndSave) {
+                HStack(spacing: 6) {
+                    Spacer()
+                    if isValidating {
+                        ProgressView()
+                            .controlSize(.small)
+                            .scaleEffect(0.65)
+                    }
+                    Text(isValidating ? L10n.t("verifyingKey") : L10n.t("save"))
+                        .font(.system(size: 12, weight: .heavy, design: .rounded))
+                        .lineLimit(1)
+                    Spacer()
+                }
+                .foregroundStyle(Color.white)
+                .padding(.vertical, 8)
+                .background(TT.hot)
+                .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .disabled(isValidating)
+
+            // Status / Signup Footer
+            if let success = validationSuccess {
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(TT.pink)
+                    Text(success)
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundStyle(p.ink)
+                        .lineLimit(1)
+                    Spacer()
+                    #if !MAS_BUILD
+                    Button(action: openSignupPage) {
+                        Text(L10n.t("getKey"))
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .foregroundStyle(p.inkSoft.opacity(0.75))
+                            .lineLimit(1)
+                    }
+                    .buttonStyle(.plain)
+                    #endif
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(TT.pink.opacity(0.14))
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            } else if let error = validationError {
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(TT.tangerine)
+                    Text(error)
+                        .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                        .foregroundStyle(TT.tangerine)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(TT.tangerine.opacity(0.14))
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            } else {
+                HStack {
+                    #if !MAS_BUILD
+                    Button(action: openSignupPage) {
+                        Text(L10n.t("getKey"))
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .foregroundStyle(TT.pink)
+                    }
+                    .buttonStyle(.plain)
+                    #endif
+                    Spacer()
+                    if !existingKey.isEmpty && !embedded {
+                        Button(action: removeSavedKey) {
+                            Text(L10n.t("removeKey"))
+                                .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                                .foregroundStyle(p.inkSoft.opacity(0.65))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 2)
+            }
+        }
+        .padding(embedded ? 12 : 14)
+        .background(p.card)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(p.border, lineWidth: 2)
+        )
+        .shadow(color: embedded ? .clear : p.shadow, radius: 10, x: 0, y: 4)
+        .onAppear {
+            let current = existingKey
+            if !current.isEmpty {
+                keyInput = current
+                validationSuccess = (kind == .deepgram) ? L10n.t("connectedDeepgram") : L10n.t("connectedGemini")
+            } else if let clip = NSPasteboard.general.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                      clip.count >= 24, clip.count <= 128,
+                      clip.rangeOfCharacter(from: .whitespacesAndNewlines.union(.controlCharacters)) == nil {
+                keyInput = clip
+            }
+        }
+    }
+
+    private func pasteFromClipboardAndValidate() {
+        guard let clip = NSPasteboard.general.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !clip.isEmpty else {
+            validationError = L10n.t("keyEmptyError")
+            return
+        }
+        keyInput = clip
+        validationError = nil
+        validateAndSave()
+    }
+
+    private func validateAndSave() {
+        let trimmed = keyInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        validationError = nil
+        validationSuccess = nil
+        isValidating = true
+
+        let finish: (APIKeyValidationResult) -> Void = { result in
+            isValidating = false
+            switch result {
+            case .valid:
+                switch kind {
+                case .deepgram:
+                    guard KeychainHelper.save(trimmed, service: TalkTypeConfig.keychainService, account: TalkTypeConfig.keychainAccount) else {
+                        validationError = "Could not save key to Keychain."
+                        return
+                    }
+                    UserDefaults.standard.removeObject(forKey: TalkTypeConfig.deepgramKeyStorageKey)
+                    UserDefaults.standard.set("deepgram", forKey: TalkTypeConfig.engineStorageKey)
+                    validationSuccess = L10n.t("connectedDeepgram")
+                case .gemini:
+                    guard KeychainHelper.save(trimmed, service: TalkTypeConfig.keychainService, account: TalkTypeConfig.keychainAccountGemini) else {
+                        validationError = "Could not save key to Keychain."
+                        return
+                    }
+                    TalkTypeConfig.isPolishing = true
+                    validationSuccess = L10n.t("connectedGemini")
+                }
+                NSSound(named: "Pop")?.play()
+                onSaved()
+            case .invalid(let message):
+                validationError = message
+                NSSound(named: "Basso")?.play()
+            }
+        }
+
+        switch kind {
+        case .deepgram:
+            APIKeyValidator.validateDeepgramKey(trimmed, completion: finish)
+        case .gemini:
+            APIKeyValidator.validateGeminiKey(trimmed, completion: finish)
+        }
+    }
+
+    private func removeSavedKey() {
+        switch kind {
+        case .deepgram:
+            _ = KeychainHelper.delete(service: TalkTypeConfig.keychainService, account: TalkTypeConfig.keychainAccount)
+            UserDefaults.standard.removeObject(forKey: TalkTypeConfig.deepgramKeyStorageKey)
+            UserDefaults.standard.set("apple", forKey: TalkTypeConfig.engineStorageKey)
+        case .gemini:
+            _ = KeychainHelper.delete(service: TalkTypeConfig.keychainService, account: TalkTypeConfig.keychainAccountGemini)
+            TalkTypeConfig.isPolishing = false
+        }
+        keyInput = ""
+        validationSuccess = nil
+        validationError = nil
+        onSaved()
+        onCancel?()
+    }
+
+    private func openSignupPage() {
+        let urlString = (kind == .deepgram)
+            ? "https://console.deepgram.com/signup"
+            : "https://aistudio.google.com/app/apikey"
+        if let url = URL(string: urlString) {
+            NSWorkspace.shared.open(url)
+        }
+    }
+}
+
+// MARK: - 3-Step First-Run Onboarding View (Soft Neo-Toybrut)
+struct OnboardingView: View {
+    @ObservedObject var speechEngine: SpeechEngine
+    @ObservedObject var uiState: AppUIState
+    let p: Palette
+    var appDelegate: AppDelegate
+    var onComplete: () -> Void
+
+    @AppStorage(TalkTypeConfig.languageStorageKey) private var storedLanguage: String = TranscriptionLanguage.auto.rawValue
+    @AppStorage(TalkTypeConfig.engineStorageKey) private var storedEngine: String = "apple"
+    @State private var micGranted: Bool = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+    @State private var axGranted: Bool = AXIsProcessTrusted()
+    @State private var hasDeepgramKey: Bool = !TalkTypeConfig.deepgramApiKey.isEmpty
+    @FocusState private var sandboxFieldFocused: Bool
+
+    private let permissionTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
+
+    private var pttKeyName: String {
+        #if MAS_BUILD
+        return "⌃⌥ Space"
+        #else
+        return TalkTypeConfig.pttTrigger.shortTitle
+        #endif
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Iconic Header: TalkType Wordmark + Step Pills + Skip
+            HStack(alignment: .center) {
+                HStack(spacing: 0) {
+                    Text("Talk").foregroundStyle(p.ink)
+                    Text("Type").foregroundStyle(TT.hot)
+                }
+                .font(.system(size: 23, weight: .heavy, design: .rounded))
+                .kerning(-0.5)
+
+                Spacer()
+
+                HStack(spacing: 5) {
+                    ForEach(0..<3, id: \.self) { idx in
+                        Button(action: {
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.72)) {
+                                uiState.onboardingStep = idx
+                            }
+                        }) {
+                            Capsule()
+                                .fill(uiState.onboardingStep == idx ? AnyShapeStyle(TT.hot) : AnyShapeStyle(p.border))
+                                .frame(width: uiState.onboardingStep == idx ? 18 : 6, height: 6)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(p.border.opacity(0.14))
+                .clipShape(Capsule())
+
+                Button(action: onComplete) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(p.inkSoft.opacity(0.5))
+                        .frame(width: 22, height: 22)
+                }
+                .buttonStyle(.plain)
+                .help("Skip setup guide")
+            }
+
+            if uiState.onboardingStep == 0 {
+                step1PermissionsView
+            } else if uiState.onboardingStep == 1 {
+                step2LanguageEngineView
+            } else {
+                step3SandboxView
+            }
+        }
+        .onAppear {
+            pollPermissions()
+            hasDeepgramKey = !TalkTypeConfig.deepgramApiKey.isEmpty
+        }
+        .onReceive(permissionTimer) { _ in
+            pollPermissions()
+        }
+        .onChange(of: sandboxFieldFocused) { focused in
+            uiState.isSandboxFocused = focused
+        }
+    }
+
+    private func pollPermissions() {
+        let newMic = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+        let newAx = appDelegate.isAccessibilityTrusted()
+        if newMic != micGranted || newAx != axGranted {
+            let becameReady = (newMic && !micGranted) || (newAx && !axGranted)
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.68)) {
+                micGranted = newMic
+                axGranted = newAx
+            }
+            if becameReady {
+                NSSound(named: "Pop")?.play()
+            }
+        }
+    }
+
+    // MARK: Step 1 — Permissions Check
+    private var step1PermissionsView: some View {
+        VStack(spacing: 12) {
+            VStack(spacing: 6) {
+                GhostMark(isRecording: false)
+                    .frame(width: 68, height: 68)
+                    .shadow(color: p.ghostLift, radius: p.ghostLiftRadius, x: 0, y: p.ghostLiftY)
+
+                Text(L10n.t("onboardStep1Title"))
+                    .font(.system(size: 16, weight: .heavy, design: .rounded))
+                    .foregroundStyle(p.ink)
+
+                Text(L10n.t("onboardStep1Sub"))
+                    .font(.system(size: 11.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(p.inkSoft.opacity(0.75))
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 2)
+
+            // Unified Permission Card
+            VStack(spacing: 0) {
+                // Row 1: Microphone
+                HStack(spacing: 10) {
+                    Image(systemName: "mic.fill")
+                        .font(.system(size: 13.5, weight: .bold))
+                        .foregroundStyle(micGranted ? AnyShapeStyle(TT.pink) : AnyShapeStyle(TT.hot))
+                        .frame(width: 22)
+
+                    VStack(alignment: .leading, spacing: 1.5) {
+                        Text("Microphone")
+                            .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                            .foregroundStyle(p.ink)
+                            .lineLimit(1)
+                        Text("Hears your voice on \(pttKeyName)")
+                            .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                            .foregroundStyle(p.inkSoft.opacity(0.68))
+                            .lineLimit(1)
+                    }
+
+                    Spacer(minLength: 6)
+
+                    if micGranted {
+                        HStack(spacing: 4) {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 9.5, weight: .bold))
+                            Text(L10n.t("microphoneReady"))
+                                .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                                .lineLimit(1)
+                        }
+                        .fixedSize(horizontal: true, vertical: false)
+                        .foregroundStyle(TT.pink)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(TT.pink.opacity(0.18))
+                        .clipShape(Capsule())
+                    } else {
+                        Button(action: requestMicPermission) {
+                            Text(L10n.t("grantMicrophone"))
+                                .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
+                                .foregroundStyle(Color.white)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 5.5)
+                                .background(TT.hot)
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+
+                #if !MAS_BUILD
+                Rectangle()
+                    .fill(p.border.opacity(0.45))
+                    .frame(height: 1)
+                    .padding(.horizontal, 14)
+
+                // Row 2: Auto-Paste (Accessibility)
+                HStack(spacing: 10) {
+                    Image(systemName: "command")
+                        .font(.system(size: 13.5, weight: .bold))
+                        .foregroundStyle(axGranted ? AnyShapeStyle(TT.pink) : AnyShapeStyle(TT.hot))
+                        .frame(width: 22)
+
+                    VStack(alignment: .leading, spacing: 1.5) {
+                        Text("Auto-Paste")
+                            .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                            .foregroundStyle(p.ink)
+                            .lineLimit(1)
+                        Text("Accessibility · pastes on release")
+                            .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                            .foregroundStyle(p.inkSoft.opacity(0.68))
+                            .lineLimit(1)
+                    }
+
+                    Spacer(minLength: 6)
+
+                    if axGranted {
+                        HStack(spacing: 4) {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 9.5, weight: .bold))
+                            Text(L10n.t("autoPasteReady"))
+                                .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                                .lineLimit(1)
+                        }
+                        .fixedSize(horizontal: true, vertical: false)
+                        .foregroundStyle(TT.pink)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(TT.pink.opacity(0.18))
+                        .clipShape(Capsule())
+                    } else {
+                        Button(action: {
+                            appDelegate.promptAccessibilityTrust(openSettings: true)
+                        }) {
+                            Text(L10n.t("enableAutoPaste"))
+                                .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
+                                .foregroundStyle(Color.white)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 5.5)
+                                .background(TT.hot)
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                #endif
+            }
+            .background(p.card)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .strokeBorder(p.border, lineWidth: 2)
+            )
+            .shadow(color: p.shadow, radius: 10, x: 0, y: 4)
+
+            Spacer(minLength: 0)
+
+            Button(action: {
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.72)) {
+                    uiState.onboardingStep = 1
+                }
+            }) {
+                HStack {
+                    Spacer()
+                    Text("Continue")
+                        .font(.system(size: 13, weight: .heavy, design: .rounded))
+                        .foregroundStyle(Color.white)
+                    Spacer()
+                }
+                .padding(.vertical, 10)
+                .background(TT.hot)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func requestMicPermission() {
+        let status = AVCaptureDevice.authorizationStatus(for: .audio)
+        if status == .notDetermined {
+            AVCaptureDevice.requestAccess(for: .audio) { granted in
+                DispatchQueue.main.async {
+                    micGranted = granted
+                    if SFSpeechRecognizer.authorizationStatus() == .notDetermined {
+                        SFSpeechRecognizer.requestAuthorization { _ in }
+                    }
+                }
+            }
+        } else {
+            appDelegate.openMicrophoneSettings()
+        }
+    }
+
+    // MARK: Step 2 — Language & Engine Setup
+    private var step2LanguageEngineView: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L10n.t("onboardStep2Title"))
+                    .font(.system(size: 16, weight: .heavy, design: .rounded))
+                    .foregroundStyle(p.ink)
+                Text(L10n.t("onboardStep2Sub"))
+                    .font(.system(size: 11.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(p.inkSoft.opacity(0.75))
+            }
+
+            // Clean 3-Segment Capsule Track for Language
+            HStack(spacing: 3) {
+                ForEach(TranscriptionLanguage.allCases, id: \.rawValue) { lang in
+                    let isSelected = (TranscriptionLanguage(rawValue: storedLanguage) ?? .auto) == lang
+                    Button(action: {
+                        storedLanguage = lang.rawValue
+                        NSSound(named: "Pop")?.play()
+                    }) {
+                        Text(lang.pillLabel)
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
+                            .background(isSelected ? p.card : Color.clear)
+                            .foregroundStyle(isSelected ? p.ink : p.inkSoft.opacity(0.65))
+                            .clipShape(Capsule())
+                            .overlay(
+                                Capsule()
+                                    .strokeBorder(isSelected ? p.border.opacity(0.7) : Color.clear, lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(3)
+            .background(p.border.opacity(0.14))
+            .clipShape(Capsule())
+
+            // Clean 2-Segment Capsule Track for Voice Engine
+            HStack(spacing: 3) {
+                let usingDG = storedEngine == "deepgram"
+                Button(action: {
+                    storedEngine = "apple"
+                    if SFSpeechRecognizer.authorizationStatus() == .notDetermined {
+                        SFSpeechRecognizer.requestAuthorization { _ in }
+                    }
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "waveform")
+                            .font(.system(size: 10, weight: .bold))
+                        Text("Mac Offline")
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+                    .background(!usingDG ? p.card : Color.clear)
+                    .foregroundStyle(!usingDG ? p.ink : p.inkSoft.opacity(0.65))
+                    .clipShape(Capsule())
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(!usingDG ? p.border.opacity(0.7) : Color.clear, lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+
+                Button(action: {
+                    storedEngine = "deepgram"
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "bolt.fill")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(usingDG ? TT.pink : p.inkSoft.opacity(0.65))
+                        Text("Nova-3 Cloud")
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+                    .background(usingDG ? p.card : Color.clear)
+                    .foregroundStyle(usingDG ? p.ink : p.inkSoft.opacity(0.65))
+                    .clipShape(Capsule())
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(usingDG ? p.border.opacity(0.7) : Color.clear, lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(3)
+            .background(p.border.opacity(0.14))
+            .clipShape(Capsule())
+
+            if storedEngine == "deepgram" {
+                KeySetupCardView(
+                    kind: .deepgram,
+                    p: p,
+                    embedded: true,
+                    onSaved: {
+                        hasDeepgramKey = !TalkTypeConfig.deepgramApiKey.isEmpty
+                    }
+                )
+            } else {
+                // Calm, cohesive Offline Voice Card
+                VStack(alignment: .leading, spacing: 9) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "lock.shield.fill")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(TT.tangerine)
+                        Text("100% private & on-device")
+                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                            .foregroundStyle(p.ink)
+                    }
+
+                    Text(L10n.t("offlineSingleLangHint"))
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .foregroundStyle(p.inkSoft.opacity(0.8))
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    HStack(spacing: 6) {
+                        let activeOffline = (TranscriptionLanguage(rawValue: storedLanguage) ?? .auto).offlineActiveCode
+                        Button(action: { storedLanguage = TranscriptionLanguage.en.rawValue }) {
+                            Text("English")
+                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                                .lineLimit(1)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 6)
+                                .background(activeOffline == "EN" ? AnyShapeStyle(TT.pink.opacity(0.22)) : AnyShapeStyle(p.paperLit))
+                                .foregroundStyle(activeOffline == "EN" ? TT.pink : p.inkSoft)
+                                .clipShape(Capsule())
+                                .overlay(
+                                    Capsule()
+                                        .strokeBorder(activeOffline == "EN" ? TT.pink.opacity(0.45) : p.border.opacity(0.6), lineWidth: 1)
+                                )
+                        }
+                        .buttonStyle(.plain)
+
+                        Button(action: { storedLanguage = TranscriptionLanguage.es.rawValue }) {
+                            Text("Español")
+                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                                .lineLimit(1)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 6)
+                                .background(activeOffline == "ES" ? AnyShapeStyle(TT.pink.opacity(0.22)) : AnyShapeStyle(p.paperLit))
+                                .foregroundStyle(activeOffline == "ES" ? TT.pink : p.inkSoft)
+                                .clipShape(Capsule())
+                                .overlay(
+                                    Capsule()
+                                        .strokeBorder(activeOffline == "ES" ? TT.pink.opacity(0.45) : p.border.opacity(0.6), lineWidth: 1)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(13)
+                .background(p.card)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .strokeBorder(p.border, lineWidth: 2)
+                )
+            }
+
+            Spacer(minLength: 0)
+
+            HStack(spacing: 8) {
+                Button(action: {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.72)) {
+                        uiState.onboardingStep = 0
+                    }
+                }) {
+                    Text("Back")
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .foregroundStyle(p.inkSoft)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(p.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                                .strokeBorder(p.border, lineWidth: 1.5)
+                        )
+                }
+                .buttonStyle(.plain)
+
+                Button(action: {
+                    if storedEngine == "deepgram" && TalkTypeConfig.deepgramApiKey.isEmpty {
+                        storedEngine = "apple"
+                    }
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.72)) {
+                        uiState.onboardingStep = 2
+                    }
+                }) {
+                    HStack {
+                        Spacer()
+                        Text("Continue")
+                            .font(.system(size: 13, weight: .heavy, design: .rounded))
+                            .foregroundStyle(Color.white)
+                        Spacer()
+                    }
+                    .padding(.vertical, 10)
+                    .background(TT.hot)
+                    .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    // MARK: Step 3 — Live "Hold Option to Try It!" Sandbox
+    private var step3SandboxView: some View {
+        let activeText: String = {
+            if speechEngine.isRecording && !speechEngine.transcript.isEmpty {
+                return speechEngine.transcript
+            }
+            return uiState.sandboxText
+        }()
+
+        return VStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L10n.t("onboardStep3Title"))
+                    .font(.system(size: 16, weight: .heavy, design: .rounded))
+                    .foregroundStyle(p.ink)
+                Text(L10n.t("onboardStep3Sub"))
+                    .font(.system(size: 11.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(p.inkSoft.opacity(0.75))
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            // Clean transcriptCard-styled sandbox (zero native scrollbar clutter)
+            ZStack(alignment: .bottomTrailing) {
+                // Hidden focusable TextField so ⌘V or typing also flows into sandboxText
+                TextField("", text: $uiState.sandboxText)
+                    .textFieldStyle(.plain)
+                    .frame(width: 1, height: 1)
+                    .opacity(0.01)
+                    .focused($sandboxFieldFocused)
+
+                ScrollView(.vertical, showsIndicators: false) {
+                    Text(activeText.isEmpty ? L10n.t("onboardSandboxPlaceholder") : activeText)
+                        .font(.system(size: 13.5, weight: .medium, design: .monospaced))
+                        .lineSpacing(3)
+                        .foregroundStyle(activeText.isEmpty ? p.inkSoft.opacity(0.5) : p.ink)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(14)
+                }
+
+                if uiState.sandboxSuccess {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 9.5, weight: .bold))
+                        Text(L10n.t("onboardSandboxSuccess"))
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .lineLimit(1)
+                    }
+                    .fixedSize(horizontal: true, vertical: false)
+                    .foregroundStyle(TT.pink)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 4)
+                    .background(TT.pink.opacity(0.20))
+                    .clipShape(Capsule())
+                    .padding(10)
+                }
+            }
+            .frame(height: 112)
+            .background(p.card)
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(
+                        speechEngine.isRecording
+                            ? AnyShapeStyle(TT.hot)
+                            : (uiState.sandboxSuccess ? AnyShapeStyle(TT.pink) : AnyShapeStyle(p.border)),
+                        lineWidth: 2
+                    )
+            )
+            .shadow(color: p.shadow, radius: 10, x: 0, y: 4)
+            .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .onTapGesture {
+                sandboxFieldFocused = true
+                uiState.isSandboxFocused = true
+            }
+            .onAppear {
+                sandboxFieldFocused = true
+                uiState.isSandboxFocused = true
+            }
+
+            // Living GhostMark right in the sandbox
+            VStack(spacing: 6) {
+                Button(action: {
+                    if speechEngine.isRecording {
+                        appDelegate.requestPaste()
+                    } else {
+                        speechEngine.startRecording()
+                    }
+                }) {
+                    GhostMark(isRecording: speechEngine.isRecording)
+                        .frame(width: 78, height: 78)
+                        .shadow(
+                            color: speechEngine.isRecording ? TT.pink.opacity(0.55) : p.ghostLift,
+                            radius: speechEngine.isRecording ? 14 : p.ghostLiftRadius,
+                            x: 0,
+                            y: speechEngine.isRecording ? 0 : p.ghostLiftY
+                        )
+                }
+                .buttonStyle(.plain)
+
+                Text(speechEngine.isRecording
+                     ? L10n.t("listeningSpeak")
+                     : "Hold \(pttKeyName) or click the ghost")
+                    .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(speechEngine.isRecording ? AnyShapeStyle(TT.hot) : AnyShapeStyle(p.inkSoft.opacity(0.75)))
+            }
+            .frame(maxWidth: .infinity)
+
+            Spacer(minLength: 0)
+
+            HStack(spacing: 8) {
+                Button(action: {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.72)) {
+                        uiState.onboardingStep = 1
+                    }
+                }) {
+                    Text("Back")
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .foregroundStyle(p.inkSoft)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(p.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                                .strokeBorder(p.border, lineWidth: 1.5)
+                        )
+                }
+                .buttonStyle(.plain)
+
+                Button(action: onComplete) {
+                    HStack(spacing: 6) {
+                        Spacer()
+                        Text(L10n.t("startUsingTalkType"))
+                            .font(.system(size: 13, weight: .heavy, design: .rounded))
+                        Spacer()
+                    }
+                    .foregroundStyle(Color.white)
+                    .padding(.vertical, 10)
+                    .background(TT.hot)
+                    .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+}
+
 // MARK: - SwiftUI Popover UI (with History Tab & Quick Recovery)
 struct ContentView: View {
     @ObservedObject var speechEngine: SpeechEngine
     @ObservedObject var history: HistoryStore
+    @ObservedObject var uiState: AppUIState
     @Environment(\.colorScheme) private var scheme
     @State private var breathing = false
     @State private var selectedTab: Int = 0 // 0: Dictate, 1: History
@@ -3385,6 +4621,7 @@ struct ContentView: View {
     @AppStorage("talktypeDictationCount") private var dictationCount: Int = 0
     @AppStorage("talktypeSuperchargeDismissed") private var superchargeDismissed: Bool = false
     @AppStorage("talktypeHistorySortNewestFirst") private var sortNewestFirst: Bool = true
+    @AppStorage(TalkTypeConfig.languageStorageKey) private var storedLanguage: String = TranscriptionLanguage.auto.rawValue
     @State private var isConfirmingClear: Bool = false
     @State private var hasDeepgramKey: Bool = !TalkTypeConfig.deepgramApiKey.isEmpty
     @State private var wordmarkScale: CGFloat = 1.0
@@ -3392,14 +4629,6 @@ struct ContentView: View {
 
     private var isSupercharged: Bool {
         storedEngine == "deepgram" && hasDeepgramKey
-    }
-
-    private var shouldShowSuperchargedPrompt: Bool {
-        #if MAS_BUILD
-        return false
-        #else
-        return !isSupercharged && !superchargeDismissed && dictationCount < 5
-        #endif
     }
 
     private var sortedRecords: [TranscriptRecord] {
@@ -3446,109 +4675,160 @@ struct ContentView: View {
 #if MAS_BUILD
         return nil
 #else
-        return AXIsProcessTrusted() ? nil : .accessibility
+        return appDelegate.isAccessibilityTrusted() ? nil : .accessibility
 #endif
     }
 
-    var body: some View {
-        VStack(spacing: permissionHelpIssue == nil ? 14 : 9) {
-            // Header with Wordmark + Tab Picker (Rock-Solid Top Locked)
-            HStack {
-                Button(action: {
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.52)) {
-                        ghostMood = (ghostMood + 1) % 4
-                        wordmarkScale = 1.08
+    private var activeLanguage: TranscriptionLanguage {
+        TranscriptionLanguage(rawValue: storedLanguage) ?? .auto
+    }
+
+    // Whisper-quiet footer bar for 1-click Language & Voice Engine switching
+    private var footerModeBar: some View {
+        HStack(spacing: 6) {
+            // Language capsule switcher (EN·ES | EN | ES)
+            HStack(spacing: 2) {
+                ForEach(TranscriptionLanguage.allCases, id: \.rawValue) { lang in
+                    let selected = activeLanguage == lang
+                    Button(action: {
+                        storedLanguage = lang.rawValue
+                        NSSound(named: "Pop")?.play()
+                    }) {
+                        Text(lang.shortBadge)
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3.5)
+                            .background(selected ? p.card : Color.clear)
+                            .foregroundStyle(selected ? p.ink : p.inkSoft.opacity(0.6))
+                            .clipShape(Capsule())
                     }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-                        withAnimation(.spring(response: 0.25, dampingFraction: 0.6)) {
-                            wordmarkScale = 1.0
-                        }
-                    }
-                    NSSound(named: "Pop")?.play()
-                }) {
-                    HStack(spacing: 0) {
-                        Text("Talk").foregroundStyle(p.ink)
-                        Text("Type").foregroundStyle(currentMoodGradient)
-                    }
-                    .font(.system(size: 26, weight: .heavy, design: .rounded))
-                    .kerning(-0.5)
-                    .scaleEffect(wordmarkScale)
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
-                
-                Spacer()
-                
-                // Mode Toggle
-                HStack(spacing: 2) {
-                    TabPill(title: L10n.t("live"), isSelected: selectedTab == 0, p: p) {
-                        selectedTab = 0
-                    }
-                    
-                    TabPill(title: L10n.t("history"), isSelected: selectedTab == 1, p: p) {
-                        selectedTab = 1
-                    }
-                }
-                .padding(2)
-                .background(p.border.opacity(0.12))
-                .clipShape(Capsule())
             }
-            
-            if selectedTab == 0 {
-                // Live View
-                transcriptCard
-                if permissionHelpIssue != nil {
-                    permissionHelper
-                        .transition(.move(edge: .top).combined(with: .opacity))
+            .padding(2)
+            .background(p.border.opacity(0.14))
+            .clipShape(Capsule())
+
+            Spacer(minLength: 4)
+
+            // Engine pill (opens Nova-3 card or toggles Offline/Cloud)
+            Button(action: {
+                withAnimation(.easeOut(duration: 0.16)) {
+                    uiState.activeKeySetup = .deepgram
                 }
-                ghostButton
-                statusLine
+            }) {
+                HStack(spacing: 4) {
+                    Image(systemName: isSupercharged ? "bolt.fill" : "sparkles")
+                        .font(.system(size: 9, weight: .bold))
+                    Text(isSupercharged ? "Nova-3" : "Offline · \(activeLanguage.offlineActiveCode)")
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                }
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4.5)
+                .background(isSupercharged ? TT.pink.opacity(0.16) : p.card)
+                .foregroundStyle(isSupercharged ? TT.pink : p.inkSoft.opacity(0.8))
+                .clipShape(Capsule())
+                .overlay(
+                    Capsule()
+                        .strokeBorder(isSupercharged ? TT.pink.opacity(0.35) : p.border.opacity(0.6), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+            .help(isSupercharged ? L10n.t("superchargedHelp") : L10n.t("offlineSingleLangHint"))
+        }
+    }
 
-                if shouldShowSuperchargedPrompt {
-                    HStack(spacing: 4) {
-                        Button(action: {
-                            appDelegate.promptDeepgramKey()
-                            hasDeepgramKey = !TalkTypeConfig.deepgramApiKey.isEmpty
-                        }) {
-                            HStack(spacing: 5) {
-                                Image(systemName: "sparkles")
-                                    .font(.system(size: 9.5, weight: .bold))
-                                Text(L10n.t("trySuperchargedBadge"))
-                                    .font(.system(size: 10.5, weight: .bold, design: .rounded))
-                            }
+    var body: some View {
+        VStack(spacing: permissionHelpIssue == nil ? 12 : 9) {
+            if let keySetup = uiState.activeKeySetup {
+                KeySetupCardView(
+                    kind: keySetup,
+                    p: p,
+                    embedded: false,
+                    onSaved: {
+                        hasDeepgramKey = !TalkTypeConfig.deepgramApiKey.isEmpty
+                    },
+                    onCancel: {
+                        withAnimation(.easeOut(duration: 0.16)) {
+                            uiState.activeKeySetup = nil
                         }
-                        .buttonStyle(.plain)
-
-                        Button(action: {
-                            withAnimation(.easeOut(duration: 0.15)) {
-                                superchargeDismissed = true
-                            }
-                        }) {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 7.5, weight: .bold))
-                                .foregroundStyle(TT.pink.opacity(0.6))
-                                .padding(3)
-                        }
-                        .buttonStyle(.plain)
-                        .help(L10n.t("cancel"))
                     }
-                    .padding(.leading, 10)
-                    .padding(.trailing, 6)
-                    .padding(.vertical, 4.5)
-                    .background(TT.pink.opacity(0.12))
-                    .foregroundStyle(TT.pink)
+                )
+                Spacer(minLength: 0)
+            } else if uiState.showOnboarding {
+                OnboardingView(
+                    speechEngine: speechEngine,
+                    uiState: uiState,
+                    p: p,
+                    appDelegate: appDelegate,
+                    onComplete: {
+                        withAnimation(.spring(response: 0.28, dampingFraction: 0.72)) {
+                            uiState.completeOnboarding()
+                            hasDeepgramKey = !TalkTypeConfig.deepgramApiKey.isEmpty
+                            refreshPermissionStatus()
+                        }
+                    }
+                )
+            } else {
+                // Header with Wordmark + Tab Picker (Rock-Solid Top Locked)
+                HStack {
+                    Button(action: {
+                        withAnimation(.spring(response: 0.28, dampingFraction: 0.52)) {
+                            ghostMood = (ghostMood + 1) % 4
+                            wordmarkScale = 1.08
+                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.6)) {
+                                wordmarkScale = 1.0
+                            }
+                        }
+                        NSSound(named: "Pop")?.play()
+                    }) {
+                        HStack(spacing: 0) {
+                            Text("Talk").foregroundStyle(p.ink)
+                            Text("Type").foregroundStyle(currentMoodGradient)
+                        }
+                        .font(.system(size: 25, weight: .heavy, design: .rounded))
+                        .kerning(-0.5)
+                        .scaleEffect(wordmarkScale)
+                    }
+                    .buttonStyle(.plain)
+                    
+                    Spacer()
+                    
+                    HStack(spacing: 2) {
+                        TabPill(title: L10n.t("live"), isSelected: selectedTab == 0, p: p) {
+                            selectedTab = 0
+                        }
+                        
+                        TabPill(title: L10n.t("history"), isSelected: selectedTab == 1, p: p) {
+                            selectedTab = 1
+                        }
+                    }
+                    .padding(2)
+                    .background(p.border.opacity(0.12))
                     .clipShape(Capsule())
-                    .overlay(
-                        Capsule()
-                            .strokeBorder(TT.pink.opacity(0.28), lineWidth: 1)
-                    )
-                    .padding(.top, 2)
-                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
                 }
                 
-                Spacer(minLength: 0)
-            } else {
-                // History View (Never lose text again)
-                historyCard
+                if selectedTab == 0 {
+                    // Live View (Original serene layout + whisper-soft footer bar)
+                    transcriptCard
+                    if permissionHelpIssue != nil {
+                        permissionHelper
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
+                    ghostButton
+                    statusLine
+                    Spacer(minLength: 0)
+                    footerModeBar
+                } else {
+                    // History View (Never lose text again)
+                    historyCard
+                }
             }
         }
         .padding(18)
@@ -3618,7 +4898,7 @@ struct ContentView: View {
             appDelegate.openSpeechRecognitionSettings()
         case .accessibility:
 #if !MAS_BUILD
-            appDelegate.openAccessibilitySettings()
+            appDelegate.promptAccessibilityTrust(openSettings: true)
 #else
             break
 #endif

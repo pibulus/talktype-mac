@@ -21,6 +21,8 @@ esac''',
     "xcodebuild": "echo 'Xcode 26.0'; echo 'Build version 26A'",
     "security": r'''if [ "${AUDIT_NO_IDENTITY:-0}" = "0" ]; then echo '  1) FIXTURE "Developer ID Application: Audit Fixture (AUDIT)"'; fi''',
     "swiftc": r'''while [ "$#" -gt 0 ]; do if [ "$1" = '-o' ]; then shift; : > "$1"; fi; shift; done''',
+    "lipo": r'''if [ "${1:-}" = "-archs" ]; then echo "${AUDIT_LIPO_ARCHS:-x86_64 arm64}"; exit 0; fi
+while [ "$#" -gt 0 ]; do if [ "$1" = '-output' ]; then shift; : > "$1"; fi; shift; done''',
     "codesign": "exit 0",
     "create-dmg": r'''for arg do prev="${last:-}"; last="$arg"; done; echo INVALID > "$prev"; exit 1''',
     "hdiutil": r'''for arg do last="$arg"; done; echo VALID > "$last"''',
@@ -61,6 +63,9 @@ def case(name, mode="direct", expected=0, artifact=None, preserve=False, error=N
             assert all((work / folder / "previous-good-artifact").is_file() for folder in ["build", "dist"]), name
         elif artifact == "release":
             assert release.read_text().strip() == "VALID", name
+            calls = (work / "tool-calls").read_text()
+            assert "stapler staple build/TalkType.app" in calls, name
+            assert "stapler staple dist/TalkType-1.0.dmg" in calls, name
         elif artifact == "local":
             assert local.read_text().strip() == "VALID" and not release.exists(), name
             assert "notarytool submit" not in (work / "tool-calls").read_text(), name
@@ -79,3 +84,4 @@ case("missing notarization ticket rejects release", expected=1, AUDIT_NO_PROFILE
 case("Apple agreement failure is reported accurately", expected=1, AUDIT_NO_PROFILE=1,
      AUDIT_PROFILE_ERROR="HTTP 403: required agreement missing", error="HTTP 403: required agreement missing")
 case("local image is distinct and never submitted", artifact="local", LOCAL_BUILD=1, AUDIT_NO_IDENTITY=1, AUDIT_NO_TICKET=1)
+case("single-arch binary rejected by universal release gate", expected=1, AUDIT_LIPO_ARCHS="arm64", error="missing x86_64 architecture")

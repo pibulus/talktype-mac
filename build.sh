@@ -17,7 +17,7 @@ BIN_DIR="${APP_DIR}/Contents/MacOS"
 RES_DIR="${APP_DIR}/Contents/Resources"
 
 TARGET_MODE="${1:-direct}" # "direct" or "mas"
-UNIVERSAL="${UNIVERSAL:-0}"  # UNIVERSAL=1 builds a fat arm64 + x86_64 binary
+UNIVERSAL="${UNIVERSAL:-1}"  # UNIVERSAL=1 builds a fat arm64 + x86_64 binary by default
 
 case "${TARGET_MODE}" in
     direct|mas) ;;
@@ -75,7 +75,16 @@ if [ "${UNIVERSAL}" = "1" ]; then
     swiftc ${SWIFT_FLAGS} -target x86_64-apple-macos13.0 "${SRC_FILE}" -o "${BUILD_DIR}/${APP_NAME}-x86_64"
     lipo -create "${BUILD_DIR}/${APP_NAME}-arm64" "${BUILD_DIR}/${APP_NAME}-x86_64" -output "${BIN_DIR}/${APP_NAME}"
     rm -f "${BUILD_DIR}/${APP_NAME}-arm64" "${BUILD_DIR}/${APP_NAME}-x86_64"
-    echo "🧬 Universal binary (arm64 + x86_64)"
+    ARCHS=$(lipo -archs "${BIN_DIR}/${APP_NAME}" 2>/dev/null || true)
+    case " ${ARCHS} " in
+        *" arm64 "*) ;;
+        *) echo "Release gate failed: binary is missing arm64 architecture (got: ${ARCHS})." >&2; exit 1 ;;
+    esac
+    case " ${ARCHS} " in
+        *" x86_64 "*) ;;
+        *) echo "Release gate failed: binary is missing x86_64 architecture (got: ${ARCHS})." >&2; exit 1 ;;
+    esac
+    echo "🧬 Universal binary verified (${ARCHS})"
 else
     swiftc ${SWIFT_FLAGS} -target arm64-apple-macos13.0 "${SRC_FILE}" -o "${BIN_DIR}/${APP_NAME}"
 fi
@@ -238,24 +247,70 @@ else
         echo "Ad-hoc local test build"
     fi
     
-    # 5. Build Styled DMG for Direct Distribution
+    # 5. Notarize & staple app bundle before packaging into DMG, then build & notarize Styled DMG
     DMG_PATH="${DIST_DIR}/${APP_NAME}-${VERSION}.dmg"
     rm -f "${DMG_PATH}"
     # A failed release must never leave an apparently shippable image in dist/.
     DIRECT_BUILD_COMPLETE=0
     NOTARY_ERROR_FILE=""
+    APP_ZIP="${BUILD_DIR}/${APP_NAME}-notarize.zip"
     trap '
         if [ -n "${NOTARY_ERROR_FILE}" ]; then rm -f "${NOTARY_ERROR_FILE}"; fi
+        rm -f "${APP_ZIP}"
         if [ "${DIRECT_BUILD_COMPLETE}" != "1" ]; then rm -f "${DMG_PATH}"; fi
     ' EXIT
     codesign --verify --strict "${APP_DIR}"
 
+    if [ "${LOCAL_BUILD}" != "1" ] && [ -z "${NOTARY_PROFILE:-}" ]; then
+        if xcrun notarytool history --keychain-profile "AC_PASSWORD" >/dev/null 2>&1; then
+            NOTARY_PROFILE="AC_PASSWORD"
+        elif xcrun notarytool history --keychain-profile "talktype-notary" >/dev/null 2>&1; then
+            NOTARY_PROFILE="talktype-notary"
+        else
+            NOTARY_PROFILE="AC_PASSWORD"
+        fi
+    fi
+    NOTARY_ERROR_FILE=$(mktemp "${TMPDIR:-/tmp}/talktype-notary-error.XXXXXX")
+    if [ "${LOCAL_BUILD}" = "1" ] || [ "${SKIP_NOTARIZE:-0}" = "1" ]; then
+        echo "⏭️  Skipping app bundle notarization for the requested local/test configuration."
+    elif xcrun notarytool history --keychain-profile "${NOTARY_PROFILE}" >/dev/null 2>"${NOTARY_ERROR_FILE}"; then
+        echo "🔐 Submitting ${APP_DIR} for notarization before DMG creation (profile: ${NOTARY_PROFILE})…"
+        ditto -c -k --keepParent "${APP_DIR}" "${APP_ZIP}"
+        xcrun notarytool submit "${APP_ZIP}" --keychain-profile "${NOTARY_PROFILE}" --wait
+        rm -f "${APP_ZIP}"
+        if xcrun stapler staple "${APP_DIR}"; then
+            xcrun stapler validate "${APP_DIR}"
+            echo "✅ Notarized & stapled app bundle: ${APP_DIR}"
+        else
+            echo "❌ App bundle notarization failed — see: xcrun notarytool log <submission-id> --keychain-profile ${NOTARY_PROFILE}" >&2
+            exit 1
+        fi
+    else
+        echo "❌ Cannot access notarization with profile '${NOTARY_PROFILE}':" >&2
+        cat "${NOTARY_ERROR_FILE}" >&2
+        exit 1
+    fi
+
+    prepare_dmg_stage() {
+        local stage_dir="$1"
+        rm -rf "${stage_dir}"
+        mkdir -p "${stage_dir}"
+        chmod 0755 "${stage_dir}"
+        cp -R "${APP_DIR}" "${stage_dir}/"
+        chmod -R u+rwX,go+rX "${stage_dir}"
+        chmod 0755 "${stage_dir}"
+        local stage_perms
+        stage_perms=$(stat -f '%Lp' "${stage_dir}" 2>/dev/null || echo "")
+        if [ "${stage_perms}" != "755" ]; then
+            echo "Release gate failed: DMG staging directory permissions are ${stage_perms} (expected 755)." >&2
+            exit 1
+        fi
+    }
+
     if command -v create-dmg >/dev/null 2>&1; then
         echo "🎨 Building styled DMG with custom volume icon and background..."
         DMG_STAGE="${BUILD_DIR}/dmg_stage"
-        rm -rf "${DMG_STAGE}"
-        mkdir -p "${DMG_STAGE}"
-        cp -R "${APP_DIR}" "${DMG_STAGE}/"
+        prepare_dmg_stage "${DMG_STAGE}"
 
         # Background art (1x+2x TIFF) comes from `swift Assets/make-art.swift`.
         # It is 660x400; the window is 28pt taller because Finder counts the title bar.
@@ -285,12 +340,17 @@ else
     if [ ! -f "${DMG_PATH}" ]; then
         echo "💿 Fallback: Creating DMG with hdiutil..."
         DMG_STAGE="${BUILD_DIR}/dmg_stage"
-        mkdir -p "${DMG_STAGE}"
-        cp -R "${APP_DIR}" "${DMG_STAGE}/"
+        prepare_dmg_stage "${DMG_STAGE}"
         ln -s /Applications "${DMG_STAGE}/Applications"
         if [ -f "Assets/AppIcon.icns" ]; then
             cp "Assets/AppIcon.icns" "${DMG_STAGE}/.VolumeIcon.icns"
             SetFile -c icnC "${DMG_STAGE}/.VolumeIcon.icns" 2>/dev/null || true
+        fi
+        chmod 0755 "${DMG_STAGE}"
+        STAGE_PERMS=$(stat -f '%Lp' "${DMG_STAGE}" 2>/dev/null || echo "")
+        if [ "${STAGE_PERMS}" != "755" ]; then
+            echo "Release gate failed: DMG staging directory permissions are ${STAGE_PERMS} (expected 755)." >&2
+            exit 1
         fi
         hdiutil create -volname "${APP_NAME}" \
                 -srcfolder "${DMG_STAGE}" \
@@ -308,21 +368,11 @@ else
         echo "🔏 Signed DMG container with Developer ID: ${IDENTITY}"
     fi
 
-    # 6. Notarize & staple. Local test builds deliberately skip network submission.
-    if [ "${LOCAL_BUILD}" != "1" ] && [ -z "${NOTARY_PROFILE:-}" ]; then
-        if xcrun notarytool history --keychain-profile "AC_PASSWORD" >/dev/null 2>&1; then
-            NOTARY_PROFILE="AC_PASSWORD"
-        elif xcrun notarytool history --keychain-profile "talktype-notary" >/dev/null 2>&1; then
-            NOTARY_PROFILE="talktype-notary"
-        else
-            NOTARY_PROFILE="AC_PASSWORD"
-        fi
-    fi
+    # 6. Notarize & staple DMG container. Local test builds deliberately skip network submission.
     DMG_PATH="${DIST_DIR}/${APP_NAME}-${VERSION}.dmg"
-    NOTARY_ERROR_FILE=$(mktemp "${TMPDIR:-/tmp}/talktype-notary-error.XXXXXX")
     if [ "${LOCAL_BUILD}" = "1" ] || [ "${SKIP_NOTARIZE:-0}" = "1" ]; then
         echo "⏭️  Skipping notarization for the requested local/test configuration."
-    elif xcrun notarytool history --keychain-profile "${NOTARY_PROFILE}" >/dev/null 2>"${NOTARY_ERROR_FILE}"; then
+    else
         echo "🔐 Submitting DMG for notarization (profile: ${NOTARY_PROFILE})…"
         # Stapling only succeeds if Apple issued a ticket, so it's the real pass/fail.
         xcrun notarytool submit "${DMG_PATH}" --keychain-profile "${NOTARY_PROFILE}" --wait
@@ -333,14 +383,10 @@ else
             echo "❌ Notarization failed — see: xcrun notarytool log <submission-id> --keychain-profile ${NOTARY_PROFILE}"
             exit 1
         fi
-    else
-        echo "❌ Cannot access notarization with profile '${NOTARY_PROFILE}':" >&2
-        cat "${NOTARY_ERROR_FILE}" >&2
-        exit 1
     fi
 
-    # Gatekeeper is the only judge that matters for a download.
-    if xcrun stapler validate "${DMG_PATH}" >/dev/null 2>&1 && spctl -a -t open --context context:primary-signature "${DMG_PATH}" 2>/dev/null; then
+    # Gatekeeper is the only judge that matters for a download. Both .app and .dmg must validate.
+    if xcrun stapler validate "${APP_DIR}" >/dev/null 2>&1 && xcrun stapler validate "${DMG_PATH}" >/dev/null 2>&1 && spctl -a -t open --context context:primary-signature "${DMG_PATH}" 2>/dev/null; then
         echo "✨ Direct DMG ready to ship: ${DMG_PATH}"
     else
         if [ "${LOCAL_BUILD}" != "1" ]; then
