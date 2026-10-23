@@ -800,6 +800,8 @@ final class AppUIState: ObservableObject {
     @Published var sandboxText: String = ""
     @Published var sandboxSuccess: Bool = false
     @Published var needsAccessibilityBanner: Bool = false
+    @Published var isPopoverShown: Bool = false
+    @Published var isHUDShown: Bool = false
 
     func startOnboarding() {
         onboardingStep = 0
@@ -831,7 +833,7 @@ final class AppUIState: ObservableObject {
 #if !TALKTYPE_TESTING
 @main
 #endif
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     var statusItem: NSStatusItem!
     var popover: NSPopover!
     let engine = SpeechEngine()
@@ -951,15 +953,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         statusItem.isVisible = true
 
-        // Setup Popover
+        // Setup Popover (contentViewController is mounted lazily when shown & torn down on close for 0% idle CPU)
         popover = NSPopover()
         popover.contentSize = NSSize(width: 346, height: 440)
         popover.behavior = .transient
-        
-        // Host the SwiftUI View
-        let contentView = ContentView(speechEngine: engine, history: history, uiState: uiState, appDelegate: self)
-        popover.contentViewController = NSHostingController(rootView: contentView)
-        
+        popover.delegate = self
+
         // Live HUD controller
         liveHUDController = LiveHUDWindowController(speechEngine: engine, appDelegate: self)
 
@@ -1053,6 +1052,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         mainMenu.addItem(editMenuItem)
 
         NSApp.mainMenu = mainMenu
+
+        // Auto-migrate existing users who already have dictation history or a configured Deepgram key
+        if !TalkTypeConfig.isOnboardingCompleted && (!history.records.isEmpty || !TalkTypeConfig.deepgramApiKey.isEmpty) {
+            TalkTypeConfig.isOnboardingCompleted = true
+        }
 
         // Open the card on first launch, when onboarding is incomplete, or on MAS launch
         #if MAS_BUILD
@@ -1852,16 +1856,37 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    func ensurePopoverContentView() {
+        guard popover != nil && popover.contentViewController == nil else { return }
+        let contentView = ContentView(speechEngine: engine, history: history, uiState: uiState, appDelegate: self)
+        popover.contentViewController = NSHostingController(rootView: contentView)
+    }
+
     @objc func togglePopover(_ sender: AnyObject?) {
         if popover.isShown {
+            uiState.isPopoverShown = false
             popover.performClose(sender)
+            popover.contentViewController = nil
         } else {
             if let button = statusItem.button {
+                ensurePopoverContentView()
+                uiState.isPopoverShown = true
                 NSApp.activate(ignoringOtherApps: true)
                 popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
                 popover.contentViewController?.view.window?.makeKey()
             }
         }
+    }
+
+    func popoverWillShow(_ notification: Notification) {
+        ensurePopoverContentView()
+        uiState.isPopoverShown = true
+    }
+
+    func popoverDidClose(_ notification: Notification) {
+        uiState.isPopoverShown = false
+        uiState.isSandboxFocused = false
+        popover?.contentViewController = nil
     }
     
     #if !MAS_BUILD
@@ -1944,6 +1969,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         let wasPopoverShown = popover != nil && popover.isShown
         if wasPopoverShown {
+            uiState.isPopoverShown = false
             popover.performClose(nil)
         }
         
@@ -2010,10 +2036,14 @@ final class LiveHUDWindowController: NSWindowController {
     let size = NSSize(width: 580, height: 76)
     private var isVisibleTarget = false
     private let speechEngine: SpeechEngine
+    private weak var appDelegate: AppDelegate?
     private var pendingHideItem: DispatchWorkItem?
+    private var hostingView: NSHostingView<LiveTranscriptHUDView>?
+    var hasActiveHostingView: Bool { hostingView != nil }
 
     init(speechEngine: SpeechEngine, appDelegate: AppDelegate? = nil) {
         self.speechEngine = speechEngine
+        self.appDelegate = appDelegate
         let mouseLoc = NSEvent.mouseLocation
         let screenWithMouse = NSScreen.screens.first(where: { NSMouseInRect(mouseLoc, $0.frame, false) })
         let screen = screenWithMouse ?? NSScreen.main ?? NSScreen.screens.first
@@ -2040,17 +2070,6 @@ final class LiveHUDWindowController: NSWindowController {
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         window.isReleasedWhenClosed = false
 
-        window.contentView = NSHostingView(
-            rootView: LiveTranscriptHUDView(
-                speechEngine: speechEngine,
-                audioMeter: speechEngine.audioMeter,
-                onOpenAccessibility: { [weak appDelegate] in
-                    #if !MAS_BUILD
-                    appDelegate?.promptAccessibilityTrust(openSettings: true)
-                    #endif
-                }
-            ))
-
         super.init(window: window)
 
         NotificationCenter.default.addObserver(
@@ -2059,6 +2078,29 @@ final class LiveHUDWindowController: NSWindowController {
             name: NSApplication.didChangeScreenParametersNotification,
             object: nil
         )
+    }
+
+    private func ensureContentView() {
+        guard let window = self.window, hostingView == nil else { return }
+        let delegate = self.appDelegate
+        let view = NSHostingView(
+            rootView: LiveTranscriptHUDView(
+                speechEngine: speechEngine,
+                audioMeter: speechEngine.audioMeter,
+                onOpenAccessibility: { [weak delegate] in
+                    #if !MAS_BUILD
+                    delegate?.promptAccessibilityTrust(openSettings: true)
+                    #endif
+                }
+            ))
+        hostingView = view
+        window.contentView = view
+    }
+
+    private func teardownContentView() {
+        guard hostingView != nil else { return }
+        hostingView = nil
+        window?.contentView = NSView(frame: NSRect(origin: .zero, size: size))
     }
 
     func setInteractive(_ interactive: Bool) {
@@ -2097,7 +2139,9 @@ final class LiveHUDWindowController: NSWindowController {
         pendingHideItem?.cancel()
         pendingHideItem = nil
 
+        ensureContentView()
         isVisibleTarget = true
+        appDelegate?.uiState.isHUDShown = true
         updatePosition()
         window.orderFrontRegardless()
         
@@ -2115,10 +2159,12 @@ final class LiveHUDWindowController: NSWindowController {
         let hideBlock = DispatchWorkItem { [weak self, weak window] in
             guard let self = self, let window = window else { return }
             self.isVisibleTarget = false
+            self.appDelegate?.uiState.isHUDShown = false
             if delay == 0 {
-                // Instant zero-lag dismissal
+                // Instant zero-lag dismissal + tear down NSHostingView so idle CPU is 0.0%
                 window.alphaValue = 0
                 window.orderOut(nil)
+                self.teardownContentView()
             } else {
                 NSAnimationContext.runAnimationGroup({ context in
                     context.duration = 0.08
@@ -2127,6 +2173,7 @@ final class LiveHUDWindowController: NSWindowController {
                     guard let self = self else { return }
                     if !self.isVisibleTarget {
                         window.orderOut(nil)
+                        self.teardownContentView()
                     }
                 })
             }
@@ -3425,6 +3472,7 @@ enum TT {
 
 struct GhostMark: View {
     var isRecording = false
+    var isActive = true
     @AppStorage("talktypeGhostMood") private var ghostMood: Int = 0
 
     @State private var eyeScale: CGFloat = 1
@@ -3452,9 +3500,21 @@ struct GhostMark: View {
         }
         .offset(y: floatY)
         .rotationEffect(.degrees(tilt))
-        .onAppear { startFloating(); scheduleBlink() }
+        .onAppear { updateActivityState() }
         .onDisappear { stopFloating(); blinkTimer?.invalidate(); blinkTimer = nil }
-        .onChange(of: isRecording) { _ in startFloating() }
+        .onChange(of: isRecording) { _ in updateActivityState() }
+        .onChange(of: isActive) { _ in updateActivityState() }
+    }
+
+    private func updateActivityState() {
+        if isActive {
+            startFloating()
+            scheduleBlink()
+        } else {
+            stopFloating()
+            blinkTimer?.invalidate()
+            blinkTimer = nil
+        }
     }
 
     private func layer(_ name: String) -> some View {
@@ -4044,7 +4104,9 @@ struct OnboardingView: View {
             hasDeepgramKey = !TalkTypeConfig.deepgramApiKey.isEmpty
         }
         .onReceive(permissionTimer) { _ in
-            pollPermissions()
+            if uiState.isPopoverShown && uiState.showOnboarding && uiState.onboardingStep == 0 {
+                pollPermissions()
+            }
         }
         .onChange(of: sandboxFieldFocused) { focused in
             uiState.isSandboxFocused = focused
@@ -4070,7 +4132,7 @@ struct OnboardingView: View {
     private var step1PermissionsView: some View {
         VStack(spacing: 12) {
             VStack(spacing: 6) {
-                GhostMark(isRecording: false)
+                GhostMark(isRecording: false, isActive: uiState.isPopoverShown)
                     .frame(width: 68, height: 68)
                     .shadow(color: p.ghostLift, radius: p.ghostLiftRadius, x: 0, y: p.ghostLiftY)
 
@@ -4546,7 +4608,7 @@ struct OnboardingView: View {
                         speechEngine.startRecording()
                     }
                 }) {
-                    GhostMark(isRecording: speechEngine.isRecording)
+                    GhostMark(isRecording: speechEngine.isRecording, isActive: uiState.isPopoverShown)
                         .frame(width: 78, height: 78)
                         .shadow(
                             color: speechEngine.isRecording ? TT.pink.opacity(0.55) : p.ghostLift,
@@ -4958,7 +5020,7 @@ struct ContentView: View {
 
     private var ghostButton: some View {
         Button(action: toggle) {
-            GhostMark(isRecording: isRec)
+            GhostMark(isRecording: isRec, isActive: uiState.isPopoverShown)
                 .frame(width: 118, height: 118)
                 .saturation(isRec ? 1.0 : 0.92)
                 .scaleEffect(breathing && isRec ? 1.06 : 1.0)

@@ -300,6 +300,22 @@ extension AppDelegate {
         APIKeyValidator.customValidator = nil
         expect(validationResults.count == 3 && validationResults.last == .valid, "APIKeyValidator checks failed")
         print("PASS bilingual language=multi routing & live API key validation")
+
+        // Verify idle HUD & Popover NSHostingView teardown (prevents 120fps GhostMark CPU burn when idle)
+        let hud = LiveHUDWindowController(speechEngine: app.engine, appDelegate: app)
+        expect(!hud.hasActiveHostingView, "Idle HUD window must not mount NSHostingView before show()")
+        hud.show()
+        expect(hud.hasActiveHostingView && app.uiState.isHUDShown, "HUD show() must mount NSHostingView and set isHUDShown")
+        hud.hide(after: 0)
+        expect(!hud.hasActiveHostingView && !app.uiState.isHUDShown, "HUD hide() must tear down NSHostingView and clear isHUDShown")
+
+        app.popover = NSPopover()
+        expect(app.popover.contentViewController == nil, "Idle popover must not mount NSHostingController before show")
+        app.ensurePopoverContentView()
+        expect(app.popover.contentViewController != nil, "ensurePopoverContentView must mount NSHostingController")
+        app.popoverDidClose(Notification(name: NSPopover.didCloseNotification))
+        expect(app.popover.contentViewController == nil && !app.uiState.isPopoverShown, "popoverDidClose must tear down NSHostingController")
+        print("PASS idle HUD & Popover NSHostingView teardown & zero-CPU background state")
     }
 }
 
