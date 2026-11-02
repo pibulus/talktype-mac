@@ -247,6 +247,15 @@ enum L10n {
         "noRecentTranscripts": ["en": "No Recent Transcripts", "es": "Sin transcripciones recientes"],
         "recentTranscripts": ["en": "Recent Transcripts", "es": "Transcripciones recientes"],
         "historyEmpty": ["en": "History empty", "es": "Historial vacío"],
+        "historyEdit": ["en": "Edit", "es": "Editar"],
+        "historySave": ["en": "Save", "es": "Guardar"],
+        "historyCancel": ["en": "Cancel", "es": "Cancelar"],
+        "aboutTalkType": ["en": "About TalkType…", "es": "Acerca de TalkType…"],
+        "conversationsMode": ["en": "Conversations", "es": "Conversaciones"],
+        "conversationsHelp": ["en": "Labels who said what when more than one person is talking. Needs the cloud engine.", "es": "Etiqueta quién dijo qué cuando habla más de una persona. Necesita el motor en la nube."],
+        "conversationsNeedsCloud": ["en": "Conversations needs the cloud engine — pick Voice Mode first.", "es": "Conversaciones necesita el motor en la nube — elige el modo de voz primero."],
+        "aboutBlurb": ["en": "Menu bar dictation that runs on the Mac's own speech engine. No account, nothing uploaded.", "es": "Dictado en la barra de menús que corre en el motor de voz del Mac. Sin cuenta, sin subir nada."],
+        "madeBy": ["en": "Made by Pablo in Melbourne", "es": "Hecho por Pablo en Melbourne"],
         "pushToTalkKey": ["en": "Push to Talk Key", "es": "Tecla pulsar para hablar"],
         "transcriptionEngine": ["en": "Voice Mode", "es": "Modo de voz"],
         "appleSpeech": ["en": "Mac Built-in (Offline · Private)", "es": "Integrado en Mac (sin conexión · privado)"],
@@ -261,6 +270,7 @@ enum L10n {
         "today": ["en": "Today", "es": "Hoy"],
         "yesterday": ["en": "Yesterday", "es": "Ayer"],
         "history": ["en": "History", "es": "Historial"],
+        "about": ["en": "About", "es": "Acerca"],
         "holdGhost": ["en": "Click the ghost to start talking…", "es": "Haz clic en el fantasma para empezar a hablar…"],
         "clickGhostHold": ["en": "Click ghost or hold ", "es": "Haz clic en el fantasma o mantén "],
         "clickAgainToFinish": ["en": "Click again to finish", "es": "Haz clic otra vez para terminar"],
@@ -346,6 +356,15 @@ enum TalkTypeConfig {
     static var isClicksSwapped: Bool {
         get { UserDefaults.standard.bool(forKey: swapClicksStorageKey) }
         set { UserDefaults.standard.set(newValue, forKey: swapClicksStorageKey) }
+    }
+
+    // Conversations label who said what. Needs a streaming engine that diarizes;
+    // Apple on-device has no equivalent, so this is Deepgram-only.
+    static let conversationModeStorageKey = "talktypeConversationMode"
+
+    static var isConversationMode: Bool {
+        get { UserDefaults.standard.bool(forKey: conversationModeStorageKey) }
+        set { UserDefaults.standard.set(newValue, forKey: conversationModeStorageKey) }
     }
 
     // Keychain location for the Deepgram API key.
@@ -622,7 +641,7 @@ enum KeychainHelper {
 // MARK: - History Item
 struct TranscriptRecord: Identifiable, Codable, Equatable {
     let id: UUID
-    let text: String
+    var text: String
     let timestamp: Date
     let engine: String
     
@@ -665,6 +684,18 @@ class HistoryStore: ObservableObject {
     func delete(id: UUID) {
         DispatchQueue.main.async {
             self.records.removeAll { $0.id == id }
+            self.save()
+        }
+    }
+
+    /// Correct a misheard word after the fact. The live HUD stays read-only on
+    /// purpose: dictation is one gesture, editing is a separate, calmer moment.
+    func update(id: UUID, text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        DispatchQueue.main.async {
+            guard let index = self.records.firstIndex(where: { $0.id == id }) else { return }
+            self.records[index].text = trimmed
             self.save()
         }
     }
@@ -805,6 +836,8 @@ final class AppUIState: ObservableObject {
     @Published var needsAccessibilityBanner: Bool = false
     @Published var isPopoverShown: Bool = false
     @Published var isHUDShown: Bool = false
+    /// Set by the menu bar so the popover can jump to a specific tab.
+    @Published var requestedTab: Int? = nil
 
     func startOnboarding() {
         onboardingStep = 0
@@ -1414,6 +1447,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
         let menu = NSMenu(title: "TalkType")
         menu.autoenablesItems = false
+        let voiceMenu = NSMenu(title: "Voice")
+        let appMenu = NSMenu(title: "App")
 
         // ══════════════════════════════════════════════════════════
         // 1. RECENT TAKES (CLICK TO PASTE)
@@ -1527,7 +1562,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
         let modelParent = NSMenuItem(title: L10n.t("transcriptionEngine"), action: nil, keyEquivalent: "")
         modelParent.submenu = modelMenu
-        menu.addItem(modelParent)
+        voiceMenu.addItem(modelParent)
+
+        let convoItem = NSMenuItem(title: L10n.t("conversationsMode"), action: #selector(toggleConversationMode), keyEquivalent: "")
+        convoItem.target = self
+        convoItem.state = TalkTypeConfig.isConversationMode ? .on : .off
+        convoItem.toolTip = L10n.t("conversationsHelp")
+        voiceMenu.addItem(convoItem)
 
         #if !MAS_BUILD
         let shortcutMenu = NSMenu(title: "Shortcut")
@@ -1541,7 +1582,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
         let shortcutParent = NSMenuItem(title: L10n.t("pushToTalkKey"), action: nil, keyEquivalent: "")
         shortcutParent.submenu = shortcutMenu
-        menu.addItem(shortcutParent)
+        voiceMenu.addItem(shortcutParent)
         #endif
 
         // Left / Right Click Action
@@ -1568,7 +1609,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
         let clickParent = NSMenuItem(title: L10n.t("menuBarClick"), action: nil, keyEquivalent: "")
         clickParent.submenu = clickMenu
-        menu.addItem(clickParent)
+        appMenu.addItem(clickParent)
 
         // Auto-Polish (Self-contained submenu: toggle + pass configuration)
         let polishMenu = NSMenu(title: "Auto-Polish")
@@ -1592,12 +1633,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
         let polishParent = NSMenuItem(title: L10n.t("autoPolish"), action: nil, keyEquivalent: "")
         polishParent.submenu = polishMenu
-        menu.addItem(polishParent)
+        voiceMenu.addItem(polishParent)
 
         // Custom Vocabulary
         let vocabItem = NSMenuItem(title: L10n.t("customKeywords"), action: #selector(promptCustomKeywords), keyEquivalent: "")
         vocabItem.target = self
-        menu.addItem(vocabItem)
+        voiceMenu.addItem(vocabItem)
 
         // Language Submenu
         let langMenu = NSMenu(title: "Language")
@@ -1611,7 +1652,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
         let langParent = NSMenuItem(title: L10n.t("language"), action: nil, keyEquivalent: "")
         langParent.submenu = langMenu
-        menu.addItem(langParent)
+        voiceMenu.addItem(langParent)
 
         // HUD Position Submenu
         let posMenu = NSMenu(title: "HUD Position")
@@ -1628,7 +1669,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
         let posParent = NSMenuItem(title: L10n.t("hudPosition"), action: nil, keyEquivalent: "")
         posParent.submenu = posMenu
-        menu.addItem(posParent)
+        appMenu.addItem(posParent)
+
+        let setupItem = NSMenuItem(title: L10n.t("runSetupGuide"), action: #selector(runSetupGuide), keyEquivalent: "")
+        setupItem.target = self
+        appMenu.addItem(setupItem)
+
+        let voiceParent = NSMenuItem(title: "Voice", action: nil, keyEquivalent: "")
+        voiceParent.submenu = voiceMenu
+        menu.addItem(voiceParent)
+
+        let appParent = NSMenuItem(title: "App", action: nil, keyEquivalent: "")
+        appParent.submenu = appMenu
+        menu.addItem(appParent)
 
         // ══════════════════════════════════════════════════════════
         // 3. PERMISSIONS / SYSTEM ALERTS (Only if needed)
@@ -1666,17 +1719,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         // ══════════════════════════════════════════════════════════
         menu.addItem(NSMenuItem.separator())
 
-        let setupGuideItem = NSMenuItem(title: L10n.t("runSetupGuide"), action: #selector(runSetupGuide), keyEquivalent: "")
-        setupGuideItem.target = self
-        menu.addItem(setupGuideItem)
-
-        let webItem = NSMenuItem(title: L10n.t("talkTypeWeb"), action: #selector(openTalkTypeWeb), keyEquivalent: "")
-        webItem.target = self
-        menu.addItem(webItem)
-
-        let privacyItem = NSMenuItem(title: L10n.t("privacyPolicy"), action: #selector(openPrivacyPolicy), keyEquivalent: "")
-        privacyItem.target = self
-        menu.addItem(privacyItem)
+        let aboutItem = NSMenuItem(title: L10n.t("aboutTalkType"), action: #selector(showAboutSection), keyEquivalent: "")
+        aboutItem.target = self
+        menu.addItem(aboutItem)
 
         let quitItem = NSMenuItem(title: L10n.t("quit"), action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
@@ -1710,6 +1755,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     @objc func openPrivacyPolicy() {
         if let url = URL(string: "https://talktype.app/privacy") {
             NSWorkspace.shared.open(url)
+        }
+    }
+
+    @objc func toggleConversationMode() {
+        TalkTypeConfig.isConversationMode.toggle()
+        if TalkTypeConfig.isConversationMode && !TalkTypeConfig.isUsingDeepgram {
+            // Diarization needs the cloud engine; say so rather than silently doing nothing.
+            showFailure(L10n.t("conversationsNeedsCloud"))
+        }
+    }
+
+    @objc func showAboutSection() {
+        uiState.requestedTab = 2
+        if popover?.isShown != true {
+            openVisualPopover()
         }
     }
 
@@ -2562,6 +2622,9 @@ class SpeechEngine: NSObject, ObservableObject {
     private var deepgramKeepAliveTimer: Timer?
     private var confirmedTranscript = ""
     private var interimTranscript = ""
+    /// Last speaker index seen in conversation mode, so a label only appears when
+    /// the floor actually changes hands.
+    private var lastSpeakerIndex: Int?
     private var isStopping = false
     private var deepgramStopDeadline: DispatchWorkItem?
     private var deepgramFinalRanges = Set<String>()
@@ -2591,6 +2654,17 @@ class SpeechEngine: NSObject, ObservableObject {
     private func disarmStreamWatchdog() {
         streamStallWatchdogTimer?.invalidate()
         streamStallWatchdogTimer = nil
+    }
+
+    /// Dominant speaker across a segment's words. Returns nil when the stream has
+    /// no diarization data, so callers can leave the text alone.
+    static func dominantSpeakerIndex(in alternatives: [[String: Any]]) -> Int? {
+        guard let words = alternatives.first?["words"] as? [[String: Any]], !words.isEmpty else { return nil }
+        var counts: [Int: Int] = [:]
+        for word in words {
+            if let speaker = word["speaker"] as? Int { counts[speaker, default: 0] += 1 }
+        }
+        return counts.max(by: { $0.value < $1.value })?.key
     }
 
     private func commitInterim() {
@@ -2921,6 +2995,7 @@ class SpeechEngine: NSObject, ObservableObject {
         transcript = ""
         confirmedTranscript = ""
         interimTranscript = ""
+        lastSpeakerIndex = nil
         appleSegmentText = ""
         lastApplePartialTime = 0
         lastSegmentStart = -1
@@ -2952,8 +3027,9 @@ class SpeechEngine: NSObject, ObservableObject {
     private func makeDeepgramWebSocket() -> URLSessionWebSocketTask? {
         let apiKey = TalkTypeConfig.deepgramApiKey
         let keywordsParam = VocabularyManager.deepgramKeywordsParam
+        let diarizeParam = TalkTypeConfig.isConversationMode ? "&diarize=true" : ""
         guard !apiKey.isEmpty,
-              let url = URL(string: "wss://api.deepgram.com/v1/listen?model=nova-3&smart_format=true&interim_results=true&encoding=linear16&sample_rate=16000&channels=1&mip_opt_out=true&language=\(TalkTypeConfig.language.deepgramLanguage)\(keywordsParam)") else {
+              let url = URL(string: "wss://api.deepgram.com/v1/listen?model=nova-3&smart_format=true&interim_results=true&encoding=linear16&sample_rate=16000&channels=1&mip_opt_out=true&language=\(TalkTypeConfig.language.deepgramLanguage)\(keywordsParam)\(diarizeParam)") else {
             return nil
         }
         var request = URLRequest(url: url)
@@ -3176,6 +3252,14 @@ class SpeechEngine: NSObject, ObservableObject {
                 }
             }
             if !cleaned.isEmpty { interimTranscript = cleaned }
+            // Conversation mode: label the segment when someone else takes over.
+            if TalkTypeConfig.isConversationMode,
+               let speaker = Self.dominantSpeakerIndex(in: alternatives) {
+                if speaker != lastSpeakerIndex {
+                    lastSpeakerIndex = speaker
+                    interimTranscript = "Speaker \(speaker + 1): " + interimTranscript
+                }
+            }
             commitInterim()
             return
         }
@@ -3259,6 +3343,7 @@ class SpeechEngine: NSObject, ObservableObject {
         if !appendingToExisting {
             confirmedTranscript = ""
             interimTranscript = ""
+            lastSpeakerIndex = nil
             appleSegmentText = ""
             lastApplePartialTime = 0
             transcript = ""
@@ -3707,6 +3792,11 @@ struct HistoryRecordCard: View {
     let p: Palette
     let onCopy: () -> Void
     let onDelete: () -> Void
+    let onSave: (String) -> Void
+
+    @State private var isEditing = false
+    @State private var draft = ""
+    @FocusState private var editingFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -3717,15 +3807,63 @@ struct HistoryRecordCard: View {
 
                 Spacer()
 
-                CopyPillButton(isCopied: isCopied, action: onCopy)
+                if isEditing {
+                    Button(L10n.t("historyCancel")) {
+                        isEditing = false
+                        editingFocused = false
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(p.inkSoft.opacity(0.7))
+
+                    Button(L10n.t("historySave")) {
+                        onSave(draft)
+                        isEditing = false
+                        editingFocused = false
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                    .foregroundStyle(TT.hot)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3.5)
+                    .background(TT.hot.opacity(0.14))
+                    .clipShape(Capsule())
+                } else {
+                    Button(L10n.t("historyEdit")) {
+                        draft = record.text
+                        isEditing = true
+                        editingFocused = true
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(p.inkSoft.opacity(0.7))
+
+                    CopyPillButton(isCopied: isCopied, action: onCopy)
+                }
             }
             .padding(.top, 1)
 
-            Text(record.text)
-                .font(.system(size: 12.5, weight: .medium, design: .monospaced))
-                .lineSpacing(2.5)
-                .foregroundStyle(p.ink)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            if isEditing {
+                TextEditor(text: $draft)
+                    .font(.system(size: 12.5, weight: .medium, design: .monospaced))
+                    .foregroundStyle(p.ink)
+                    .scrollContentBackground(.hidden)
+                    .frame(minHeight: 54, maxHeight: 130)
+                    .padding(6)
+                    .background(p.paperLit)
+                    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .strokeBorder(TT.hot.opacity(0.35), lineWidth: 1)
+                    )
+                    .focused($editingFocused)
+            } else {
+                Text(record.text)
+                    .font(.system(size: 12.5, weight: .medium, design: .monospaced))
+                    .lineSpacing(2.5)
+                    .foregroundStyle(p.ink)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
         .padding(12)
         .background(p.card)
@@ -4898,6 +5036,10 @@ struct ContentView: View {
                         TabPill(title: L10n.t("history"), isSelected: selectedTab == 1, p: p) {
                             selectedTab = 1
                         }
+
+                        TabPill(title: L10n.t("about"), isSelected: selectedTab == 2, p: p) {
+                            selectedTab = 2
+                        }
                     }
                     .padding(2)
                     .background(p.border.opacity(0.12))
@@ -4916,9 +5058,11 @@ struct ContentView: View {
                     statusLine
                     Spacer(minLength: 0)
                     footerModeBar
-                } else {
+                } else if selectedTab == 1 {
                     // History View (Never lose text again)
                     historyCard
+                } else {
+                    aboutView
                 }
             }
         }
@@ -4929,6 +5073,15 @@ struct ContentView: View {
         .onAppear {
             refreshPermissionStatus()
             hasDeepgramKey = !TalkTypeConfig.deepgramApiKey.isEmpty
+            if let requested = uiState.requestedTab {
+                selectedTab = requested
+                uiState.requestedTab = nil
+            }
+        }
+        .onChange(of: uiState.requestedTab) { requested in
+            guard let requested = requested else { return }
+            selectedTab = requested
+            uiState.requestedTab = nil
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             refreshPermissionStatus()
@@ -4998,6 +5151,81 @@ struct ContentView: View {
 
     private func refreshPermissionStatus() {
         permissionRefreshVersion &+= 1
+    }
+
+    private var aboutView: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 12) {
+                GhostMark(isRecording: false, isActive: false)
+                    .frame(width: 56, height: 56)
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 0) {
+                        Text("Talk").foregroundStyle(p.ink)
+                        Text("Type").foregroundStyle(currentMoodGradient)
+                    }
+                    .font(.system(size: 21, weight: .heavy, design: .rounded))
+                    .kerning(-0.5)
+                    Text("v\(shortVersion) (\(buildNumber))")
+                        .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                        .foregroundStyle(p.inkSoft.opacity(0.6))
+                }
+                Spacer(minLength: 0)
+            }
+
+            Text(L10n.t("aboutBlurb"))
+                .font(.system(size: 12.5, weight: .medium, design: .rounded))
+                .lineSpacing(2)
+                .foregroundStyle(p.inkSoft)
+                .fixedSize(horizontal: false, vertical: true)
+
+            VStack(spacing: 6) {
+                aboutRow(L10n.t("talkTypeWeb"), "https://talktype.app")
+                aboutRow(L10n.t("privacyPolicy"), "https://talktype.app/privacy")
+            }
+
+            Spacer(minLength: 0)
+
+            Text(L10n.t("madeBy"))
+                .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                .foregroundStyle(p.inkSoft.opacity(0.55))
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(p.card)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(p.border, lineWidth: 2)
+        )
+    }
+
+    private func aboutRow(_ title: String, _ urlString: String) -> some View {
+        Button {
+            if let url = URL(string: urlString) { NSWorkspace.shared.open(url) }
+        } label: {
+            HStack {
+                Text(title)
+                    .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(p.ink)
+                Spacer(minLength: 0)
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(p.inkSoft.opacity(0.6))
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(p.paperLit)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var shortVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+    }
+
+    private var buildNumber: String {
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
     }
 
     private var transcriptCard: some View {
@@ -5167,6 +5395,9 @@ struct ContentView: View {
                                     withAnimation(.easeOut(duration: 0.2)) {
                                         history.delete(id: record.id)
                                     }
+                                },
+                                onSave: { edited in
+                                    history.update(id: record.id, text: edited)
                                 }
                             )
                         }
