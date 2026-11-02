@@ -22,6 +22,11 @@ Meet the little ghost in your Mac’s menu bar. Say what you mean, get words you
 
 **Description**
 
+> Do not paste this section into App Store Connect as written. It promises a
+> 50-dictation trial and a lifetime unlock; the build has no StoreKit and no
+> counter, so submitting it would be a guideline 2.3.1 / 3.1.1 rejection.
+> Ship the copy only after the paywall exists, or cut the trial sentence.
+
 Meet the little ghost in your Mac’s menu bar. TalkType turns spoken thoughts into text you can copy into the app you’re using.
 
 Tap to start, speak naturally, and keep recent transcripts close at hand. Add names and phrases to custom vocabulary to help recognition get them right.
@@ -39,7 +44,7 @@ Optional cloud engines use your own API keys; provider terms and usage charges m
 
 **Keywords**
 
-dictation,voice to text,speech to text,transcribe,voice typing,transcription,notes,whisper,memo,microphone,writing
+dictation,voice to text,speech to text,transcribe,voice typing,notes,memo,microphone,writing
 
 ## Purchase plan to validate
 

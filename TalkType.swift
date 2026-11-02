@@ -4035,7 +4035,12 @@ struct OnboardingView: View {
     @AppStorage(TalkTypeConfig.languageStorageKey) private var storedLanguage: String = TranscriptionLanguage.auto.rawValue
     @AppStorage(TalkTypeConfig.engineStorageKey) private var storedEngine: String = "apple"
     @State private var micGranted: Bool = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+    #if MAS_BUILD
+    // The sandbox never grants Accessibility, so never ask for it here.
+    @State private var axGranted: Bool = false
+    #else
     @State private var axGranted: Bool = AXIsProcessTrusted()
+    #endif
     @State private var hasDeepgramKey: Bool = !TalkTypeConfig.deepgramApiKey.isEmpty
     @FocusState private var sandboxFieldFocused: Bool
 
