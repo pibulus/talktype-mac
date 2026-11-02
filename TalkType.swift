@@ -207,7 +207,7 @@ enum L10n {
         "geminiAlertInfo": ["en": "TalkType operates completely standalone. Optionally enter your own Google Gemini API key to format and polish transcripts into clean prose. When enabled, dictated transcript text is sent directly to Google's Gemini API (generativelanguage.googleapis.com).", "es": "TalkType funciona de forma completamente independiente. Opcionalmente introduce tu propia clave API de Google Gemini para dar formato y pulir tus transcripciones. Al activarse, el texto transcrito se envía directamente a la API de Google Gemini (generativelanguage.googleapis.com)."],
         "onboardStep1Sub": ["en": "One quick switch so TalkType can hear you.", "es": "Un permiso rápido para que TalkType te escuche."],
         "onboardSandboxPlaceholder": ["en": "Hold ⌃⌥ Space, speak, and let go — your words land right here…", "es": "Mantén ⌃⌥ Espacio, habla y suelta — tus palabras aparecerán aquí…"],
-        "onboardSandboxSuccess": ["en": "That's the whole trick.", "es": "Así de simple."]
+        "onboardSandboxSuccess": ["en": "Now it's yours.", "es": "Ahora es tuyo."]
     ]
     #else
     static let modeStrings: [String: [String: String]] = [
@@ -1877,13 +1877,33 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
                 NSApp.activate(ignoringOtherApps: true)
                 popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
                 popover.contentViewController?.view.window?.makeKey()
+                clampPopoverIntoVisibleFrame()
             }
         }
+    }
+
+    /// NSPopover can settle with its top edge above the menu bar — it flips to the
+    /// opposite edge when it thinks there is no room below, which puts the card off
+    /// the top of the screen. Pull it back into the visible frame.
+    func clampPopoverIntoVisibleFrame() {
+        guard let window = popover?.contentViewController?.view.window,
+              let screen = window.screen ?? NSScreen.main else { return }
+        let visible = screen.visibleFrame
+        var frame = window.frame
+        guard frame.maxY > visible.maxY || frame.minY < visible.minY else { return }
+        if frame.maxY > visible.maxY { frame.origin.y = visible.maxY - frame.height }
+        if frame.minY < visible.minY { frame.origin.y = visible.minY }
+        window.setFrame(frame, display: true)
     }
 
     func popoverWillShow(_ notification: Notification) {
         ensurePopoverContentView()
         uiState.isPopoverShown = true
+    }
+
+    func popoverDidShow(_ notification: Notification) {
+        // The hosting view resizes after show; re-clamp once it has settled.
+        clampPopoverIntoVisibleFrame()
     }
 
     func popoverDidClose(_ notification: Notification) {
@@ -4892,6 +4912,7 @@ struct ContentView: View {
                             .transition(.move(edge: .top).combined(with: .opacity))
                     }
                     ghostButton
+                        .padding(.top, 6)
                     statusLine
                     Spacer(minLength: 0)
                     footerModeBar
@@ -4981,15 +5002,24 @@ struct ContentView: View {
 
     private var transcriptCard: some View {
         VStack(spacing: 0) {
-            ScrollView(.vertical, showsIndicators: false) {
-                Text(speechEngine.transcript.isEmpty
-                     ? L10n.t("holdGhost")
-                     : speechEngine.transcript)
-                    .font(.system(size: 14, weight: .medium, design: .monospaced))
-                    .lineSpacing(3)
-                    .foregroundStyle(speechEngine.transcript.isEmpty ? p.inkSoft.opacity(0.55) : p.ink)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(14)
+            ScrollViewReader { proxy in
+                ScrollView(.vertical, showsIndicators: false) {
+                    Text(speechEngine.transcript.isEmpty
+                         ? L10n.t("holdGhost")
+                         : speechEngine.transcript)
+                        .font(.system(size: 14, weight: .medium, design: .monospaced))
+                        .lineSpacing(3)
+                        .foregroundStyle(speechEngine.transcript.isEmpty ? p.inkSoft.opacity(0.55) : p.ink)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(14)
+                    // Trailing anchor so live dictation keeps the newest words in view.
+                    Color.clear.frame(height: 1).id("transcriptBottom")
+                }
+                .onChange(of: speechEngine.transcript) { _ in
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        proxy.scrollTo("transcriptBottom", anchor: .bottom)
+                    }
+                }
             }
 
             if !speechEngine.transcript.isEmpty {
