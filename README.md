@@ -77,7 +77,7 @@ Before release, also test real microphone/AirPods route changes, sleep/wake, ful
 
 `site/` holds the shop page that sells the DMG — plain HTML/CSS, Square checkout
 for payments, no build step. Preview with `cd site && python3 -m http.server`.
-Deploy notes and the three URLs to update are in `site/README.md`.
+Deploy notes, the live Netlify project and the URLs to update are in `docs/SITE.md`.
 
 ## Design
 

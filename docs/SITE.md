@@ -1,7 +1,7 @@
-# site/ — TalkType for Mac
+# TalkType for Mac — the shop site
 
-The shop page. Plain HTML, one stylesheet, one small script. No build step, no
-framework, no tracker.
+Lives in `site/`. Plain HTML, one stylesheet, one small script, one Netlify
+function. No build step, no framework, no tracker.
 
 ```
 index.html    the main page: hero, product stage, how it works, engines, pricing, FAQ

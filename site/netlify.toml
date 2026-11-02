@@ -49,11 +49,19 @@
   from = "/netlify/*"
   to = "/404.html"
   status = 404
+  force = true
 [[redirects]]
   from = "/*.md"
   to = "/404.html"
   status = 404
+  force = true
 [[redirects]]
   from = "/netlify.toml"
   to = "/404.html"
   status = 404
+  force = true
+[[redirects]]
+  from = "/README.md"
+  to = "/404.html"
+  status = 404
+  force = true
