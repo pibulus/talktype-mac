@@ -10,3 +10,6 @@ fix_*.py
 screenshots/raw_capture.png
 TalkType.provisionprofile
 *.provisionprofile
+
+# Local Netlify folder
+.netlify

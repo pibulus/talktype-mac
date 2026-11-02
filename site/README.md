@@ -66,29 +66,46 @@ currency rather than assuming it.
    **Made by Pablo**, and update the old A$29 Square Online item (left over as a
    manual fallback) to A$59 or archive it.
 
-## Hosting: what this needs
+## Hosting (live)
 
-A static host is not enough any more — the checkout is one serverless function.
-Two recipes:
+Netlify project **talktype-mac** → https://talktype-mac.netlify.app
+(team `pibulus`, project id `cd23d988-989e-422b-ae02-1a88a371be37`).
 
-**Netlify (recommended, smallest moving parts)**
+It is deployed as a plain static publish plus one function; no build step.
+
 ```bash
-# from the repo root
-npx netlify-cli deploy --dir site --functions site/netlify/functions --prod
+cd site
+netlify deploy --dir . --functions netlify/functions --prod
 ```
-or connect the repo with base `site/`, publish `site/`, functions
-`site/netlify/functions` — `site/netlify.toml` already says so. Add the env vars
-above in Site settings → Environment.
 
-**Deno Deploy / the box** — serve `site/` statically and route
-`POST /api/checkout` at the same module (it is plain `export default (request) =>
-Response`; swap `process.env` for `Deno.env` when running under Deno).
+`site/` is linked to that project locally (`.netlify/state.json`, gitignored).
 
-**The box** — copy `site/` into an nginx root for a `talktype-mac` vhost, proxy
-`POST /api/checkout` at the function module (run it under Deno or Node), and
-reverse-proxy `/downloads/` at the DMG.
+**Current environment:** `SQUARE_ENVIRONMENT=sandbox`, sandbox token and location,
+`SITE_URL=https://talktype-mac.netlify.app`. The whole flow is live and testable
+now — Buy → Square's sandbox testing panel → back to `/thanks.html` with confetti.
 
-Keep `thanks.html` reachable at the same path the Square redirect uses.
+**To take real money:** replace the site env with the production token and set
+`SQUARE_ENVIRONMENT=production` + `SQUARE_LOCATION_ID=LS821EYMQCANH`, then redeploy
+(nothing else changes).
+
+## Domain
+
+The plan is `mac.talktype.app` → this Netlify site, and `talktype.app/mac` 301s
+to it (or serves this bundle directly once the web app's route is retired).
+
+1. Cloudflare DNS for `talktype.app`: add
+   `CNAME mac → talktype-mac.netlify.app` (DNS only, grey cloud — Netlify issues
+   the certificate).
+2. Netlify → Project configuration → Domain management → Add `mac.talktype.app`.
+3. Then update the canonical / `og:url` in `index.html` + `buy.html` to
+   `https://mac.talktype.app/`.
+
+### Sandbox token note
+
+The Netlify CLI echoed the sandbox `SQUARE_ACCESS_TOKEN` into terminal output
+while it was being set. It is a sandbox credential only; the production token
+should be set from the Square dashboard without passing through a shell command
+that echoes it (`netlify env:import` from a local file, or the Netlify UI).
 
 ## Notes
 
