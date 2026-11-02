@@ -204,7 +204,10 @@ enum L10n {
         "geminiPass": ["en": "Google Gemini API Key…", "es": "Clave API de Google Gemini…"],
         "pasteGeminiKey": ["en": "Paste your Gemini API key", "es": "Pega tu clave API de Gemini"],
         "geminiAlertTitle": ["en": "Google Gemini API Key (Optional)", "es": "Clave API de Google Gemini (Opcional)"],
-        "geminiAlertInfo": ["en": "TalkType operates completely standalone. Optionally enter your own Google Gemini API key to format and polish transcripts into clean prose. When enabled, dictated transcript text is sent directly to Google's Gemini API (generativelanguage.googleapis.com).", "es": "TalkType funciona de forma completamente independiente. Opcionalmente introduce tu propia clave API de Google Gemini para dar formato y pulir tus transcripciones. Al activarse, el texto transcrito se envía directamente a la API de Google Gemini (generativelanguage.googleapis.com)."]
+        "geminiAlertInfo": ["en": "TalkType operates completely standalone. Optionally enter your own Google Gemini API key to format and polish transcripts into clean prose. When enabled, dictated transcript text is sent directly to Google's Gemini API (generativelanguage.googleapis.com).", "es": "TalkType funciona de forma completamente independiente. Opcionalmente introduce tu propia clave API de Google Gemini para dar formato y pulir tus transcripciones. Al activarse, el texto transcrito se envía directamente a la API de Google Gemini (generativelanguage.googleapis.com)."],
+        "onboardStep1Sub": ["en": "One quick switch so TalkType can hear you.", "es": "Un permiso rápido para que TalkType te escuche."],
+        "onboardSandboxPlaceholder": ["en": "Hold ⌃⌥ Space, speak, and let go — your words land right here…", "es": "Mantén ⌃⌥ Espacio, habla y suelta — tus palabras aparecerán aquí…"],
+        "onboardSandboxSuccess": ["en": "That's the whole trick.", "es": "Así de simple."]
     ]
     #else
     static let modeStrings: [String: [String: String]] = [
