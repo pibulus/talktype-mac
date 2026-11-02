@@ -1,0 +1,8 @@
+{
+  "name": "TalkType for Mac",
+  "version": "1.0",
+  "build": "1",
+  "bundle": "com.pibulus.talktype",
+  "channel": "direct",
+  "commit": "see git log"
+}

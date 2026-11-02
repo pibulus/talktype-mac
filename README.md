@@ -73,9 +73,17 @@ Run `Tests/run-regressions.sh` to exercise transcript finalization, stale callba
 
 Before release, also test real microphone/AirPods route changes, sleep/wake, full-screen HUD behavior, and denied-permission flows on the supported macOS versions. Automated checks and notarization do not guarantee App Review approval.
 
+## Site
+
+`site/` holds the shop page that sells the DMG — plain HTML/CSS, Square checkout
+for payments, no build step. Preview with `cd site && python3 -m http.server`.
+Deploy notes and the three URLs to update are in `site/README.md`.
+
 ## Design
 
 Palette is shared with talktype.app and the browser extension, sourced from
 `talktype/src/app.css` and `ghost/gradients.js`. Cream `#fff6e6` paper, warm ink
 `#1e1714`, peach ghost gradient. Dark mode inverts to warm near-black — never `#000`.
 Ghost assets in `Assets/` are rendered from `talktype/static/talktype-icon.svg`.
+The extension and this site both carry that same ghost; `site/assets/ghost.svg` and
+`talktype_extension/src/icons/ghost.svg` are the canonical vector.

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TalkType for Mac — privacy</title>
+  <meta name="description" content="What TalkType for Mac does with audio, text, keys and history. Short answer: it stays on the Mac.">
+  <meta name="theme-color" content="#fff6e6">
+  <link rel="icon" href="assets/ghost.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="wrap topbar-inner">
+    <a class="brand" href="index.html">
+      <img src="assets/ghost.svg" alt="">
+      TalkType <span class="tag">for Mac</span>
+    </a>
+    <nav class="nav-links">
+      <a href="index.html">Mac page</a>
+      <a href="support.html">Support</a>
+      <a href="https://talktype.app/privacy">Web app privacy</a>
+    </nav>
+  </div>
+</header>
+
+<main class="prose">
+  <div class="wrap narrow">
+    <div class="kicker"><span class="dot"></span> Privacy</div>
+    <h1 style="margin-top: 14px">Audio stays on the Mac.</h1>
+    <p class="lede">TalkType has no backend, no account system and no analytics. This page describes exactly what leaves the machine and when. Last updated 2 November 2026.</p>
+
+    <h2>Default engine</h2>
+    <p>Apple's speech recognition runs on the Mac's Neural Engine. Audio is not uploaded to Apple, and nothing reaches this website or any TalkType server. There is no TalkType server to reach.</p>
+
+    <h2>Optional cloud engines</h2>
+    <p>Adding a Deepgram or Gemini API key unlocks streaming recognition or a prose polish pass. When those engines run, audio (or the finished transcript, for Gemini) travels directly from the Mac to that provider, using the owner's own key. Deepgram and Google process it under their own terms; TalkType never sees it.</p>
+
+    <h2>Keys</h2>
+    <p>API keys are stored in the macOS Keychain, in the app's own keychain item. They are not written to preferences files, not synced by TalkType, and not included in any request other than the provider's own authentication header.</p>
+
+    <h2>History and settings</h2>
+    <p>The last 50 transcripts, vocabulary and preferences live in the app's own container on the Mac. The History tab can clear them at any time. Nothing is uploaded, and there is no device sync.</p>
+
+    <h2>Data collected by this website</h2>
+    <p>Payments open Square's hosted checkout. Square collects the email address and card details needed for the receipt; that data never touches this site. The site itself sets no analytics cookies and runs no third-party trackers. Server logs at the host record standard request information such as IP address and user agent.</p>
+
+    <h2>Purchases and support</h2>
+    <p>Email sent to <a href="mailto:pibulus@gmail.com">pibulus@gmail.com</a> is kept only as long as the conversation needs it. Receipts stay with Square.</p>
+
+    <h2>App Store privacy label</h2>
+    <p>The Mac App Store build declares no data collection: no analytics, no identifiers, no advertising, no tracking. The optional cloud engines are disabled until a key is entered by the owner, and the audio still goes only to that provider.</p>
+
+    <h2>Questions</h2>
+    <p><a href="mailto:pibulus@gmail.com">pibulus@gmail.com</a>. The full web-app policy is at <a href="https://talktype.app/privacy">talktype.app/privacy</a>.</p>
+  </div>
+</main>
+
+<footer class="footer">
+  <div class="wrap footer-inner">
+    <a class="brand" href="index.html" style="font-size: 15px">
+      <img src="assets/ghost.svg" alt="" style="width: 24px; height: 24px">
+      TalkType
+    </a>
+    <nav class="footer-links">
+      <a href="https://talktype.app">talktype.app</a>
+      <a href="support.html">Support</a>
+      <a href="mailto:pibulus@gmail.com">pibulus@gmail.com</a>
+    </nav>
+    <div class="made">Made in Melbourne by Pablo · <span id="version">v1.0</span></div>
+  </div>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>

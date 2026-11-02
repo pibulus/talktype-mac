@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TalkType for Mac — support</title>
+  <meta name="description" content="Help with TalkType for Mac: install, permissions, the shortcut, lost downloads and refunds.">
+  <meta name="theme-color" content="#fff6e6">
+  <link rel="icon" href="assets/ghost.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="wrap topbar-inner">
+    <a class="brand" href="index.html">
+      <img src="assets/ghost.svg" alt="">
+      TalkType <span class="tag">for Mac</span>
+    </a>
+    <nav class="nav-links">
+      <a href="index.html">Mac page</a>
+      <a href="buy.html">Buy</a>
+      <a href="https://talktype.app/extension">Extension</a>
+    </nav>
+    <a class="pill pill-quiet pill-sm" href="mailto:pibulus@gmail.com">Email support</a>
+  </div>
+</header>
+
+<main class="prose">
+  <div class="wrap narrow">
+    <div class="kicker"><span class="dot"></span> Support</div>
+    <h1 style="margin-top: 14px">Talk to a human.</h1>
+    <p class="lede">One person makes this app. Email <a href="mailto:pibulus@gmail.com">pibulus@gmail.com</a> with the macOS version and what happened — a reply usually lands within a day, Melbourne time.</p>
+
+    <h2>The ghost never appears in the menu bar</h2>
+    <p>macOS hides menu bar items when the bar is full, especially on a MacBook with a notch. Quit a few other menu bar apps, or use a manager such as Bartender, and the ghost returns. The app is still running either way.</p>
+
+    <h2>Nothing pastes into the app</h2>
+    <p>Automatic paste needs Accessibility: System Settings → Privacy &amp; Security → Accessibility → enable TalkType. Without it the transcript still lands on the clipboard, and ⌘V does the rest. Password fields refuse synthetic keystrokes by design and cannot be made to accept them.</p>
+
+    <h2>Microphone or Speech Recognition was denied</h2>
+    <p>System Settings → Privacy &amp; Security → Microphone (or Speech Recognition) → enable TalkType, then quit and reopen the app. The menu shows the exact permission still missing.</p>
+
+    <h2>The shortcut does nothing</h2>
+    <p>Something else owns Right Option, or the keyboard layout does not report it as a modifier. The menu offers Left Option, either Option, or a standard push-to-talk key instead.</p>
+
+    <h2>Lost the DMG</h2>
+    <p>The build stays at <a href="https://talktype.app/downloads/TalkType.dmg">talktype.app/downloads/TalkType.dmg</a>. A receipt is not required to re-download, because the app is not licensed per install and nobody enjoys a scavenger hunt.</p>
+
+    <h2>Refunds</h2>
+    <p>Email the Square receipt within 30 days and the payment is refunded, no interrogation. If the app simply did not fit, saying why helps the next build.</p>
+
+    <h2>Privacy</h2>
+    <p>The short version: audio is processed on the Mac by default, keys live in the Keychain, and there is no analytics or account system. The longer version is on <a href="privacy.html">the privacy page</a>.</p>
+  </div>
+</main>
+
+<footer class="footer">
+  <div class="wrap footer-inner">
+    <a class="brand" href="index.html" style="font-size: 15px">
+      <img src="assets/ghost.svg" alt="" style="width: 24px; height: 24px">
+      TalkType
+    </a>
+    <nav class="footer-links">
+      <a href="https://talktype.app">talktype.app</a>
+      <a href="privacy.html">Privacy</a>
+      <a href="mailto:pibulus@gmail.com">pibulus@gmail.com</a>
+    </nav>
+    <div class="made">Made in Melbourne by Pablo · <span id="version">v1.0</span></div>
+  </div>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
