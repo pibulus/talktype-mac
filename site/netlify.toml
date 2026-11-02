@@ -1,0 +1,45 @@
+[build]
+  publish = "."
+  functions = "netlify/functions"
+
+# /api/checkout → the Square payment-link function
+[[redirects]]
+  from = "/api/checkout"
+  to = "/.netlify/functions/checkout"
+  status = 200
+  force = true
+
+# Clean-ish URLs without touching the static filenames
+[[redirects]]
+  from = "/buy"
+  to = "/buy.html"
+  status = 200
+[[redirects]]
+  from = "/thanks"
+  to = "/thanks.html"
+  status = 200
+[[redirects]]
+  from = "/support"
+  to = "/support.html"
+  status = 200
+[[redirects]]
+  from = "/privacy"
+  to = "/privacy.html"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    X-Frame-Options = "SAMEORIGIN"
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
+
+[[headers]]
+  for = "/*.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"

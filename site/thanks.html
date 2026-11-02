@@ -30,7 +30,11 @@
   <div class="wrap">
     <img class="ghost-big" src="assets/ghost.svg" alt="">
     <h1 class="display" style="font-size: clamp(36px, 5.4vw, 60px); margin-top: 20px">The ghost is yours.</h1>
-    <p class="lede" style="max-width: 520px; margin: 18px auto 0">Payment is done. The DMG below is the same notarized code the Mac App Store build is cut from, with the sandbox powers left in.</p>
+    <p class="paid-note" id="paid-note" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 12.5 5 5L20 6.5"/></svg>
+      Payment received — Square emailed the receipt
+    </p>
+    <p class="lede" style="max-width: 520px; margin: 18px auto 0">The DMG below is the same notarized code the Mac App Store build is cut from, with the sandbox powers left in.</p>
 
     <div class="hero-actions" style="margin-top: 30px">
       <a class="pill pill-hot" href="https://talktype.app/downloads/TalkType.dmg" download>
@@ -65,7 +69,7 @@
       <a href="https://talktype.app/privacy">Privacy</a>
       <a href="support.html">Support</a>
     </nav>
-    <div class="made">Made in Melbourne by Pablo · <span id="version">v1.0</span></div>
+    <a class="made" href="https://madebypablo.app">Made by Pablo · Melbourne · <span id="version">v1.0</span></a>
   </div>
 </footer>
 

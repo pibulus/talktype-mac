@@ -21,6 +21,105 @@
     hud.style.transition = 'opacity 0.22s ease';
   }
 
+  // Checkout: ask our function for a Square payment link, then hand the buyer
+  // to Square. Card details never touch this page.
+  const checkout = document.getElementById('checkout');
+  if (checkout) {
+    const label = checkout.querySelector('.label');
+    const error = document.getElementById('checkout-error');
+    checkout.addEventListener('click', async () => {
+      if (checkout.dataset.state === 'busy') return;
+      checkout.dataset.state = 'busy';
+      checkout.disabled = true;
+      label.textContent = 'Opening Square…';
+      if (error) error.hidden = true;
+
+      try {
+        const res = await fetch('/api/checkout', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: '{}'
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.checkoutUrl) throw new Error(data.error || 'no checkout');
+        window.location.assign(data.checkoutUrl);
+      } catch (e) {
+        checkout.dataset.state = 'idle';
+        checkout.disabled = false;
+        label.textContent = 'Continue to secure payment';
+        if (error) error.hidden = false;
+      }
+    });
+  }
+
+  // Returning from Square: a little peach confetti, once, if motion is welcome.
+  const params = new URLSearchParams(location.search);
+  const paid = params.has('checkout_id');
+  if (paid) {
+    const note = document.getElementById('paid-note');
+    if (note) note.hidden = false;
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) confetti();
+  }
+
+  function confetti() {
+    const canvas = document.createElement('canvas');
+    canvas.setAttribute('aria-hidden', 'true');
+    Object.assign(canvas.style, {
+      position: 'fixed', inset: '0', width: '100%', height: '100%',
+      pointerEvents: 'none', zIndex: '9999'
+    });
+    document.body.appendChild(canvas);
+    const ctx = canvas.getContext('2d');
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const resize = () => {
+      canvas.width = innerWidth * dpr;
+      canvas.height = innerHeight * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    resize();
+    addEventListener('resize', resize);
+
+    const colours = ['#ff60e0', '#ff82ca', '#ff9a85', '#ffb060', '#ffcf40', '#2bb59a'];
+    const pieces = Array.from({ length: 110 }, () => ({
+      x: innerWidth / 2 + (Math.random() - 0.5) * innerWidth * 0.55,
+      y: -20 - Math.random() * innerHeight * 0.35,
+      w: 5 + Math.random() * 7,
+      h: 8 + Math.random() * 10,
+      vx: (Math.random() - 0.5) * 2.4,
+      vy: 2.6 + Math.random() * 3.4,
+      rot: Math.random() * Math.PI,
+      vr: (Math.random() - 0.5) * 0.22,
+      colour: colours[(Math.random() * colours.length) | 0],
+      sway: Math.random() * Math.PI * 2
+    }));
+
+    const started = performance.now();
+    const tick = (now) => {
+      ctx.clearRect(0, 0, innerWidth, innerHeight);
+      const life = (now - started) / 3600;
+      for (const p of pieces) {
+        p.sway += 0.03;
+        p.x += p.vx + Math.sin(p.sway) * 0.8;
+        p.y += p.vy;
+        p.vy += 0.035;
+        p.rot += p.vr;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot);
+        ctx.globalAlpha = Math.max(0, 1 - life * 0.9);
+        ctx.fillStyle = p.colour;
+        ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+        ctx.restore();
+      }
+      if (life < 1.05) requestAnimationFrame(tick);
+      else {
+        canvas.remove();
+        removeEventListener('resize', resize);
+      }
+    };
+    requestAnimationFrame(tick);
+  }
+
   // Version stamp: the artifact should be able to answer what it is.
   fetch('version.json')
     .then((r) => (r.ok ? r.json() : null))

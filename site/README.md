@@ -5,8 +5,10 @@ framework, no tracker.
 
 ```
 index.html    the main page: hero, product stage, how it works, engines, pricing, FAQ
-buy.html      order summary → Square hosted checkout
-thanks.html   post-payment download + install steps (noindex)
+buy.html      order summary → POST /api/checkout → Square payment link
+thanks.html   post-payment download + install steps + confetti (noindex)
+netlify.toml  static publish + the /api/checkout redirect + headers
+netlify/functions/checkout.mjs   the only server code: mints a Square link
 support.html  install/permission help, refunds, contact
 privacy.html  what leaves the Mac, in plain words
 styles.css    cream paper, warm ink, one peach gradient — the app's own palette
@@ -22,37 +24,71 @@ cd site && python3 -m http.server 8898
 # http://127.0.0.1:8898
 ```
 
+## Price
+
+**A$59 once** (about US$39). Two places must agree:
+
+- `netlify/functions/checkout.mjs` → `PRODUCT.amountCents: 5900`
+- the visible copy: `index.html` (pricing card, CTA, meta) and `buy.html`
+  (order lines, total). The OG card is baked, so regenerate it if the number moves.
+
+## Square checkout
+
+`POST /api/checkout` → `netlify/functions/checkout.mjs` → Square
+`/v2/online-checkout/payment-links` → buyer pays on Square → redirect to
+`/thanks.html?checkout_id=…` (confetti + download). No card field is ever served
+from this site.
+
+Environment (set in Netlify, never in the repo):
+
+| var | value |
+|---|---|
+| `SQUARE_ACCESS_TOKEN` | production token from the Square developer dashboard |
+| `SQUARE_LOCATION_ID` | `LS821EYMQCANH` (AU production location) |
+| `SQUARE_ENVIRONMENT` | `production` — anything else stays sandbox |
+| `SQUARE_API_VERSION` | optional, defaults to `2026-01-22` |
+| `SITE_URL` | optional; the origin used for the post-payment redirect |
+
+Without a token the function answers 503 and `buy.html` shows its inline error
+with a mailto fallback. Nothing charges.
+
+An AU seller location charges AUD; the function asks Square for the location
+currency rather than assuming it.
+
 ## Before it goes live
 
-Three constants are placeholders. Change them in the HTML, nowhere else:
-
 1. **Canonical / OG URLs** — `index.html`, `buy.html` `<head>`, currently
-   `https://talktype.app/mac/`. If the site lands on its own domain (or at
-   `talktype.app/download`), update those plus the `og:url`.
-2. **Square checkout link** — `buy.html`, the `#checkout` anchor. It currently
-   points at the live "TalkType for Mac (Lifetime) — A$29.00" order:
-   `checkout.square.site/merchant/ML5YMRAT9Q14P/order/...`. Replace it if a new
-   Square item is created.
-3. **DMG URLs** — `thanks.html`, `index.html` (pricing card) and the FAQ point at
+   `https://talktype.app/mac/`. Update all three if the host changes.
+2. **DMG URLs** — `thanks.html`, `index.html` (pricing card) and the FAQ point at
    `https://talktype.app/downloads/TalkType.dmg`. Keep that file in sync with the
    build this site sells.
+3. **Square dashboard** — rename the merchant business from `pabloandres` to
+   **Made by Pablo**, and update the old A$29 Square Online item (left over as a
+   manual fallback) to A$59 or archive it.
 
-Also worth doing once, in Square: rename the store from `pabloandres` to
-`TalkType`, and set the checkout confirmation to send buyers to `/thanks.html`
-when Square's link settings allow a return URL.
+## Hosting: what this needs
 
-## Deploy
+A static host is not enough any more — the checkout is one serverless function.
+Two recipes:
 
-Any static host works, because there is no server:
+**Netlify (recommended, smallest moving parts)**
+```bash
+# from the repo root
+npx netlify-cli deploy --dir site --functions site/netlify/functions --prod
+```
+or connect the repo with base `site/`, publish `site/`, functions
+`site/netlify/functions` — `site/netlify.toml` already says so. Add the env vars
+above in Site settings → Environment.
 
-- **Netlify drop** — drag the `site/` folder onto app.netlify.com/drop, then point
-  the domain. No build command, publish directory `site/`.
-- **The box** — copy `site/` into the nginx root for a `talktype-mac` vhost and
-  reverse-proxy `/downloads/` at the DMG, mirroring the other fleet apps.
-- **Deno Deploy** — serve the folder with `deno serve` or the existing static
-  handler; no config needed.
+**Deno Deploy / the box** — serve `site/` statically and route
+`POST /api/checkout` at the same module (it is plain `export default (request) =>
+Response`; swap `process.env` for `Deno.env` when running under Deno).
 
-Keep `thanks.html` reachable at the same path the Square receipt links to.
+**The box** — copy `site/` into an nginx root for a `talktype-mac` vhost, proxy
+`POST /api/checkout` at the function module (run it under Deno or Node), and
+reverse-proxy `/downloads/` at the DMG.
+
+Keep `thanks.html` reachable at the same path the Square redirect uses.
 
 ## Notes
 
