@@ -1,6 +1,6 @@
 # TalkType — Mac App Store listing draft
 
-This is listing copy and a product-page plan. The free trial and lifetime unlock are a proposal; they are not implemented in the app yet.
+This is listing copy and a product-page plan. The app ships as a **paid download**: one price, no trial, no StoreKit, no subscription. Anything below that promises a trial or an unlock is a bug in this file.
 
 ## Positioning
 
@@ -38,7 +38,7 @@ Tap to start, speak naturally, and keep recent transcripts close at hand. Add na
 - Optional Deepgram live transcription
 - Optional Gemini text polish
 
-Try 50 dictations free, then unlock unlimited TalkType with one purchase. No TalkType account or subscription.
+One purchase, no account, no subscription. Optional cloud engines use your own API keys.
 
 Optional cloud engines use your own API keys; provider terms and usage charges may apply.
 
@@ -46,13 +46,16 @@ Optional cloud engines use your own API keys; provider terms and usage charges m
 
 dictation,voice to text,speech to text,transcribe,voice typing,notes,memo,microphone,writing
 
-## Purchase plan to validate
+## Purchase plan (decided)
 
-- Free download with 50 complete dictations, including the normal end-to-end flow.
-- One non-consumable lifetime unlock for unlimited use ($12.99).
-- Price: US$12.99 (Tier 13).
-- No subscription and no TalkType-hosted transcription charges. Optional provider usage remains on the user’s provider account.
-- Explain the free limit before download and before the limit is reached. Provide purchase restore controls.
+- **Paid app, one price.** No trial, no in-app purchase, no StoreKit, nothing to restore.
+- Price: **US$39.99** (App Store Connect auto-sets the AU storefront, roughly A$62).
+- Direct sale on talktype.app/mac is **A$59** (~US$39) — the same product, a little cheaper because there is no store fee. Never mention that inside the app.
+- No subscription and no TalkType-hosted transcription charges. Optional provider usage remains on the user’s own provider account.
+
+## App Store icon
+
+`screenshots/appicon-1024.png` — 1024×1024, no transparency, exported from `Assets/AppIcon.icns`.
 
 ## Screenshot story
 
@@ -68,8 +71,7 @@ Keep every screenshot’s controls and behavior true to the shipped App Store bu
 
 ## Still needed before submission
 
-- Implement and test the free-dictation counter, StoreKit unlock, purchase restoration, and paywall copy.
-- Finalize the privacy policy, in-app policy link, and App Store privacy answers.
+- Finalize the in-app privacy link (the MAS build currently opens the *web app* policy — point it at a Mac-specific one) and the App Store privacy answers: **Data Not Collected**.
 - Confirm the App Store build’s dictation, clipboard, shortcut, and cloud behavior, then revise any copy that depends on it.
 - Localize the approved listing and screenshot captions into Spanish.
 - Replace the current App Store screenshot with a clean, intentional sample transcript.
