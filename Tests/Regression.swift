@@ -6,14 +6,17 @@ private enum AuditKeychain {
     static var updateStatus: OSStatus = errSecItemNotFound
     static var addStatus: OSStatus = errSecInteractionNotAllowed
     static var stored: Data?
+    static var lastAccessible: String?
     static var writes = 0
     static var reads = 0
     static func update(_ query: CFDictionary, _ attributes: CFDictionary) -> OSStatus {
         writes += 1
+        lastAccessible = (attributes as NSDictionary)[kSecAttrAccessible] as? String
         return updateStatus
     }
     static func add(_ query: CFDictionary, _ result: UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus {
         writes += 1
+        lastAccessible = (query as NSDictionary)[kSecAttrAccessible] as? String
         if addStatus == errSecSuccess {
             stored = (query as NSDictionary)[kSecValueData] as? Data
             readStatus = errSecSuccess
@@ -58,11 +61,13 @@ extension KeychainHelper {
         pump()
         expect(reports == 1, "Configuration reads create a HUD feedback loop")
         _ = save("new-key", service: "fixture", account: "fixture")
+        expect(AuditKeychain.lastAccessible == (kSecAttrAccessibleWhenUnlockedThisDeviceOnly as String),
+               "KeychainHelper.save must bind credentials to kSecAttrAccessibleWhenUnlockedThisDeviceOnly")
         // updateStatus is missing and add succeeds here: no error.
         expect(delete(service: "fixture", account: "fixture"), "Deleting an absent key should succeed")
         onFailure = nil
         UserDefaults.standard.removeObject(forKey: legacy)
-        print("PASS Keychain migration success/failure, denied-read preservation, repeated error suppression")
+        print("PASS Keychain migration success/failure, denied-read preservation, repeated error suppression, ThisDeviceOnly ACL")
     }
 }
 
@@ -219,6 +224,16 @@ extension SpeechEngine {
         }
         pump()
         print("PASS float/int16 stereo buffer ownership and interleaved metering")
+        engine.activeBackend = .deepgram
+        engine.isRecording = true
+        engine.phase = .listening
+        engine.transcript = "cancel me"
+        let preCancelSession = engine.currentSessionId
+        engine.cancelRecording()
+        expect(!engine.isRecording && !engine.isStopping && engine.phase == .idle && engine.transcript.isEmpty,
+               "cancelRecording on Deepgram must reset capture state cleanly")
+        expect(engine.currentSessionId != preCancelSession, "cancelRecording must invalidate currentSessionId")
+        print("PASS SpeechEngine.cancelRecording invalidates session and discards partial text")
         engine.onFinal = nil // Release the test callback's strong capture.
     }
 }
@@ -318,6 +333,90 @@ extension AppDelegate {
         app.popoverDidClose(Notification(name: NSPopover.didCloseNotification))
         expect(app.popover.contentViewController == nil && !app.uiState.isPopoverShown, "popoverDidClose must tear down NSHostingController")
         print("PASS idle HUD & Popover NSHostingView teardown & zero-CPU background state")
+
+        // Verify Escape / cancelDictation cleanly aborts listening without delivering partial text or touching pasteboard
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString("preserve-user-clipboard", forType: .string)
+        app.history.clear()
+        var cancelledDeliveries = 0
+        app.engine.onFinal = { _ in cancelledDeliveries += 1 }
+        app.engine.isRecording = true
+        app.engine.phase = .listening
+        app.engine.transcript = "half finished thought"
+        app.uiState.isClickRecording = true
+        app.isHandsFreeMode = true
+        app.cancelDictation()
+        expect(!app.engine.isRecording && app.engine.phase == .idle, "cancelDictation must reset engine to idle")
+        expect(app.engine.transcript.isEmpty, "cancelDictation must discard partial transcript")
+        expect(!app.uiState.isClickRecording && !app.isHandsFreeMode, "cancelDictation must clear click/hands-free state")
+        expect(cancelledDeliveries == 0 && app.history.records.isEmpty, "cancelDictation must never deliver or store partial text")
+        expect(NSPasteboard.general.string(forType: .string) == "preserve-user-clipboard", "cancelDictation must not overwrite user pasteboard")
+        app.engine.onFinal = nil
+        print("PASS Escape cancelDictation discards partial dictation cleanly without pasteboard mutation")
+
+        // Verify KeySetupCardView never snoops NSPasteboard on .onAppear and respects MAS_BUILD / Sovereign Voice rules
+        AuditKeychain.readStatus = errSecItemNotFound
+        AuditKeychain.writes = 0
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString("secret-token-on-clipboard-1234567890", forType: .string)
+        let cardHost = NSHostingView(rootView: KeySetupCardView(kind: .deepgram, p: .light, embedded: false, onSaved: {}))
+        cardHost.frame = NSRect(x: 0, y: 0, width: 320, height: 280)
+        cardHost.layoutSubtreeIfNeeded()
+        pump(0.02)
+        expect(AuditKeychain.writes == 0, "KeySetupCardView must never auto-save on appear")
+
+        let sovereignForbidden = try! NSRegularExpression(pattern: "\\b(you|your|yours|yourself)\\b", options: [.caseInsensitive])
+        let aiForbidden = try! NSRegularExpression(pattern: "\\bAI\\b", options: [])
+        for (tableName, table) in [("strings", L10n.strings), ("modeStrings", L10n.modeStrings)] {
+            for (key, langs) in table {
+                for (lang, text) in langs {
+                    let range = NSRange(text.startIndex..<text.endIndex, in: text)
+                    expect(sovereignForbidden.firstMatch(in: text, options: [], range: range) == nil,
+                           "Sovereign Voice violation in \(tableName).\(key)[\(lang)]: \(text)")
+                    expect(aiForbidden.firstMatch(in: text, options: [], range: range) == nil,
+                           "AI copy violation in \(tableName).\(key)[\(lang)]: \(text)")
+                }
+            }
+        }
+        #if MAS_BUILD
+        for key in ["dgAlertTitle", "dgAlertInfo", "geminiAlertTitle", "geminiAlertInfo", "save", "deepgramApiKey", "unlockSupercharged", "trySuperchargedHelp"] {
+            for lang in ["en", "es"] {
+                let val = L10n.modeStrings[key]?[lang] ?? ""
+                expect(!val.isEmpty, "Missing MAS modeString \(key)[\(lang)]")
+                expect(!val.contains("$200") && !val.lowercased().contains("free pass"),
+                       "MAS string \(key)[\(lang)] leaked promo/pass language: \(val)")
+            }
+        }
+        #endif
+        print("PASS KeySetupCardView zero pasteboard snoop, Sovereign Voice & MAS string hygiene")
+
+        // Verify HIG menu ellipses & Clear History confirmation gate + Español localization
+        let prevLang = UserDefaults.standard.string(forKey: TalkTypeConfig.languageStorageKey)
+        TalkTypeConfig.language = .en
+        expect(!L10n.t("aboutTalkType").hasSuffix("…"), "About TalkType should not carry a trailing ellipsis")
+        expect(!L10n.t("privacyPolicy").hasSuffix("…"), "Privacy Policy opens a URL immediately and should not carry an ellipsis")
+        expect(L10n.t("clearHistoryMenu").hasSuffix("…"), "Clear History menu item requires confirmation and must end with …")
+        TalkTypeConfig.language = .es
+        expect(L10n.t("clearHistoryMenu") == "Borrar historial…", "Spanish clearHistoryMenu mismatch")
+        expect(L10n.t("launchAtLogin") == "Abrir al iniciar sesión", "Spanish launchAtLogin mismatch")
+        expect(L10n.t("clickAgainToFinish") == "Clic otra vez para terminar", "Spanish clickAgainToFinish mismatch")
+        if let prevLang = prevLang {
+            UserDefaults.standard.set(prevLang, forKey: TalkTypeConfig.languageStorageKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: TalkTypeConfig.languageStorageKey)
+        }
+
+        app.history.add(text: "Keep me until confirmed", engine: "apple")
+        pump(0.02)
+        expect(app.history.records.count == 1, "Fixture history record missing")
+        AppDelegate.confirmClearHistoryOverride = { false }
+        app.clearHistoryMenuAction()
+        expect(app.history.records.count == 1, "Cancelled Clear History… destroyed saved takes")
+        AppDelegate.confirmClearHistoryOverride = { true }
+        app.clearHistoryMenuAction()
+        expect(app.history.records.isEmpty, "Confirmed Clear History… failed to clear saved takes")
+        AppDelegate.confirmClearHistoryOverride = nil
+        print("PASS 1987 Mac HIG menu ellipses, Español strings & Clear History confirmation gate")
     }
 }
 

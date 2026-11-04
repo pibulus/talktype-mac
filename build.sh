@@ -37,32 +37,116 @@ SDK_BUILD=$(xcrun --sdk macosx --show-sdk-build-version 2>/dev/null || echo "")
 XCODE_VERSION=$(xcodebuild -version 2>/dev/null | awk '/Xcode/ {print $2}' || echo "")
 XCODE_BUILD=$(xcodebuild -version 2>/dev/null | awk '/Build version/ {print $3}' || echo "")
 MACHINE_BUILD=$(sw_vers -buildVersion 2>/dev/null || echo "")
+DT_XCODE=""
+if [ -n "${XCODE_VERSION}" ]; then
+    IFS='.' read -r XC_MAJ XC_MIN XC_PAT <<< "${XCODE_VERSION}"
+    DT_XCODE=$(printf "%02d%d%d" "${XC_MAJ:-0}" "${XC_MIN:-0}" "${XC_PAT:-0}")
+fi
+
+# Release artifacts must always be universal (arm64 + x86_64).
+if [ "${UNIVERSAL}" != "1" ]; then
+    if { [ "${TARGET_MODE}" = "direct" ] && [ "${LOCAL_BUILD}" != "1" ]; } || \
+       { [ "${TARGET_MODE}" = "mas" ] && [ "${ALLOW_ADHOC_MAS:-0}" != "1" ]; }; then
+        echo "Release gate failed: UNIVERSAL=1 is required for release builds." >&2
+        exit 1
+    fi
+fi
+
+# Resolve a non-ambiguous SHA-1 fingerprint for codesign when multiple certificates
+# share the same Common Name in Keychain (preferring provisioning profile match, then latest expiry).
+resolve_codesign_token() {
+    local common_name="$1"
+    local find_lines="$2"
+    local profile_path="${3:-}"
+    local resolved=""
+    resolved=$(python3 - "${common_name}" "${find_lines}" "${profile_path}" 2>/dev/null <<'PY' || true
+import datetime, hashlib, plistlib, re, subprocess, sys
+common_name, find_lines, profile_path = sys.argv[1], sys.argv[2], sys.argv[3]
+candidates = [m.group(1).upper() for m in re.finditer(r'\b([0-9A-Fa-f]{40})\b', find_lines)]
+if not candidates:
+    sys.exit(0)
+if profile_path:
+    try:
+        cms = subprocess.check_output(["security", "cms", "-D", "-i", profile_path], stderr=subprocess.DEVNULL)
+        prof = plistlib.loads(cms)
+        prof_sha1s = {hashlib.sha1(c).hexdigest().upper() for c in prof.get("DeveloperCertificates", []) if isinstance(c, bytes)}
+        for sha in candidates:
+            if sha in prof_sha1s:
+                print(sha)
+                sys.exit(0)
+    except Exception:
+        pass
+if len(candidates) == 1:
+    print(candidates[0])
+    sys.exit(0)
+try:
+    pem = subprocess.check_output(["security", "find-certificate", "-a", "-p", "-c", common_name], text=True, stderr=subprocess.DEVNULL)
+    best_exp, best_sha = None, None
+    for block in re.findall(r"-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----", pem, re.S):
+        der = subprocess.check_output(["openssl", "x509", "-outform", "DER"], input=block.encode(), stderr=subprocess.DEVNULL)
+        sha = hashlib.sha1(der).hexdigest().upper()
+        if sha not in candidates:
+            continue
+        end = subprocess.check_output(["openssl", "x509", "-noout", "-enddate"], input=block, text=True, stderr=subprocess.DEVNULL).strip()
+        # notAfter=Nov  1 19:24:31 2027 GMT
+        dt = datetime.datetime.strptime(re.sub(r'\s+', ' ', end.split("=", 1)[-1].replace(" GMT", "")), "%b %d %H:%M:%S %Y")
+        if best_exp is None or dt > best_exp:
+            best_exp, best_sha = dt, sha
+    if best_sha:
+        print(best_sha)
+        sys.exit(0)
+except Exception:
+    pass
+print(candidates[0])
+PY
+)
+    if [ -n "${resolved}" ]; then
+        printf '%s' "${resolved}"
+    else
+        printf '%s' "${common_name}"
+    fi
+}
 
 # MAS release needs BOTH Apple certs. Check before wiping build/ and dist/ so a
 # doomed run can't take the last good DMG down with it.
 if [ "${TARGET_MODE}" = "mas" ]; then
-    MAS_IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null \
-                   | grep "3rd Party Mac Developer Application\|Apple Distribution" | head -1 | sed 's/.*"\(.*\)"/\1/' || true)
-    INSTALLER_ID=$(security find-identity -v -p basic 2>/dev/null \
-                   | grep "3rd Party Mac Developer Installer\|Mac Installer Distribution" | head -1 | sed 's/.*"\(.*\)"/\1/' || true)
-    if [ "${ALLOW_ADHOC_MAS:-0}" != "1" ] && { [ -z "${MAS_IDENTITY}" ] || [ -z "${INSTALLER_ID}" ]; }; then
-        echo "❌ Cannot build a Mac App Store release — missing certificate(s):"
-        [ -z "${MAS_IDENTITY}" ] && echo "   • App signing: 'Apple Distribution' or '3rd Party Mac Developer Application'"
-        [ -z "${INSTALLER_ID}" ] && echo "   • Installer:   '3rd Party Mac Developer Installer' (Mac Installer Distribution)"
-        echo "   Create them at developer.apple.com → Certificates, or Xcode → Settings → Accounts → Manage Certificates."
-        echo "   ALLOW_ADHOC_MAS=1 ./build.sh mas  builds an ad-hoc sandboxed binary for local testing only."
-        echo "   Nothing was touched: build/ and dist/ are as you left them."
-        exit 1
+    if [ "${ALLOW_ADHOC_MAS:-0}" = "1" ]; then
+        MAS_IDENTITY=""
+        MAS_SIGN_TOKEN=""
+        INSTALLER_ID=""
+    else
+        MAS_FIND=$(security find-identity -v -p codesigning 2>/dev/null \
+                   | grep "3rd Party Mac Developer Application\|Apple Distribution" || true)
+        MAS_IDENTITY=$(printf '%s\n' "${MAS_FIND}" | head -1 | sed 's/.*"\(.*\)"/\1/' || true)
+        INSTALLER_ID=$(security find-identity -v -p basic 2>/dev/null \
+                       | grep "3rd Party Mac Developer Installer\|Mac Installer Distribution" | head -1 | sed 's/.*"\(.*\)"/\1/' || true)
+        if [ -z "${MAS_IDENTITY}" ] || [ -z "${INSTALLER_ID}" ]; then
+            echo "❌ Cannot build a Mac App Store release — missing certificate(s):"
+            [ -z "${MAS_IDENTITY}" ] && echo "   • App signing: 'Apple Distribution' or '3rd Party Mac Developer Application'"
+            [ -z "${INSTALLER_ID}" ] && echo "   • Installer:   '3rd Party Mac Developer Installer' (Mac Installer Distribution)"
+            echo "   Create them at developer.apple.com → Certificates, or Xcode → Settings → Accounts → Manage Certificates."
+            echo "   ALLOW_ADHOC_MAS=1 ./build.sh mas  builds an ad-hoc sandboxed binary for local testing only."
+            echo "   Nothing was touched: build/ and dist/ are as you left them."
+            exit 1
+        fi
+        PROFILE_ARG=""
+        [ -f "TalkType.provisionprofile" ] && PROFILE_ARG="TalkType.provisionprofile"
+        MAS_SIGN_TOKEN=$(resolve_codesign_token "${MAS_IDENTITY}" "${MAS_FIND}" "${PROFILE_ARG}")
     fi
 fi
 
 # Fail before removing a previous good build when release signing is unavailable.
 if [ "${TARGET_MODE}" = "direct" ]; then
-    IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null \
-               | grep "Developer ID Application" | head -1 | sed 's/.*"\(.*\)"/\1/' || true)
+    DIRECT_FIND=$(security find-identity -v -p codesigning 2>/dev/null \
+                  | grep "Developer ID Application" || true)
+    IDENTITY=$(printf '%s\n' "${DIRECT_FIND}" | head -1 | sed 's/.*"\(.*\)"/\1/' || true)
     if [ -z "${IDENTITY}" ] && [ "${LOCAL_BUILD}" != "1" ]; then
         echo "Missing Developer ID Application identity; refusing to make a release." >&2
         exit 1
+    fi
+    DIRECT_SIGN_TOKEN=""
+    if [ -n "${IDENTITY}" ]; then
+        DIRECT_SIGN_TOKEN=$(resolve_codesign_token "${IDENTITY}" "${DIRECT_FIND}" "")
     fi
 fi
 
@@ -94,6 +178,14 @@ else
     swiftc ${SWIFT_FLAGS} -target arm64-apple-macos13.0 "${SRC_FILE}" -o "${BIN_DIR}/${APP_NAME}"
 fi
 
+# MAS Mach-O hygiene gate: sandboxed App Store binaries must never link ApplicationServices
+if [ "${TARGET_MODE}" = "mas" ]; then
+    if otool -L "${BIN_DIR}/${APP_NAME}" 2>/dev/null | grep -q "ApplicationServices"; then
+        echo "Release gate failed: MAS binary links ApplicationServices framework." >&2
+        exit 1
+    fi
+fi
+
 # 2. Generate Production Info.plist
 cat > "${APP_DIR}/Contents/Info.plist" << PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -115,6 +207,8 @@ cat > "${APP_DIR}/Contents/Info.plist" << PLIST
     <key>CFBundleVersion</key>
     <string>${BUILD_NUMBER}</string>
     <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    <key>CFBundleIconName</key>
     <string>AppIcon</string>
     <key>LSUIElement</key>
     <true/>
@@ -145,8 +239,12 @@ cat > "${APP_DIR}/Contents/Info.plist" << PLIST
     <false/>
     <key>NSSupportsSuddenTermination</key>
     <false/>
+    <key>DTCompiler</key>
+    <string>com.apple.compilers.llvm.clang.1_0</string>
     <key>DTPlatformName</key>
     <string>macosx</string>
+    <key>DTPlatformBuild</key>
+    <string>${SDK_BUILD}</string>
     <key>DTSDKName</key>
     <string>macosx${SDK_VERSION}</string>
     <key>DTSDKBuild</key>
@@ -154,7 +252,7 @@ cat > "${APP_DIR}/Contents/Info.plist" << PLIST
     <key>DTPlatformVersion</key>
     <string>${SDK_VERSION}</string>
     <key>DTXcode</key>
-    <string>${XCODE_VERSION}</string>
+    <string>${DT_XCODE}</string>
     <key>DTXcodeBuild</key>
     <string>${XCODE_BUILD}</string>
     <key>BuildMachineOSBuild</key>
@@ -169,14 +267,68 @@ cat > "${APP_DIR}/Contents/Info.plist" << PLIST
 </plist>
 PLIST
 
-# 3. Copy Assets & AppIcon
+# 3. Copy Assets, AppIcon & Compile Assets.car (ITMS-90032 / App Store Connect icon catalog)
 cp Assets/*.png "${RES_DIR}/" 2>/dev/null || true
-if [ -f "Assets/AppIcon.icns" ]; then
-    cp Assets/AppIcon.icns "${RES_DIR}/"
+if [ ! -f "Assets/AppIcon.icns" ]; then
+    echo "Release gate failed: missing Assets/AppIcon.icns." >&2
+    exit 1
 fi
+cp "Assets/AppIcon.icns" "${RES_DIR}/"
+
+ICON_WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/talktype-actool.XXXXXX")
+ICONSET_TMP="${ICON_WORK_DIR}/AppIcon.iconset"
+XCASSETS_TMP="${ICON_WORK_DIR}/Assets.xcassets"
+APPICONSET_TMP="${XCASSETS_TMP}/AppIcon.appiconset"
+ACT_PLIST_TMP="${ICON_WORK_DIR}/actool-partial-info.plist"
+mkdir -p "${APPICONSET_TMP}"
+iconutil -c iconset "Assets/AppIcon.icns" -o "${ICONSET_TMP}"
+cp "${ICONSET_TMP}"/icon_*.png "${APPICONSET_TMP}/" 2>/dev/null || true
+cat > "${XCASSETS_TMP}/Contents.json" << 'JSON'
+{
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}
+JSON
+cat > "${APPICONSET_TMP}/Contents.json" << 'JSON'
+{
+  "images" : [
+    { "filename" : "icon_16x16.png",    "idiom" : "mac", "scale" : "1x", "size" : "16x16" },
+    { "filename" : "icon_16x16@2x.png", "idiom" : "mac", "scale" : "2x", "size" : "16x16" },
+    { "filename" : "icon_32x32.png",    "idiom" : "mac", "scale" : "1x", "size" : "32x32" },
+    { "filename" : "icon_32x32@2x.png", "idiom" : "mac", "scale" : "2x", "size" : "32x32" },
+    { "filename" : "icon_128x128.png",    "idiom" : "mac", "scale" : "1x", "size" : "128x128" },
+    { "filename" : "icon_128x128@2x.png", "idiom" : "mac", "scale" : "2x", "size" : "128x128" },
+    { "filename" : "icon_256x256.png",    "idiom" : "mac", "scale" : "1x", "size" : "256x256" },
+    { "filename" : "icon_256x256@2x.png", "idiom" : "mac", "scale" : "2x", "size" : "256x256" },
+    { "filename" : "icon_512x512.png",    "idiom" : "mac", "scale" : "1x", "size" : "512x512" },
+    { "filename" : "icon_512x512@2x.png", "idiom" : "mac", "scale" : "2x", "size" : "512x512" }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}
+JSON
+xcrun actool "${XCASSETS_TMP}" \
+    --compile "${RES_DIR}" \
+    --platform macosx \
+    --minimum-deployment-target 13.0 \
+    --app-icon AppIcon \
+    --output-partial-info-plist "${ACT_PLIST_TMP}" >/dev/null
+rm -rf "${ICON_WORK_DIR}"
+
 if [ -f "PrivacyInfo.xcprivacy" ]; then
-    cp PrivacyInfo.xcprivacy "${RES_DIR}/"
+    cp "PrivacyInfo.xcprivacy" "${RES_DIR}/"
 fi
+
+for required_res in "Assets.car" "AppIcon.icns" "PrivacyInfo.xcprivacy"; do
+    if [ ! -s "${RES_DIR}/${required_res}" ]; then
+        echo "Release gate failed: ${RES_DIR}/${required_res} is missing or empty." >&2
+        exit 1
+    fi
+done
 
 chmod +x "${BIN_DIR}/${APP_NAME}"
 
@@ -189,21 +341,31 @@ elif [ "${TARGET_MODE}" = "mas" ]; then
     echo "ℹ️  No provisioning profile supplied; add one before TestFlight or restricted capabilities."
 fi
 
+# Strip Finder Info / quarantine extended attributes before sealing signature (prevents ITMS-91109)
+xattr -cr "${APP_DIR}"
+
+verify_no_quarantine() {
+    if xattr -lr "${APP_DIR}" 2>/dev/null | grep -q "com.apple.quarantine"; then
+        echo "Release gate failed: com.apple.quarantine attribute present inside ${APP_DIR}." >&2
+        exit 1
+    fi
+}
+
 # 4. Code Signing & Entitlements (Secure Timestamp enabled)
 if [ "${TARGET_MODE}" = "mas" ]; then
     ENTITLEMENTS="TalkType.sandbox.entitlements"
     echo "📦 Sandboxed App Store mode enabled with ${ENTITLEMENTS}"
 
     if [ -n "${MAS_IDENTITY}" ]; then
-        codesign --force --sign "${MAS_IDENTITY}" \
+        codesign --force --sign "${MAS_SIGN_TOKEN}" \
                  --entitlements "${ENTITLEMENTS}" \
                  --timestamp \
                  --identifier com.pibulus.talktype "${BIN_DIR}/${APP_NAME}"
-        codesign --force --sign "${MAS_IDENTITY}" \
+        codesign --force --sign "${MAS_SIGN_TOKEN}" \
                  --entitlements "${ENTITLEMENTS}" \
                  --timestamp \
                  --identifier com.pibulus.talktype "${APP_DIR}"
-        echo "🔏 Signed with MAS certificate: ${MAS_IDENTITY}"
+        echo "🔏 Signed with MAS certificate: ${MAS_IDENTITY} (${MAS_SIGN_TOKEN})"
     else
         # Only reachable with ALLOW_ADHOC_MAS=1 (preflight exits otherwise)
         codesign --force --sign - \
@@ -215,12 +377,21 @@ if [ "${TARGET_MODE}" = "mas" ]; then
         echo "🔏 Ad-hoc signed (ALLOW_ADHOC_MAS=1)"
     fi
 
+    codesign --verify --strict "${APP_DIR}"
+    verify_no_quarantine
+
     if [ -n "${MAS_IDENTITY}" ] && [ -n "${INSTALLER_ID}" ]; then
+        PKG_PATH="${DIST_DIR}/${APP_NAME}-${VERSION}.pkg"
         productbuild --component "${APP_DIR}" /Applications \
                      --product "${APP_DIR}/Contents/Info.plist" \
                      --sign "${INSTALLER_ID}" \
-                     "${DIST_DIR}/${APP_NAME}-${VERSION}.pkg"
-        echo "✨ Mac App Store PKG ready at ${DIST_DIR}/${APP_NAME}-${VERSION}.pkg"
+                     "${PKG_PATH}"
+        if [ ! -s "${PKG_PATH}" ]; then
+            echo "Release gate failed: MAS installer package ${PKG_PATH} was not created." >&2
+            exit 1
+        fi
+        pkgutil --check-signature "${PKG_PATH}" >/dev/null
+        echo "✨ Mac App Store PKG ready at ${PKG_PATH}"
     else
         echo "🚧 LOCAL TEST BUILD ONLY — no .pkg, not submittable to App Store Connect."
     fi
@@ -230,17 +401,17 @@ else
     echo "⚡ Direct distribution mode enabled with Hardened Runtime & ${ENTITLEMENTS}"
     
     if [ -n "${IDENTITY}" ]; then
-        codesign --force --sign "${IDENTITY}" \
+        codesign --force --sign "${DIRECT_SIGN_TOKEN}" \
                  --options runtime \
                  --entitlements "${ENTITLEMENTS}" \
                  --timestamp \
                  --identifier com.pibulus.talktype "${BIN_DIR}/${APP_NAME}"
-        codesign --force --sign "${IDENTITY}" \
+        codesign --force --sign "${DIRECT_SIGN_TOKEN}" \
                  --options runtime \
                  --entitlements "${ENTITLEMENTS}" \
                  --timestamp \
                  --identifier com.pibulus.talktype "${APP_DIR}"
-        echo "🔏 Signed with Developer ID: ${IDENTITY}"
+        echo "🔏 Signed with Developer ID: ${IDENTITY} (${DIRECT_SIGN_TOKEN})"
     else
         if [ "${LOCAL_BUILD}" != "1" ]; then
             echo "Missing Developer ID Application identity; refusing to make a release." >&2
@@ -251,6 +422,7 @@ else
                  --identifier com.pibulus.talktype "${APP_DIR}"
         echo "Ad-hoc local test build"
     fi
+    verify_no_quarantine
     
     # 5. Notarize & staple app bundle before packaging into DMG, then build & notarize Styled DMG
     DMG_PATH="${DIST_DIR}/${APP_NAME}-${VERSION}.dmg"
@@ -369,8 +541,8 @@ else
 
     # Sign the DMG disk image container
     if [ -n "${IDENTITY}" ]; then
-        codesign --force --sign "${IDENTITY}" --timestamp "${DMG_PATH}"
-        echo "🔏 Signed DMG container with Developer ID: ${IDENTITY}"
+        codesign --force --sign "${DIRECT_SIGN_TOKEN}" --timestamp "${DMG_PATH}"
+        echo "🔏 Signed DMG container with Developer ID: ${IDENTITY} (${DIRECT_SIGN_TOKEN})"
     fi
 
     # 6. Notarize & staple DMG container. Local test builds deliberately skip network submission.
