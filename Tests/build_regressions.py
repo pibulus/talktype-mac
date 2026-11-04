@@ -37,7 +37,20 @@ case "$*" in
     *) exit 1 ;;
 esac''',
     "xcodebuild": "echo 'Xcode 26.0'; echo 'Build version 26A'",
-    "security": r'''if [ "${AUDIT_MAS_IDENTITY:-0}" = "1" ]; then
+    "security": r'''if [ "${1:-}" = "cms" ]; then
+    if [ "${AUDIT_PROFILE_DEV:-0}" = "1" ]; then cat profile-dev.plist
+    elif [ "${AUDIT_PROFILE_WRONG_APPID:-0}" = "1" ]; then cat profile-wrong-appid.plist
+    else cat profile-ok.plist
+    fi
+    exit 0
+fi
+if [ "${1:-}" = "find-certificate" ]; then
+    echo "-----BEGIN CERTIFICATE-----"
+    echo "RklYVFVSRQ=="
+    echo "-----END CERTIFICATE-----"
+    exit 0
+fi
+if [ "${AUDIT_MAS_IDENTITY:-0}" = "1" ]; then
     case "$*" in
         *"-p codesigning"*) echo '  1) FIXTURE "Apple Distribution: Audit Fixture (AUDIT)"' ;;
         *"-p basic"*) echo '  1) FIXTURE "3rd Party Mac Developer Installer: Audit Fixture (AUDIT)"' ;;
@@ -57,7 +70,11 @@ exit 0''',
     echo "build/mas/TalkType.app: com.apple.quarantine: 0081"
 fi
 exit 0''',
-    "codesign": "exit 0",
+    "codesign": r'''if [ "${1:-}" = "-d" ]; then
+    if [ "${AUDIT_NO_SIGNED_ENTS:-0}" = "0" ]; then cat signed-ents.plist; fi
+    exit 0
+fi
+exit 0''',
     "productbuild": r'''printf 'productbuild %s\n' "$*" >> tool-calls
 if [ "${AUDIT_PKG_FAILURE:-0}" != "0" ]; then exit 1; fi
 for arg do last="$arg"; done
@@ -70,6 +87,34 @@ exit "${AUDIT_PKG_SIG_FAILURE:-0}"''',
     "SetFile": "exit 0",
 }
 
+# Fixtures the build.sh release gates read. The real `security cms -D` and
+# `codesign -d --entitlements` output is simulated here so the gates stay real.
+PROFILE_PLIST = '''<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+    <key>Entitlements</key><dict>
+        <key>com.apple.application-identifier</key><string>V433H655PN.com.pibulus.talktype</string>
+        <key>com.apple.developer.team-identifier</key><string>V433H655PN</string>
+    </dict>
+    <key>DeveloperCertificates</key><array><data>RklYVFVSRQ==</data></array>
+</dict></plist>'''
+
+PROFILE_PLIST_DEV = PROFILE_PLIST.replace(
+    "<key>DeveloperCertificates</key>",
+    "<key>ProvisionedDevices</key><array><string>00000000-0000-0000-0000-000000000000</string></array>\n    <key>DeveloperCertificates</key>",
+)
+
+PROFILE_PLIST_WRONG_APPID = PROFILE_PLIST.replace(
+    "V433H655PN.com.pibulus.talktype", "V433H655PN.com.pibulus.wrongapp"
+)
+
+SIGNED_ENTS_PLIST = '''<?xml version="1.0" encoding="UTF-8"?>
+<plist version="1.0"><dict>
+    <key>com.apple.application-identifier</key><string>V433H655PN.com.pibulus.talktype</string>
+    <key>com.apple.developer.team-identifier</key><string>V433H655PN</string>
+    <key>com.apple.security.app-sandbox</key><true/>
+</dict></plist>'''
+
 
 def case(name, mode="direct", expected=0, artifact=None, preserve=False, error=None, keep_direct=False, **flags):
     with tempfile.TemporaryDirectory(prefix="talktype-build-test-") as temp:
@@ -80,8 +125,15 @@ def case(name, mode="direct", expected=0, artifact=None, preserve=False, error=N
             script = fake / name_
             script.write_text("#!/bin/bash\n" + body + "\n")
             script.chmod(0o755)
-        for path in ["build.sh", "TalkType.swift", "TalkType.entitlements", "TalkType.sandbox.entitlements", "PrivacyInfo.xcprivacy"]:
+        for path in ["build.sh", "TalkType.swift", "TalkType.entitlements", "TalkType.sandbox.entitlements",
+                     "TalkType.mas.entitlements", "PrivacyInfo.xcprivacy"]:
             shutil.copy(ROOT / path, work / path)
+        (work / "profile-ok.plist").write_text(PROFILE_PLIST)
+        (work / "profile-dev.plist").write_text(PROFILE_PLIST_DEV)
+        (work / "profile-wrong-appid.plist").write_text(PROFILE_PLIST_WRONG_APPID)
+        (work / "signed-ents.plist").write_text(SIGNED_ENTS_PLIST)
+        if flags.get("AUDIT_NO_PROFILE_FILE") != 1:
+            (work / "TalkType.provisionprofile").write_bytes(b"FIXTURE-PROFILE")
         (work / "Assets").mkdir()
         shutil.copy(ROOT / "Assets/AppIcon.icns", work / "Assets/AppIcon.icns")
         for folder in ["build", "dist"]:
@@ -92,7 +144,8 @@ def case(name, mode="direct", expected=0, artifact=None, preserve=False, error=N
             (work / "dist/direct/TalkType-1.0.dmg").write_text("KEEP")
         env = os.environ.copy()
         # Prevent a developer's ordinary release settings from leaking into the fixtures.
-        for key in ["LOCAL_BUILD", "ALLOW_ADHOC_MAS", "SKIP_NOTARIZE", "UNIVERSAL", "VERSION", "BUILD_NUMBER"]:
+        for key in ["LOCAL_BUILD", "ALLOW_ADHOC_MAS", "SKIP_NOTARIZE", "UNIVERSAL", "VERSION", "BUILD_NUMBER",
+                    "PROVISIONING_PROFILE"]:
             env.pop(key, None)
         env.update(PATH=f"{fake}:/usr/bin:/bin:/usr/sbin:/sbin", NOTARY_PROFILE="fixture")
         env.update({k: str(v) for k, v in flags.items()})
@@ -152,3 +205,11 @@ case("MAS release builds signed pkg with 4-digit DTXcode and Assets.car", mode="
 case("MAS build rejects ApplicationServices linkage", mode="mas", ALLOW_ADHOC_MAS=1, expected=1, AUDIT_LINK_AX=1, error="ApplicationServices")
 case("missing Assets.car fails bundle hygiene gate", mode="mas", ALLOW_ADHOC_MAS=1, expected=1, AUDIT_EMPTY_CAR=1, error="Assets.car is missing or empty")
 case("quarantine attribute fails ITMS-91109 release gate", mode="mas", ALLOW_ADHOC_MAS=1, expected=1, AUDIT_QUARANTINE=1, error="com.apple.quarantine")
+case("MAS release fails fast without a provisioning profile", mode="mas", expected=1, preserve=True,
+     AUDIT_MAS_IDENTITY=1, AUDIT_NO_PROFILE_FILE=1, error="Missing Mac App Store provisioning profile")
+case("MAS release rejects a development provisioning profile", mode="mas", expected=1, preserve=True,
+     AUDIT_MAS_IDENTITY=1, AUDIT_PROFILE_DEV=1, error="Development profile")
+case("MAS release rejects a mismatched application-identifier", mode="mas", expected=1, preserve=True,
+     AUDIT_MAS_IDENTITY=1, AUDIT_PROFILE_WRONG_APPID=1, error="application-identifier mismatch")
+case("MAS release rejects a signature without App Store identifiers", mode="mas", expected=1,
+     AUDIT_MAS_IDENTITY=1, AUDIT_NO_SIGNED_ENTS=1, error="missing com.apple.application-identifier")

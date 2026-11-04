@@ -107,31 +107,71 @@ PY
     fi
 }
 
-# MAS release needs BOTH Apple certs. Check before wiping build/ and dist/ so a
-# doomed run can't take the last good DMG down with it.
+# MAS release needs BOTH Apple certs AND TalkType.provisionprofile. Check before
+# wiping build/ and dist/ so a doomed run can't take the last good build down with it.
 if [ "${TARGET_MODE}" = "mas" ]; then
     if [ "${ALLOW_ADHOC_MAS:-0}" = "1" ]; then
         MAS_IDENTITY=""
         MAS_SIGN_TOKEN=""
         INSTALLER_ID=""
+        INSTALLER_SIGN_TOKEN=""
     else
+        MAS_PROVISION_PROFILE="${PROVISIONING_PROFILE:-TalkType.provisionprofile}"
+        if [ ! -f "${MAS_PROVISION_PROFILE}" ]; then
+            echo "❌ Missing Mac App Store provisioning profile: ${MAS_PROVISION_PROFILE}" >&2
+            echo "   Run: ASC_ISSUER_ID=<uuid> deno run -A scripts/asc-provision.ts" >&2
+            echo "   Or download a Mac App Store profile for com.pibulus.talktype (V433H655PN) and save as ${MAS_PROVISION_PROFILE}." >&2
+            echo "   ALLOW_ADHOC_MAS=1 ./build.sh mas  builds an ad-hoc sandboxed binary for local testing only." >&2
+            exit 1
+        fi
         MAS_FIND=$(security find-identity -v -p codesigning 2>/dev/null \
                    | grep "3rd Party Mac Developer Application\|Apple Distribution" || true)
         MAS_IDENTITY=$(printf '%s\n' "${MAS_FIND}" | head -1 | sed 's/.*"\(.*\)"/\1/' || true)
-        INSTALLER_ID=$(security find-identity -v -p basic 2>/dev/null \
-                       | grep "3rd Party Mac Developer Installer\|Mac Installer Distribution" | head -1 | sed 's/.*"\(.*\)"/\1/' || true)
+        INSTALLER_FIND=$(security find-identity -v -p basic 2>/dev/null \
+                         | grep "3rd Party Mac Developer Installer\|Mac Installer Distribution" || true)
+        INSTALLER_ID=$(printf '%s\n' "${INSTALLER_FIND}" | head -1 | sed 's/.*"\(.*\)"/\1/' || true)
         if [ -z "${MAS_IDENTITY}" ] || [ -z "${INSTALLER_ID}" ]; then
-            echo "❌ Cannot build a Mac App Store release — missing certificate(s):"
-            [ -z "${MAS_IDENTITY}" ] && echo "   • App signing: 'Apple Distribution' or '3rd Party Mac Developer Application'"
-            [ -z "${INSTALLER_ID}" ] && echo "   • Installer:   '3rd Party Mac Developer Installer' (Mac Installer Distribution)"
-            echo "   Create them at developer.apple.com → Certificates, or Xcode → Settings → Accounts → Manage Certificates."
-            echo "   ALLOW_ADHOC_MAS=1 ./build.sh mas  builds an ad-hoc sandboxed binary for local testing only."
-            echo "   Nothing was touched: build/ and dist/ are as you left them."
+            echo "❌ Cannot build a Mac App Store release — missing certificate(s):" >&2
+            [ -z "${MAS_IDENTITY}" ] && echo "   • App signing: 'Apple Distribution' or '3rd Party Mac Developer Application'" >&2
+            [ -z "${INSTALLER_ID}" ] && echo "   • Installer:   '3rd Party Mac Developer Installer' (Mac Installer Distribution)" >&2
+            echo "   Nothing was touched: build/ and dist/ are as you left them." >&2
             exit 1
         fi
-        PROFILE_ARG=""
-        [ -f "TalkType.provisionprofile" ] && PROFILE_ARG="TalkType.provisionprofile"
-        MAS_SIGN_TOKEN=$(resolve_codesign_token "${MAS_IDENTITY}" "${MAS_FIND}" "${PROFILE_ARG}")
+        PROFILE_CHECK_ERR=$(python3 - "${MAS_PROVISION_PROFILE}" "${MAS_FIND}" <<'PY' 2>&1 || true
+import hashlib, plistlib, re, subprocess, sys
+prof_path, find_lines = sys.argv[1], sys.argv[2]
+cms = subprocess.check_output(["security", "cms", "-D", "-i", prof_path], stderr=subprocess.DEVNULL)
+prof = plistlib.loads(cms)
+ents = prof.get("Entitlements", {})
+app_id = ents.get("com.apple.application-identifier") or ents.get("application-identifier") or ""
+if app_id != "V433H655PN.com.pibulus.talktype":
+    print(f"Profile application-identifier mismatch: got '{app_id}', expected 'V433H655PN.com.pibulus.talktype'")
+    sys.exit(1)
+if "ProvisionedDevices" in prof:
+    print("Profile is a Development profile (contains ProvisionedDevices); Mac App Store distribution profile required.")
+    sys.exit(1)
+prof_sha1s = {hashlib.sha1(c).hexdigest().upper() for c in prof.get("DeveloperCertificates", []) if isinstance(c, bytes)}
+keychain_sha1s = {m.group(1).upper() for m in re.finditer(r'\b([0-9A-Fa-f]{40})\b', find_lines)}
+if prof_sha1s and keychain_sha1s and not (prof_sha1s & keychain_sha1s):
+    print("None of the DeveloperCertificates in the provisioning profile match a signing identity in Keychain.")
+    sys.exit(1)
+PY
+)
+        if [ -n "${PROFILE_CHECK_ERR}" ]; then
+            echo "❌ Invalid provisioning profile (${MAS_PROVISION_PROFILE}): ${PROFILE_CHECK_ERR}" >&2
+            exit 1
+        fi
+        MAS_SIGN_TOKEN=$(resolve_codesign_token "${MAS_IDENTITY}" "${MAS_FIND}" "${MAS_PROVISION_PROFILE}")
+        INSTALLER_SIGN_TOKEN=""
+        if [ -f ".asc-work/mac_installer_distribution.cer" ]; then
+            PINNED_INST_SHA=$(openssl x509 -inform der -in ".asc-work/mac_installer_distribution.cer" -fingerprint -sha1 -noout 2>/dev/null | sed 's/.*=//; s/://g' | tr '[:lower:]' '[:upper:]' || true)
+            if [ -n "${PINNED_INST_SHA}" ] && printf '%s\n' "${INSTALLER_FIND}" | tr '[:lower:]' '[:upper:]' | grep -Fq "${PINNED_INST_SHA}"; then
+                INSTALLER_SIGN_TOKEN="${PINNED_INST_SHA}"
+            fi
+        fi
+        if [ -z "${INSTALLER_SIGN_TOKEN}" ]; then
+            INSTALLER_SIGN_TOKEN=$(resolve_codesign_token "${INSTALLER_ID}" "${INSTALLER_FIND}" "")
+        fi
     fi
 fi
 
@@ -332,13 +372,16 @@ done
 
 chmod +x "${BIN_DIR}/${APP_NAME}"
 
-# Embed a profile when supplied. Restricted entitlements and TestFlight require
-# one; this app's basic sandbox entitlements alone do not require a profile.
-if [ "${TARGET_MODE}" = "mas" ] && [ -f "TalkType.provisionprofile" ]; then
-    cp "TalkType.provisionprofile" "${APP_DIR}/Contents/embedded.provisionprofile"
-    echo "📎 Embedded provisioning profile"
+# Embed Mac App Store provisioning profile for distribution builds.
+if [ "${TARGET_MODE}" = "mas" ] && [ "${ALLOW_ADHOC_MAS:-0}" != "1" ]; then
+    cp "${MAS_PROVISION_PROFILE}" "${APP_DIR}/Contents/embedded.provisionprofile"
+    if [ ! -s "${APP_DIR}/Contents/embedded.provisionprofile" ]; then
+        echo "Release gate failed: Contents/embedded.provisionprofile is missing or empty." >&2
+        exit 1
+    fi
+    echo "📎 Embedded provisioning profile (${MAS_PROVISION_PROFILE})"
 elif [ "${TARGET_MODE}" = "mas" ]; then
-    echo "ℹ️  No provisioning profile supplied; add one before TestFlight or restricted capabilities."
+    echo "ℹ️  Ad-hoc local MAS test build (no embedded provisioning profile)."
 fi
 
 # Strip Finder Info / quarantine extended attributes before sealing signature (prevents ITMS-91109)
@@ -353,14 +396,9 @@ verify_no_quarantine() {
 
 # 4. Code Signing & Entitlements (Secure Timestamp enabled)
 if [ "${TARGET_MODE}" = "mas" ]; then
-    ENTITLEMENTS="TalkType.sandbox.entitlements"
-    echo "📦 Sandboxed App Store mode enabled with ${ENTITLEMENTS}"
-
     if [ -n "${MAS_IDENTITY}" ]; then
-        codesign --force --sign "${MAS_SIGN_TOKEN}" \
-                 --entitlements "${ENTITLEMENTS}" \
-                 --timestamp \
-                 --identifier com.pibulus.talktype "${BIN_DIR}/${APP_NAME}"
+        ENTITLEMENTS="TalkType.mas.entitlements"
+        echo "📦 Sandboxed App Store distribution mode enabled with ${ENTITLEMENTS}"
         codesign --force --sign "${MAS_SIGN_TOKEN}" \
                  --entitlements "${ENTITLEMENTS}" \
                  --timestamp \
@@ -368,6 +406,8 @@ if [ "${TARGET_MODE}" = "mas" ]; then
         echo "🔏 Signed with MAS certificate: ${MAS_IDENTITY} (${MAS_SIGN_TOKEN})"
     else
         # Only reachable with ALLOW_ADHOC_MAS=1 (preflight exits otherwise)
+        ENTITLEMENTS="TalkType.sandbox.entitlements"
+        echo "📦 Sandboxed ad-hoc test mode enabled with ${ENTITLEMENTS}"
         codesign --force --sign - \
                  --entitlements "${ENTITLEMENTS}" \
                  --identifier com.pibulus.talktype "${BIN_DIR}/${APP_NAME}"
@@ -381,10 +421,15 @@ if [ "${TARGET_MODE}" = "mas" ]; then
     verify_no_quarantine
 
     if [ -n "${MAS_IDENTITY}" ] && [ -n "${INSTALLER_ID}" ]; then
+        SIGNED_MAS_ENTS=$(codesign -d --entitlements :- "${APP_DIR}" 2>/dev/null || true)
+        if ! printf '%s\n' "${SIGNED_MAS_ENTS}" | grep -q "V433H655PN.com.pibulus.talktype" || \
+           ! printf '%s\n' "${SIGNED_MAS_ENTS}" | grep -q "com.apple.developer.team-identifier"; then
+            echo "Release gate failed: signed MAS bundle is missing com.apple.application-identifier or com.apple.developer.team-identifier." >&2
+            exit 1
+        fi
         PKG_PATH="${DIST_DIR}/${APP_NAME}-${VERSION}.pkg"
         productbuild --component "${APP_DIR}" /Applications \
-                     --product "${APP_DIR}/Contents/Info.plist" \
-                     --sign "${INSTALLER_ID}" \
+                     --sign "${INSTALLER_SIGN_TOKEN}" \
                      "${PKG_PATH}"
         if [ ! -s "${PKG_PATH}" ]; then
             echo "Release gate failed: MAS installer package ${PKG_PATH} was not created." >&2
