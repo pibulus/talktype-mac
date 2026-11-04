@@ -248,6 +248,7 @@ enum L10n {
         "madeBy": ["en": "made by pablo", "es": "hecho por pablo"],
         "madeByPablo": ["en": "Made by Pablo…", "es": "Hecho por Pablo…"],
         "showMore": ["en": "Show more", "es": "Ver más"],
+        "showLess": ["en": "Show less", "es": "Ver menos"],
         "pushToTalkKey": ["en": "Push to Talk Key", "es": "Tecla pulsar para hablar"],
         "transcriptionEngine": ["en": "Voice Mode", "es": "Modo de voz"],
         "appleSpeech": ["en": "Mac Built-in (Offline · Private)", "es": "Integrado en Mac (sin conexión · privado)"],
@@ -3840,6 +3841,17 @@ struct HistoryRecordCard: View {
     let onCopy: () -> Void
     let onDelete: () -> Void
 
+    /// A long take stays tall enough to read at a glance and no taller. Past this
+    /// it gets a Show more, so one rambling take can't swallow the list.
+    private static let collapsedLineLimit = 5
+    private static let longTakeCharacterThreshold = 220
+
+    @State private var isExpanded = false
+
+    private var isLongTake: Bool {
+        record.text.count > Self.longTakeCharacterThreshold
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .center) {
@@ -3857,7 +3869,19 @@ struct HistoryRecordCard: View {
                 .font(.system(size: 12.5, weight: .medium, design: .monospaced))
                 .lineSpacing(2.5)
                 .foregroundStyle(p.ink)
+                .lineLimit(isExpanded ? nil : Self.collapsedLineLimit)
                 .frame(maxWidth: .infinity, alignment: .leading)
+
+            if isLongTake {
+                Button(isExpanded ? L10n.t("showLess") : L10n.t("showMore")) {
+                    withAnimation(.easeOut(duration: 0.18)) {
+                        isExpanded.toggle()
+                    }
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 10, weight: .bold, design: .rounded))
+                .foregroundStyle(TT.hot)
+            }
         }
         .padding(12)
         .background(p.card)
