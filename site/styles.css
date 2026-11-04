@@ -3,7 +3,6 @@
 
 :root {
   --cream: #fff6e6;
-  --cream-deep: #fdeeda;
   --card: #fbf1e4;
   --card-warm: #fdf2e0;
   --paper: #fffdf8;
@@ -14,8 +13,6 @@
   --line: rgba(30, 23, 20, 0.12);
   --line-soft: rgba(30, 23, 20, 0.07);
   --pink: #ff82ca;
-  --peach: #ffb060;
-  --sun: #ffcf40;
   --mint: #2bb59a;
   --focus: #c94b8c;
   --grad: linear-gradient(120deg, #ff60e0 0%, #ff82ca 34%, #ff9a85 64%, #ffb060 86%, #ffcf40 100%);
@@ -24,7 +21,6 @@
   --hot: linear-gradient(135deg, #ff82ca 0%, #ffb060 100%);
   --hot-deep: linear-gradient(135deg, #f76cbb 0%, #f79f4c 100%);
   --shadow-soft: 0 18px 44px rgba(30, 23, 20, 0.08);
-  --shadow-lift: 0 24px 60px rgba(30, 23, 20, 0.12);
   --radius: 22px;
   --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
@@ -167,7 +163,7 @@ h2.section-title {
   font-weight: 800;
 }
 .lede { color: var(--ink-soft); font-size: clamp(16px, 1.5vw, 19px); line-height: 1.6; }
-.small { font-size: 13.5px; color: var(--ink-mute); }
+.small { color: var(--ink-mute); }
 
 /* ---------------------------------------------------------------- hero */
 
@@ -393,7 +389,7 @@ h2.section-title {
 .order-line { display: flex; justify-content: space-between; padding: 14px 0; font-size: 15px; color: var(--ink-soft); border-bottom: 1px solid var(--line-soft); }
 .order-total { display: flex; justify-content: space-between; padding: 20px 0 6px; font-size: 19px; font-weight: 800; letter-spacing: -0.02em; }
 .order .pill { width: 100%; height: 54px; margin-top: 14px; font-size: 16.5px; }
-.pay-note { margin-top: 14px; font-size: 12.5px; color: var(--ink-mute); text-align: center; line-height: 1.5; }
+.pay-note { margin-top: 14px; color: var(--ink-mute); text-align: center; }
 .aside-list { list-style: none; margin: 26px 0 0; padding: 0; display: grid; gap: 14px; }
 .aside-list li { display: flex; gap: 12px; font-size: 14.5px; color: var(--ink-soft); }
 .aside-list svg { flex: 0 0 auto; width: 18px; height: 18px; margin-top: 2px; color: var(--mint); }
@@ -489,8 +485,6 @@ h2.section-title {
   .hud-wrap { width: 100%; }
   .hud { max-width: 100%; padding: 10px 16px 10px 10px; gap: 10px; }
   .hud .text { max-width: min(176px, 46vw); }
-  .hud-caption { margin-left: 0; text-align: center; }
-  .mini-history { width: 100%; max-width: 330px; margin-left: 0; }
   .pricing-card, .order, .thanks .panel { padding: 24px 20px; }
   .prose { padding-top: 46px; }
   .prose-card { padding: 20px 18px; }
