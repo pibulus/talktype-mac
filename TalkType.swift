@@ -6,6 +6,7 @@ import AVFoundation
 import ApplicationServices
 import Security
 import Carbon
+import UniformTypeIdentifiers
 
 /// Short-lived state for the dictation loop; processing blocks a second take
 /// until the current transcript has been delivered.
@@ -117,7 +118,10 @@ enum TranscriptionLanguage: String, CaseIterable {
 
     var title: String {
         switch self {
-        case .auto: return L10n.t("auto")
+        case .auto:
+            // Bilingual is a cloud trick. Offline the recogniser holds one language
+            // at a time, so don't promise two.
+            return TalkTypeConfig.isUsingDeepgram ? L10n.t("auto") : L10n.t("autoSingle")
         case .en: return L10n.t("english")
         case .es: return L10n.t("spanish")
         }
@@ -133,7 +137,7 @@ enum TranscriptionLanguage: String, CaseIterable {
 
     var pillLabel: String {
         switch self {
-        case .auto: return "Bilingual"
+        case .auto: return TalkTypeConfig.isUsingDeepgram ? "Bilingual" : "Auto"
         case .en: return "English"
         case .es: return "Español"
         }
@@ -239,6 +243,7 @@ enum L10n {
 
     static let strings: [String: [String: String]] = [
         "auto": ["en": "Bilingual (English + Español)", "es": "Bilingüe (Español + Inglés)"],
+        "autoSingle": ["en": "Auto (one language at a time)", "es": "Automático (un idioma a la vez)"],
         "english": ["en": "English", "es": "Inglés"],
         "spanish": ["en": "Spanish", "es": "Español"],
         "language": ["en": "Language", "es": "Idioma"],
@@ -248,11 +253,14 @@ enum L10n {
         "recentTranscripts": ["en": "Recent Transcripts", "es": "Transcripciones recientes"],
         "historyEmpty": ["en": "History empty", "es": "Historial vacío"],
         "aboutTalkType": ["en": "About TalkType…", "es": "Acerca de TalkType…"],
+        "showAllInHistory": ["en": "Show all in History…", "es": "Ver todo en el historial…"],
+        "moreTakes": ["en": "More Takes", "es": "Más tomas"],
+        "exportAll": ["en": "Export All…", "es": "Exportar todo…"],
         "conversationsMode": ["en": "Conversations", "es": "Conversaciones"],
         "conversationsHelp": ["en": "Labels who said what when more than one person is talking. Needs the cloud engine.", "es": "Etiqueta quién dijo qué cuando habla más de una persona. Necesita el motor en la nube."],
         "conversationsNeedsCloud": ["en": "Conversations needs the cloud engine — pick Voice Mode first.", "es": "Conversaciones necesita el motor en la nube — elige el modo de voz primero."],
-        "aboutBlurb": ["en": "I talk faster than I type, so I made TalkType.\n\nA little ghost in the menu bar that turns talking into words. The Mac listens on its own, so nothing is uploaded and nothing counts down.", "es": "Hablo más rápido de lo que escribo, así que hice TalkType.\n\nUn pequeño fantasma en la barra de menús que convierte el habla en palabras. El Mac escucha por su cuenta: nada se sube y no hay contador."],
-        "madeBy": ["en": "made by pablo.", "es": "hecho por pablo."],
+        "aboutBlurb": ["en": "I talk faster than I type, so I made TalkType.\n\nA little ghost in the menu bar that turns talking into words. The Mac listens on its own, so nothing is uploaded and nothing counts down.\n\nA Deepgram key makes it sharper. Better names, better punctuation, better in a noisy room.", "es": "Hablo más rápido de lo que escribo, así que hice TalkType.\n\nUn pequeño fantasma en la barra de menús que convierte el habla en palabras. El Mac escucha por su cuenta: nada se sube y no hay contador.\n\nUna clave de Deepgram lo afina. Mejores nombres, mejor puntuación, mejor en un sitio ruidoso."],
+        "madeBy": ["en": "made by pablo", "es": "hecho por pablo"],
         "pushToTalkKey": ["en": "Push to Talk Key", "es": "Tecla pulsar para hablar"],
         "transcriptionEngine": ["en": "Voice Mode", "es": "Modo de voz"],
         "appleSpeech": ["en": "Mac Built-in (Offline · Private)", "es": "Integrado en Mac (sin conexión · privado)"],
@@ -1443,8 +1451,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             emptyItem.isEnabled = false
             menu.addItem(emptyItem)
         } else {
-            // Top 5 takes directly in root menu with ⌘1..⌘5 shortcuts (pure snippet text, no numbers/quotes)
-            for (idx, record) in history.records.prefix(5).enumerated() {
+            // Top 3 takes in the root menu. A clipboard menu is not a filing cabinet.
+            for (idx, record) in history.records.prefix(3).enumerated() {
                 let clean = record.text.trimmingCharacters(in: .whitespacesAndNewlines)
                 let preview = clean.count > 46 ? String(clean.prefix(44)) + "…" : clean
                 let keyEq = "\(idx + 1)"
@@ -1478,10 +1486,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
                 #endif
             }
 
-            // Older takes submenu if > 5
-            if history.records.count > 5 {
-                let olderMenu = NSMenu(title: "Older Takes")
-                for record in history.records.dropFirst(5).prefix(20) {
+            // Everything else lives behind one capped submenu, with a way out to
+            // the History tab instead of an endless scroll strip.
+            if history.records.count > 3 {
+                let olderMenu = NSMenu(title: "More Takes")
+                for record in history.records.dropFirst(3).prefix(12) {
                     let clean = record.text.trimmingCharacters(in: .whitespacesAndNewlines)
                     let preview = clean.count > 46 ? String(clean.prefix(44)) + "…" : clean
                     let item = NSMenuItem(
@@ -1498,7 +1507,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
                     #endif
                     olderMenu.addItem(item)
                 }
-                let olderParent = NSMenuItem(title: "More Takes (\(history.records.count - 5))…", action: nil, keyEquivalent: "")
+                olderMenu.addItem(NSMenuItem.separator())
+                let showAll = NSMenuItem(title: L10n.t("showAllInHistory"), action: #selector(showHistorySection), keyEquivalent: "")
+                showAll.target = self
+                olderMenu.addItem(showAll)
+
+                let olderParent = NSMenuItem(title: "\(L10n.t("moreTakes")) (\(history.records.count - 3))…", action: nil, keyEquivalent: "")
                 olderParent.submenu = olderMenu
                 menu.addItem(olderParent)
             }
@@ -1508,6 +1522,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
                 copyLast.target = self
                 menu.addItem(copyLast)
             }
+
+            let exportItem = NSMenuItem(title: L10n.t("exportAll"), action: #selector(exportAllTakes), keyEquivalent: "e")
+            exportItem.keyEquivalentModifierMask = [.command, .shift]
+            exportItem.target = self
+            menu.addItem(exportItem)
 
             let clearItem = NSMenuItem(title: L10n.t("clearHistory"), action: #selector(clearHistoryMenuAction), keyEquivalent: "")
             clearItem.target = self
@@ -1552,7 +1571,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         let convoItem = NSMenuItem(title: L10n.t("conversationsMode"), action: #selector(toggleConversationMode), keyEquivalent: "")
         convoItem.target = self
         convoItem.state = TalkTypeConfig.isConversationMode ? .on : .off
-        convoItem.toolTip = L10n.t("conversationsHelp")
+        // Diarization is a cloud capability; don't offer it on the on-device engine.
+        convoItem.isEnabled = TalkTypeConfig.isUsingDeepgram
+        convoItem.toolTip = TalkTypeConfig.isUsingDeepgram
+            ? L10n.t("conversationsHelp")
+            : L10n.t("conversationsNeedsCloud")
         voiceMenu.addItem(convoItem)
 
         #if !MAS_BUILD
@@ -1755,6 +1778,38 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         uiState.requestedTab = 2
         if popover?.isShown != true {
             openVisualPopover()
+        }
+    }
+
+    @objc func showHistorySection() {
+        uiState.requestedTab = 1
+        if popover?.isShown != true {
+            openVisualPopover()
+        }
+    }
+
+    /// Dump every take to one plain-text file. Oldest first, so it reads like a log.
+    @objc func exportAllTakes() {
+        let ordered = history.records.sorted { $0.timestamp < $1.timestamp }
+        guard !ordered.isEmpty else { return }
+
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "TalkType Takes.txt"
+        panel.allowedContentTypes = [.plainText]
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        let body = ordered
+            .map { "\(formatter.string(from: $0.timestamp))\n\($0.text)" }
+            .joined(separator: "\n\n---\n\n")
+
+        do {
+            try body.write(to: url, atomically: true, encoding: .utf8)
+        } catch {
+            showFailure(error.localizedDescription)
         }
     }
 
@@ -5120,13 +5175,18 @@ struct ContentView: View {
             Spacer(minLength: 0)
 
             HStack(alignment: .firstTextBaseline) {
-                Text("(•‿•)")
+                Text("(=^･ω･^=)")
                     .font(.system(size: 11.5, weight: .medium, design: .monospaced))
                     .foregroundStyle(p.inkSoft.opacity(0.5))
                 Spacer(minLength: 0)
-                Text(L10n.t("madeBy"))
-                    .font(.system(size: 10.5, weight: .medium, design: .rounded))
-                    .foregroundStyle(p.inkSoft.opacity(0.55))
+                HStack(spacing: 0) {
+                    Text(L10n.t("madeBy"))
+                        .font(.system(size: 11.5, weight: .medium, design: .rounded))
+                        .foregroundStyle(p.inkSoft.opacity(0.6))
+                    Text(".")
+                        .font(.system(size: 11.5, weight: .heavy, design: .rounded))
+                        .foregroundStyle(TT.hot)
+                }
             }
         }
         .padding(14)
