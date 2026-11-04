@@ -103,7 +103,7 @@
     <p>macOS hides status bar icons when the menu bar runs out of horizontal room, especially on MacBook displays with a camera housing. Closing a few neighbouring menu bar items frees space so the ghost reappears; <kbd>⌃⌥ Space</kbd> continues to work even while the icon is crowded out.</p>
 
     <h2>Engines and privacy</h2>
-    <p>Apple's speech recognizer runs 100% offline on the Mac's Neural Engine by default — audio stays on the Mac, with zero TalkType servers, zero user accounts, zero analytics, and zero tracking. Optional personal-key cloud engines — Deepgram Nova-3 streaming to <code>api.deepgram.com</code> (with <code>mip_opt_out=true</code> model-training opt-out) and Google Gemini prose polish to <code>generativelanguage.googleapis.com</code> — remain strictly off by default until an API key is saved into the macOS Keychain (<code>kSecClassGenericPassword</code>). Full details live on the <a href="/appstore-privacy">Privacy Policy</a>.</p>
+    <p>Apple's speech recognizer runs offline on the Mac's Neural Engine, so audio stays on the Mac. There are no TalkType servers, no accounts, no analytics and no tracking. The optional cloud engines stay off until a personal Deepgram or Google Gemini key is added, and those keys are kept in the macOS Keychain. Full details live on the <a href="/appstore-privacy">Privacy Policy</a>.</p>
 
     <h2>Purchases, receipts, and refunds</h2>
     <p>Mac App Store purchases, receipts, App Store redownloads across personal Macs, and refund requests are handled directly by Apple through the App Store and <code>reportaproblem.apple.com</code>.</p>

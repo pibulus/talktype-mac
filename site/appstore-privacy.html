@@ -86,13 +86,13 @@
     <h2>Optional cloud engines (strictly off by default)</h2>
     <p>Two optional personal-key cloud integrations stay completely disabled unless an API key is added from the menu bar settings:</p>
     <ul>
-      <li><strong>Deepgram Nova-3</strong> (<code>api.deepgram.com</code>) — streams audio directly from the Mac over encrypted TLS to Deepgram for real-time recognition and optional conversation speaker labels, sending <code>mip_opt_out=true</code> on every session to opt out of Deepgram model-improvement training.</li>
-      <li><strong>Google Gemini</strong> (<code>generativelanguage.googleapis.com</code>) — sends finished transcripts directly from the Mac over encrypted TLS to Google's Gemini endpoint for optional prose polish and custom vocabulary formatting.</li>
+      <li><strong>Deepgram Nova-3</strong> — streams audio directly from the Mac over encrypted TLS to Deepgram for real-time recognition and optional conversation speaker labels, with model training turned off on every session.</li>
+      <li><strong>Google Gemini</strong> — sends finished transcripts directly from the Mac over encrypted TLS to Google for optional prose polish and custom vocabulary formatting.</li>
     </ul>
     <p>Those requests travel straight between the Mac and the chosen provider under that provider's own terms and privacy policy. TalkType never relays, logs, or sees the traffic. Removing a key returns TalkType strictly to offline on-device recognition.</p>
 
     <h2>Keychain storage</h2>
-    <p>Optional API keys are stored solely inside the macOS Keychain using <code>kSecClassGenericPassword</code> items scoped to TalkType. Keys are never written to plain-text preferences, never backed up to external servers by TalkType, and never sent anywhere other than the matching provider's authentication header.</p>
+    <p>Optional API keys are stored solely inside the macOS Keychain as items scoped to TalkType. Keys are never written to plain-text preferences, never backed up to external servers by TalkType, and never sent anywhere other than the matching provider's authentication header.</p>
 
     <h2>Clipboard, local History, and preferences</h2>
     <p>Completed transcripts copy locally to the macOS clipboard ready for <kbd>⌘V</kbd> in any app. Up to 50 recent takes, custom vocabulary entries, language selection (English / Español), and HUD layout preferences remain inside TalkType's sandboxed container on the Mac. Exporting History writes a plain <code>.txt</code> file to a chosen local folder, and clearing History erases stored takes immediately.</p>

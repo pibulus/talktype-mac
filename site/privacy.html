@@ -71,10 +71,10 @@
     <p>Apple's speech recognizer runs locally on the Mac's Neural Engine. Voice audio is not uploaded to Apple, and it does not reach this website either — there is no TalkType server to reach.</p>
 
     <h2>Optional cloud engines</h2>
-    <p>Adding a personal Deepgram or Google Gemini API key turns on streaming cloud recognition (<code>api.deepgram.com</code>, sent with <code>mip_opt_out=true</code> model-training opt-out) or an optional prose polish pass (<code>generativelanguage.googleapis.com</code>). When those engines run, audio or finished text travels directly from the Mac to that provider over TLS using the stored key. Deepgram and Google process requests under their own terms; TalkType never sees the traffic.</p>
+    <p>Adding a personal Deepgram or Google Gemini API key turns on streaming cloud recognition, with model training turned off or an optional prose polish pass. When those engines run, audio or finished text travels directly from the Mac to that provider over TLS using the stored key. Deepgram and Google process requests under their own terms; TalkType never sees the traffic.</p>
 
     <h2>Keychain storage</h2>
-    <p>API keys live inside the macOS Keychain as scoped <code>kSecClassGenericPassword</code> items. Keys are not written to plain preference files, not synced by TalkType, and never sent anywhere other than the chosen provider's authentication header.</p>
+    <p>API keys live inside the macOS Keychain, scoped to TalkType. Keys are not written to plain preference files, not synced by TalkType, and never sent anywhere other than the chosen provider's authentication header.</p>
 
     <h2>History and settings</h2>
     <p>Up to 50 recent transcripts, custom vocabulary entries, and menu bar preferences stay locally on the Mac. History exports to plain <code>.txt</code> locally and clears immediately from the History tab. Nothing syncs to external servers.</p>
