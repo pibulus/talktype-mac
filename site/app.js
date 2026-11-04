@@ -12,6 +12,7 @@
     ];
     let i = 0;
     setInterval(() => {
+      if (document.hidden) return; // no repaints while the tab is backgrounded
       i = (i + 1) % lines.length;
       hud.style.opacity = '0';
       setTimeout(() => {
@@ -28,6 +29,18 @@
   if (checkout) {
     const label = checkout.querySelector('.label');
     const error = document.getElementById('checkout-error');
+
+    const reset = () => {
+      checkout.dataset.state = 'idle';
+      checkout.disabled = false;
+      checkout.removeAttribute('aria-busy');
+      label.textContent = 'Continue to secure payment';
+    };
+
+    // Returning from Square can restore this page from bfcache with the button
+    // still disabled and the label stuck on "Opening Square…".
+    addEventListener('pageshow', (e) => { if (e.persisted) reset(); });
+
     checkout.addEventListener('click', async () => {
       if (checkout.dataset.state === 'busy') return;
       checkout.dataset.state = 'busy';
@@ -36,20 +49,23 @@
       label.textContent = 'Opening Square…';
       if (error) error.hidden = true;
 
+      const request = {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}'
+      };
+      // A stalled Square call must never leave the button disabled forever.
+      if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) {
+        request.signal = AbortSignal.timeout(12000);
+      }
+
       try {
-        const res = await fetch('/api/checkout', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: '{}'
-        });
+        const res = await fetch('/api/checkout', request);
         const data = await res.json().catch(() => ({}));
         if (!res.ok || !data.checkoutUrl) throw new Error(data.error || 'no checkout');
         window.location.assign(data.checkoutUrl);
       } catch (e) {
-        checkout.dataset.state = 'idle';
-        checkout.disabled = false;
-        checkout.removeAttribute('aria-busy');
-        label.textContent = 'Continue to secure payment';
+        reset();
         if (error) error.hidden = false;
       }
     });
@@ -124,7 +140,7 @@
   }
 
   // Version stamp: the artifact should be able to answer what it is.
-  fetch('version.json')
+  fetch('/version.json')
     .then((r) => (r.ok ? r.json() : null))
     .then((v) => {
       const el = document.getElementById('version');

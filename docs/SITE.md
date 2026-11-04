@@ -55,16 +55,18 @@ with a mailto fallback. Nothing charges.
 An AU seller location charges AUD; the function asks Square for the location
 currency rather than assuming it.
 
-## Before it goes live
+## Already verified (do not re-do)
 
-1. **Canonical / OG URLs** — `index.html`, `buy.html` `<head>`, currently
-   `https://talktype.app/mac/`. Update all three if the host changes.
-2. **DMG URLs** — `thanks.html`, `index.html` (pricing card) and the FAQ point at
-   `https://talktype.app/downloads/TalkType.dmg`. Keep that file in sync with the
-   build this site sells.
-3. **Square dashboard** — rename the merchant business from `pabloandres` to
-   **Made by Pablo**, and update the old A$29 Square Online item (left over as a
-   manual fallback) to A$59 or archive it.
+1. **Canonical / OG URLs** — every page points at `https://mac.talktype.app/`.
+   Verified 2026-11-05. `/buy` is canonical as the clean route, not `/buy.html`.
+2. **DMG URL** — the shop serves its own artifact at
+   `https://mac.talktype.app/downloads/TalkType.dmg` (committed at
+   `site/downloads/`). Re-verify a release with
+   `shasum -a 256 site/downloads/TalkType.dmg dist/direct/TalkType-1.0.dmg`;
+   the two must match.
+3. **Square dashboard** — still open: rename the merchant business from
+   `pabloandres` to **Made by Pablo** so buyers see the right name at checkout,
+   and archive the old A$29 Square Online item.
 
 ## Hosting (live)
 
@@ -82,18 +84,17 @@ netlify deploy --dir . --functions netlify/functions --prod
 
 `site/` is linked to that project locally (`.netlify/state.json`, gitignored).
 
-**Current environment:** `SQUARE_ENVIRONMENT=sandbox`, sandbox token and location.
-`SITE_URL` is deliberately unset — the function uses the request origin, so the
-post-payment redirect stays on whichever host sold the app (`mac.talktype.app`
-in production, a review deploy if testing elsewhere). Fallback is
-`https://mac.talktype.app`.
+**Current environment:** `SQUARE_ENVIRONMENT=production`, production token and
+location `LS821EYMQCANH` (AUD, AU). `SITE_URL` is deliberately unset — the
+function uses the request origin, so the post-payment redirect stays on whichever
+host sold the app. Fallback is `https://mac.talktype.app`.
 
-The whole flow is live and testable now — Buy → Square's sandbox testing panel →
-back to `/thanks.html` with confetti.
+Verified 2026-11-05: `curl -sX POST -d '{}' https://mac.talktype.app/api/checkout`
+returns `"environment":"production"`, `AUD 2900`, and a `checkout.square.site`
+link. The flow is Buy → Square → back to `/thanks` with confetti.
 
-**To take real money:** replace the site env with the production token and set
-`SQUARE_ENVIRONMENT=production` + `SQUARE_LOCATION_ID=LS821EYMQCANH`, then redeploy
-(nothing else changes).
+**To go back to sandbox:** set `SQUARE_ENVIRONMENT=sandbox`, the sandbox token,
+and `SQUARE_LOCATION_ID=L41AKRW3ZPD1B`, then redeploy.
 
 ## Domain — done
 
@@ -104,11 +105,12 @@ back to `/thanks.html` with confetti.
 - Canonical and `og:url` in `index.html` + `buy.html` point at
   `https://mac.talktype.app/`.
 
-### `talktype.app/mac` is NOT redirected yet — on purpose
+### `talktype.app/mac` — ready to redirect
 
-The old SvelteKit page still sells A$29 through a working Square order. The new
-shop's checkout is still **sandbox**, so it cannot take money. Until a production
-token is live on this site, 301-ing `/mac` would remove the only purchase path.
+The blocker is gone: this shop's checkout is production. The 301 can land
+whenever the old SvelteKit page is retired. Note that `talktype.app/downloads/`
+still serves a 27 October build from the other repo (`pibulus/talktype`), so
+retire or repoint those links at the same time.
 
 When production payments are verified, add to the talktype.app repo's
 `netlify.toml` and deploy:

@@ -55,6 +55,21 @@
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
 
+# Non-page artefacts: reachable and useful, never indexable.
+# robots.txt must NOT disallow these — a disallowed URL cannot be fetched, so the
+# header below would never be read and the bare URL could still be listed.
+[[headers]]
+  for = "/downloads/*"
+  [headers.values]
+    Cache-Control = "public, max-age=3600"
+    X-Robots-Tag = "noindex"
+
+[[headers]]
+  for = "/version.json"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+    X-Robots-Tag = "noindex"
+
 # Source files are not site content
 [[redirects]]
   from = "/netlify/*"

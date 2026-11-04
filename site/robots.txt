@@ -1,0 +1,9 @@
+# https://mac.talktype.app — TalkType for Mac
+User-agent: *
+Allow: /
+
+# Build artefacts and function source are not pages.
+Disallow: /netlify/
+Disallow: /api/
+
+Sitemap: https://mac.talktype.app/sitemap.xml

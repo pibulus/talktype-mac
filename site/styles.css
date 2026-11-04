@@ -563,3 +563,77 @@ a.made:hover { color: var(--ink); }
 }
 .was-inline { color: var(--ink-mute); font-weight: 500; text-decoration: line-through; margin-right: 6px; }
 .order-line .save { color: #1f7a63; font-weight: 700; }
+
+/* ─────────────────────────────────────────────────────────────
+   2026-11-05 polish pass — mobile ordering, 320px overflow,
+   touch feedback, optical type sizes.
+   ───────────────────────────────────────────────────────────── */
+
+/* iOS paints a grey flash on every tap without this. */
+a, button, summary { -webkit-tap-highlight-color: rgba(255, 130, 202, 0.18); }
+html { -webkit-text-size-adjust: 100%; }
+h1.display { text-wrap: balance; }
+
+/* Trust copy was 12.5px on the money page — too small to read on a phone. */
+.pay-note { font-size: 14.5px; line-height: 1.55; }
+.small { font-size: 14.5px; }
+.trust { font-size: 14.5px; }
+
+/* Long domains in prose must be breakable or they widen the page. */
+.prose code { overflow-wrap: anywhere; }
+
+/* Defensive anchor offset; today only .section padding absorbs the sticky bar. */
+.section, .prose, .checkout { scroll-margin-top: 76px; }
+
+/* Press feedback where hover does not exist. */
+@media (hover: none) {
+  .pill-hot:active, .pill-quiet:active, .faq summary:active,
+  .footer-links a:active, .nav-links a:active { transform: scale(0.975); }
+}
+
+/* 320px: four pages scrolled sideways. Measured min-content widths. */
+@media (max-width: 380px) {
+  .order .pill { font-size: 15px; padding: 0 14px; }
+  .price { flex-wrap: wrap; }
+  .price .amount { font-size: 46px; }
+  .price .was { font-size: 20px; margin-left: 6px; }
+  .launch-pill { margin-left: 8px; font-size: 9.5px; padding: 3px 8px; }
+}
+@media (max-width: 420px) {
+  .pill-sm { font-size: 12px; padding: 0 10px; }
+  .topbar-inner { gap: 8px; }
+  .brand { font-size: 15px; gap: 8px; }
+  .brand img { width: 26px; height: 26px; }
+}
+
+/* The pay button sat below the fold on every phone. Reorder the order card
+   so the total and the button come first, and pin the button while scrolling. */
+@media (max-width: 560px) {
+  .checkout { padding-top: 36px; }
+  .checkout-grid { margin-top: 24px; }
+  .order { display: flex; flex-direction: column; }
+  .order-head  { order: 1; }
+  .order-total { order: 2; border-top: 1px solid var(--line); padding: 16px 0 2px; }
+  .order .pay-note { order: 3; text-align: left !important; }
+  .order #checkout {
+    order: 4;
+    position: sticky; bottom: 14px; z-index: 10;
+    box-shadow: 0 16px 34px rgba(30, 23, 20, 0.18), 0 10px 26px rgba(255, 130, 202, 0.34);
+  }
+  .checkout-error { order: 5; }
+  .order-line     { order: 6; }
+
+  /* Hero: pull the CTA above the fold on a 568px-tall screen. */
+  .hero { padding-top: 36px; }
+  .hero-ghost { width: 84px; height: 84px; }
+  .hero-actions { margin-top: 24px; }
+  .stage { margin-top: 36px; }
+  .mini-history, .hud-caption { display: none; }
+
+  /* Two full-width pills stacked in the pricing card compete. */
+  .buy-side .pill-quiet {
+    height: auto; min-height: 0; padding: 6px 0; background: none;
+    border: 0; box-shadow: none; font-size: 14px; text-decoration: underline;
+    text-underline-offset: 3px; justify-content: center;
+  }
+}

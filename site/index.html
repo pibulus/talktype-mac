@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>TalkType for Mac — Hold Option. Speak. Release.</title>
-  <meta name="description" content="A ghost in the Mac menu bar that turns speech into clean text at the cursor. Apple on-device by default, Deepgram or Gemini on request. A$29 launch price, notarized DMG, no subscription.">
+  <title>TalkType for Mac — Menu-Bar Dictation, Hold Option to Talk</title>
+  <meta name="description" content="Hold Option, speak, release: clean text at the cursor in any Mac app. Apple on-device by default, optional Deepgram or Gemini. A$29 once, no subscription.">
   <meta name="theme-color" content="#fff6e6">
   <meta name="color-scheme" content="light">
   <!-- Canonical host: mac.talktype.app (Netlify project talktype-mac). -->
@@ -13,15 +13,93 @@
   <link rel="apple-touch-icon" href="assets/icon-180.png">
 
   <meta property="og:type" content="website">
-  <meta property="og:title" content="TalkType for Mac — Hold Option. Speak. Release.">
-  <meta property="og:description" content="A ghost in the Mac menu bar that turns speech into clean text at the cursor. A$29 launch price, A$39 after.">
+  <meta property="og:title" content="TalkType for Mac — Menu-Bar Dictation, Hold Option to Talk">
+  <meta property="og:description" content="Hold Option, speak, release: clean text at the cursor in any Mac app. A$29 once, on-device by default.">
+  <meta property="og:site_name" content="TalkType for Mac">
+  <meta property="og:locale" content="en_AU">
   <meta property="og:image" content="https://mac.talktype.app/assets/og-card.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta property="og:image:alt" content="TalkType for Mac — the ghost in the menu bar">
   <meta property="og:url" content="https://mac.talktype.app/">
   <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="TalkType for Mac — Menu-Bar Dictation, Hold Option to Talk">
+  <meta name="twitter:description" content="Hold Option, speak, release: clean text at the cursor in any Mac app. A$29 once, on-device by default.">
   <meta name="twitter:image" content="https://mac.talktype.app/assets/og-card.png">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": "https://mac.talktype.app/#website",
+        "url": "https://mac.talktype.app/",
+        "name": "TalkType for Mac",
+        "inLanguage": "en-AU",
+        "publisher": { "@id": "https://mac.talktype.app/#publisher" }
+      },
+      {
+        "@type": "SoftwareApplication",
+        "@id": "https://mac.talktype.app/#app",
+        "name": "TalkType for Mac",
+        "alternateName": "TalkType",
+        "applicationCategory": "ProductivityApplication",
+        "applicationSubCategory": "Dictation and speech to text",
+        "operatingSystem": "macOS 13 or later",
+        "softwareVersion": "1.0",
+        "url": "https://mac.talktype.app/",
+        "downloadUrl": "https://mac.talktype.app/downloads/TalkType.dmg",
+        "image": "https://mac.talktype.app/assets/og-card.png",
+        "description": "A menu-bar dictation utility for macOS that turns speech into clean text at the cursor. Apple's on-device recogniser by default, with optional Deepgram Nova-3 and Gemini engines on a personal key.",
+        "inLanguage": ["en", "es"],
+        "featureList": [
+          "Hold Option to dictate into any Mac app",
+          "Apple on-device recognition, nothing uploaded by default",
+          "Optional Deepgram Nova-3 streaming recognition on a personal key",
+          "Optional Gemini prose polish with custom vocabulary",
+          "50 takes of local history and clipboard backup",
+          "No account, no telemetry, keys in the macOS Keychain"
+        ],
+        "offers": {
+          "@type": "Offer",
+          "price": "29.00",
+          "priceCurrency": "AUD",
+          "availability": "https://schema.org/InStock",
+          "url": "https://mac.talktype.app/buy",
+          "priceValidUntil": "2026-12-03"
+        },
+        "publisher": { "@id": "https://mac.talktype.app/#publisher" },
+        "author": { "@id": "https://mac.talktype.app/#author" }
+      },
+      {
+        "@type": "Organization",
+        "@id": "https://mac.talktype.app/#publisher",
+        "name": "Made by Pablo",
+        "url": "https://madebypablo.app",
+        "email": "pibulus@gmail.com",
+        "address": { "@type": "PostalAddress", "addressLocality": "Melbourne" }
+      },
+      {
+        "@type": "Person",
+        "@id": "https://mac.talktype.app/#author",
+        "name": "Pablo",
+        "url": "https://madebypablo.app"
+      },
+      {
+        "@type": "FAQPage",
+        "@id": "https://mac.talktype.app/#faq",
+        "mainEntity": [
+          { "@type": "Question", "name": "Why a DMG instead of the Mac App Store?", "acceptedAnswer": { "@type": "Answer", "text": "The sandbox permits a registered hotkey, but forbids synthetic keystrokes, so nothing can paste into another app, and there is no Accessibility modifier watch. The direct build is notarized by Apple, opens without warnings, and keeps those two powers." } },
+          { "@type": "Question", "name": "Where does the audio go?", "acceptedAnswer": { "@type": "Answer", "text": "Nowhere by default. Apple's on-device recogniser keeps it on the Mac. Cloud engines only run when a Deepgram or Gemini key is added, and then audio goes straight from the Mac to that provider, never through a TalkType server, because there is no TalkType server." } },
+          { "@type": "Question", "name": "What happens after payment?", "acceptedAnswer": { "@type": "Answer", "text": "Square sends a receipt, and the confirmation page holds the download plus install steps. The same DMG stays at https://mac.talktype.app/downloads/TalkType.dmg, so a lost copy is never a lost purchase." } },
+          { "@type": "Question", "name": "Does it work in password fields?", "acceptedAnswer": { "@type": "Answer", "text": "No, by design. macOS refuses synthetic keystrokes in secured fields, and TalkType does not try to work around that. Anywhere a Cmd-V lands, dictation lands." } },
+          { "@type": "Question", "name": "Which Macs are supported?", "acceptedAnswer": { "@type": "Answer", "text": "macOS 13 Ventura or newer, Apple Silicon or Intel. The DMG carries one universal binary." } }
+        ]
+      }
+    ]
+  }
+  </script>
 
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -31,7 +109,7 @@
 
 <header class="topbar">
   <div class="wrap topbar-inner">
-    <a class="brand" href="index.html">
+    <a class="brand" href="/">
       <img src="assets/ghost.svg" alt="">
       TalkType <span class="tag">for Mac</span>
     </a>
@@ -42,7 +120,7 @@
       <a href="#faq">FAQ</a>
       <a href="https://talktype.app/extension">Extension</a>
     </nav>
-    <a class="pill pill-hot pill-sm" href="buy.html">Buy — A$29</a>
+    <a class="pill pill-hot pill-sm" href="/buy">Buy — A$29</a>
   </div>
 </header>
 
@@ -51,12 +129,12 @@
   <!-- ───────────────────────────── hero ───────────────────────────── -->
   <section class="hero">
     <div class="wrap">
-      <img class="hero-ghost" src="assets/ghost.svg" alt="The TalkType ghost">
+      <img class="hero-ghost" src="assets/ghost.svg" alt="">
       <div class="kicker" style="margin-top: 22px"><span class="dot" aria-hidden="true"></span> macOS menu bar · one payment</div>
       <h1 class="display">Hold Option.<br>Speak. <span class="grad">Release.</span></h1>
       <p class="lede">A ghost lives in the menu bar and turns speech into clean text at the cursor. Apple on-device by default. Deepgram or Gemini when the words matter more than the wait.</p>
       <div class="hero-actions">
-        <a class="pill pill-hot" href="buy.html">Buy for Mac — A$29</a>
+        <a class="pill pill-hot" href="/buy">Buy for Mac — A$29</a>
         <a class="pill pill-quiet" href="#how">See how it works</a>
       </div>
       <div class="trust">
@@ -91,7 +169,7 @@
             <div class="bars"><i></i><i></i><i></i><i></i><i></i></div>
             <div class="text" data-hud-text>and the questionable playlist…</div>
           </div>
-          <div class="hud-caption">↑ live in any app, 12 px from the cursor</div>
+          <div class="hud-caption">↑ over any app · bottom-centre by default</div>
           <div class="hud-caption">Three engines · 50 takes of history · clipboard backup</div>
 
           <div class="mini-history" aria-hidden="true">
@@ -123,7 +201,7 @@
         <div class="step">
           <span class="n">2</span>
           <h3>Say the thing</h3>
-          <p>A small HUD follows the voice. Pauses are fine. Mid-sentence corrections are fine.</p>
+          <p>A small capsule floats over every window and tracks the take. Pause as long as the thought takes.</p>
         </div>
         <div class="step">
           <span class="n">3</span>
@@ -161,8 +239,8 @@
           <span class="glyph" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v9M14.6 9.4c-.6-.7-1.5-1.1-2.6-1.1-1.4 0-2.4.8-2.4 1.9 0 1.2 1 1.7 2.6 2 1.6.3 2.6.8 2.6 2 0 1.1-1 1.9-2.6 1.9-1.1 0-2-.4-2.6-1.1"/></svg>
           </span>
-          <h3>Yours, not rented</h3>
-          <p>A$29 once. No account, no telemetry, no monthly bill. Keys live in the macOS Keychain, never on a server.</p>
+          <h3>Owned, not rented</h3>
+          <p>A$29 once, and it stays paid. Nothing meters takes, nothing counts them, no account gets created. Cloud keys sit in the macOS Keychain.</p>
         </div>
       </div>
     </div>
@@ -174,14 +252,14 @@
       <div style="max-width: 640px">
         <div class="kicker"><span class="dot" aria-hidden="true"></span> Three engines, one ghost</div>
         <h2 class="section-title" style="margin-top: 16px">Pick the trade-off.</h2>
-        <p class="lede">Offline privacy, cloud accuracy, or a polish pass on the prose. Switch any time from the menu.</p>
+        <p class="lede">Keep audio on the Mac, stream it to Deepgram while talking, or hand a finished transcript to Gemini for a tidy-up. The menu switches between them.</p>
       </div>
 
       <div class="engines">
         <div class="engine-row">
           <h3>Apple on-device</h3>
           <p>The default. Runs on the Neural Engine, works on a plane, sends nothing anywhere. Needs on-device recognition for the selected language.</p>
-          <span class="badge">Free · offline</span>
+          <span class="badge">No key · offline</span>
         </div>
         <div class="engine-row">
           <h3>Deepgram Nova-3</h3>
@@ -217,9 +295,10 @@
           </ul>
         </div>
         <div class="buy-side">
-          <a class="pill pill-hot" href="buy.html">Buy for Mac — A$29</a>
+          <a class="pill pill-hot" href="/buy">Buy for Mac — A$29</a>
           <a class="pill pill-quiet pill-sm" href="https://mac.talktype.app/downloads/TalkType.dmg">Already purchased · Download</a>
           <p class="small">Card and wallet payments handled by Square. No account is created anywhere.</p>
+          <p class="small" style="margin-top: 10px">Payment trouble or a lost download: <a href="/support">support</a>.</p>
         </div>
       </div>
     </div>
@@ -236,7 +315,7 @@
       <div class="faq">
         <details open>
           <summary>Why a DMG instead of the Mac App Store?</summary>
-          <p>The App Store sandbox does not allow watching a global key or pasting into another app, which is the whole point of TalkType. The direct build is notarized by Apple and opens without warnings — it just keeps the powers the sandbox removes.</p>
+          <p>The sandbox permits a registered hotkey — the App Store edition uses ⌃⌥ Space — but forbids synthetic keystrokes, so nothing can paste into another app, and there is no Accessibility modifier watch. The direct build is notarized by Apple, opens without warnings, and keeps those two powers.</p>
         </details>
         <details>
           <summary>Where does the audio go?</summary>
@@ -244,11 +323,11 @@
         </details>
         <details>
           <summary>What happens after payment?</summary>
-          <p>Square sends a receipt, and the thank-you page holds the download plus install steps. The same DMG lives at <a href="https://mac.talktype.app/downloads/TalkType.dmg">talktype.app/downloads/TalkType.dmg</a>, so a lost copy is never a lost purchase.</p>
+          <p>Square sends a receipt, and the confirmation page holds the download plus install steps. The same DMG stays at <a href="https://mac.talktype.app/downloads/TalkType.dmg">mac.talktype.app/downloads/TalkType.dmg</a>, so a lost copy is never a lost purchase.</p>
         </details>
         <details>
           <summary>Does it work in password fields?</summary>
-          <p>No, by design. macOS refuses synthetic keystrokes in secured fields, and TalkType does not try to work around that. Everything else that accepts text accepts dictation.</p>
+          <p>No, by design. macOS refuses synthetic keystrokes in secured fields, and TalkType does not try to work around that. Anywhere a ⌘V lands, dictation lands.</p>
         </details>
         <details>
           <summary>Which Macs are supported?</summary>
@@ -262,15 +341,15 @@
 
 <footer class="footer">
   <div class="wrap footer-inner">
-    <a class="brand" href="index.html" style="font-size: 15px">
+    <a class="brand" href="/" style="font-size: 15px">
       <img src="assets/ghost.svg" alt="" style="width: 24px; height: 24px">
       TalkType
     </a>
     <nav class="footer-links" aria-label="Footer navigation">
       <a href="https://talktype.app">talktype.app</a>
       <a href="https://talktype.app/extension">Chrome extension</a>
-      <a href="privacy.html">Privacy</a>
-      <a href="support.html">Support</a>
+      <a href="/privacy">Privacy</a>
+      <a href="/support">Support</a>
     </nav>
     <a class="made" href="https://madebypablo.app">Made by Pablo · Melbourne · <span id="version">v1.0</span></a>
   </div>

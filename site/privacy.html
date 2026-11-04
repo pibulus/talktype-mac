@@ -13,7 +13,9 @@
 
   <meta property="og:type" content="website">
   <meta property="og:title" content="TalkType for Mac — Privacy Policy">
-  <meta property="og:description" content="Audio stays on the Mac by default. Zero TalkType servers, zero accounts, zero analytics, and Keychain storage for optional cloud keys.">
+  <meta property="og:site_name" content="TalkType for Mac">
+  <meta property="og:locale" content="en_AU">
+  <meta property="og:description" content="How TalkType handles audio, transcripts, Keychain API keys, and local history. Audio stays on the Mac by default.">
   <meta property="og:url" content="https://mac.talktype.app/privacy">
   <meta property="og:image" content="https://mac.talktype.app/assets/og-card.png">
   <meta property="og:image:width" content="1200">
@@ -21,8 +23,22 @@
   <meta property="og:image:alt" content="TalkType for Mac — the ghost in the menu bar">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="TalkType for Mac — Privacy Policy">
-  <meta name="twitter:description" content="Audio stays on the Mac by default. Zero TalkType servers, zero accounts, zero analytics, and Keychain storage for optional cloud keys.">
+  <meta name="twitter:description" content="How TalkType handles audio, transcripts, Keychain API keys, and local history. Audio stays on the Mac by default.">
   <meta name="twitter:image" content="https://mac.talktype.app/assets/og-card.png">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "@id": "https://mac.talktype.app/privacy",
+    "url": "https://mac.talktype.app/privacy",
+    "name": "TalkType for Mac — Privacy Policy",
+    "description": "How TalkType for Mac handles audio, transcripts, Keychain API keys, and local history. Audio stays on the Mac by default.",
+    "inLanguage": "en-AU",
+    "dateModified": "2026-11-04",
+    "publisher": { "@type": "Organization", "@id": "https://mac.talktype.app/#publisher", "name": "Made by Pablo", "url": "https://madebypablo.app" }
+  }
+  </script>
 
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -32,16 +48,16 @@
 
 <header class="topbar">
   <div class="wrap topbar-inner">
-    <a class="brand" href="index.html">
+    <a class="brand" href="/">
       <img src="assets/ghost.svg" alt="">
       TalkType <span class="tag">for Mac</span>
     </a>
     <nav class="nav-links" aria-label="Primary navigation">
-      <a href="index.html">Mac page</a>
-      <a href="support.html">Support</a>
+      <a href="/">Mac page</a>
+      <a href="/support">Support</a>
       <a href="https://talktype.app/privacy">Web app privacy</a>
     </nav>
-    <a class="pill pill-quiet pill-sm" href="support.html">Support</a>
+    <a class="pill pill-quiet pill-sm" href="/support">Support</a>
   </div>
 </header>
 
@@ -49,13 +65,13 @@
   <div class="wrap narrow">
     <div class="kicker"><span class="dot"></span> Privacy</div>
     <h1>Audio stays on the Mac.</h1>
-    <p class="lede">TalkType runs with no backend, no account system, and no analytics. Every detail of what stays local and what can leave the machine appears below. Last updated 4 November 2026.</p>
+    <p class="lede">TalkType runs with no backend, no account system, and no analytics. Below: what stays on the Mac, what can leave it, and which third party receives it. Last updated 4 November 2026.</p>
 
     <h2>Default engine</h2>
-    <p>Apple's speech recognizer runs locally on the Mac's Neural Engine. Voice audio is not uploaded to Apple, and nothing reaches this website or any TalkType server. No TalkType server exists.</p>
+    <p>Apple's speech recognizer runs locally on the Mac's Neural Engine. Voice audio is not uploaded to Apple, and it does not reach this website either — there is no TalkType server to reach.</p>
 
     <h2>Optional cloud engines</h2>
-    <p>Adding a personal Deepgram or Google Gemini API key unlocks streaming cloud recognition (<code>api.deepgram.com</code>, sent with <code>mip_opt_out=true</code> model-training opt-out) or an optional prose polish pass (<code>generativelanguage.googleapis.com</code>). When those engines run, audio or finished text travels directly from the Mac to that provider over TLS using the stored key. Deepgram and Google process requests under their own terms; TalkType never sees the traffic.</p>
+    <p>Adding a personal Deepgram or Google Gemini API key turns on streaming cloud recognition (<code>api.deepgram.com</code>, sent with <code>mip_opt_out=true</code> model-training opt-out) or an optional prose polish pass (<code>generativelanguage.googleapis.com</code>). When those engines run, audio or finished text travels directly from the Mac to that provider over TLS using the stored key. Deepgram and Google process requests under their own terms; TalkType never sees the traffic.</p>
 
     <h2>Keychain storage</h2>
     <p>API keys live inside the macOS Keychain as scoped <code>kSecClassGenericPassword</code> items. Keys are not written to plain preference files, not synced by TalkType, and never sent anywhere other than the chosen provider's authentication header.</p>
@@ -79,13 +95,13 @@
 
 <footer class="footer">
   <div class="wrap footer-inner">
-    <a class="brand" href="index.html">
+    <a class="brand" href="/">
       <img src="assets/ghost.svg" alt="" width="24" height="24">
       TalkType
     </a>
     <nav class="footer-links" aria-label="Footer navigation">
       <a href="https://talktype.app">talktype.app</a>
-      <a href="support.html">Support</a>
+      <a href="/support">Support</a>
       <a href="mailto:pibulus@gmail.com">pibulus@gmail.com</a>
     </nav>
     <a class="made" href="https://madebypablo.app">Made by Pablo · Melbourne · <span id="version">v1.0</span></a>
