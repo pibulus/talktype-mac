@@ -321,7 +321,8 @@ enum L10n {
         "onboardSandboxPlaceholder": ["en": "Hold Right ⌥ Option, speak, and let go — your words land right here…", "es": "Mantén ⌥ Option, habla y suelta — tus palabras aparecerán aquí…"],
         "onboardSandboxSuccess": ["en": "Auto-paste works!", "es": "¡El pegado automático funciona!"],
         "startUsingTalkType": ["en": "Start Talking", "es": "Empezar a hablar"],
-        "offlineSingleLangHint": ["en": "Offline mode listens to one language at a time.", "es": "El modo sin conexión escucha un idioma a la vez."]
+        "offlineBlurb": ["en": "Works with no connection. Nothing is uploaded, nothing sits on a server.", "es": "Funciona sin conexión. Nada se sube, nada queda en un servidor."],
+        "offlineEngineHelp": ["en": "Runs on the Mac itself. No key, no network.", "es": "Corre en el propio Mac. Sin clave, sin red."]
     ]
 }
 
@@ -412,8 +413,8 @@ enum TalkTypeConfig {
     }
     #endif
 
-    /// Legacy "auto" (and a first launch with no stored choice) resolves to the
-    /// machine's own language rather than a hardcoded English.
+    /// No stored choice yet, or a value from before the picker had two options,
+    /// resolves to the machine's own language rather than a hardcoded English.
     static var systemDefaultLanguage: TranscriptionLanguage {
         Locale.current.identifier.lowercased().hasPrefix("es") ? .es : .en
     }
@@ -4579,8 +4580,7 @@ struct OnboardingView: View {
                             .foregroundStyle(p.ink)
                     }
 
-                    Text(L10n.t("offlineSingleLangHint"))
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                    Text(L10n.t("offlineBlurb"))                        .font(.system(size: 11, weight: .medium, design: .rounded))
                         .foregroundStyle(p.inkSoft.opacity(0.8))
                         .fixedSize(horizontal: false, vertical: true)
 
@@ -4953,7 +4953,7 @@ struct ContentView: View {
                 )
             }
             .buttonStyle(.plain)
-            .help(isSupercharged ? L10n.t("superchargedHelp") : L10n.t("offlineSingleLangHint"))
+            .help(isSupercharged ? L10n.t("superchargedHelp") : L10n.t("offlineEngineHelp"))
         }
     }
 

@@ -285,7 +285,7 @@ extension AppDelegate {
         // Two languages, two buttons. Legacy "auto" must migrate, never crash.
         expect(TranscriptionLanguage.en.deepgramLanguage == "en" && TranscriptionLanguage.es.deepgramLanguage == "es", "Explicit language codes mismatch")
         expect(TranscriptionLanguage.allCases.count == 2, "Language picker should offer exactly EN and ES")
-        expect(TalkTypeConfig.resolvedLanguage(raw: "auto") == TalkTypeConfig.systemDefaultLanguage, "Legacy auto must resolve to the system language")
+        expect(TalkTypeConfig.resolvedLanguage(raw: "auto") == TalkTypeConfig.systemDefaultLanguage, "Unrecognised stored value must resolve to the system language")
         expect(TalkTypeConfig.resolvedLanguage(raw: nil) == TalkTypeConfig.systemDefaultLanguage, "Missing choice must resolve to the system language")
         app.promptDeepgramKey()
         expect(app.uiState.activeKeySetup == .deepgram, "promptDeepgramKey did not activate in-popover Deepgram setup")
