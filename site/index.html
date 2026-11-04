@@ -93,7 +93,7 @@
           { "@type": "Question", "name": "Why a DMG instead of the Mac App Store?", "acceptedAnswer": { "@type": "Answer", "text": "The App Store edition can hear a shortcut, but it cannot type into another app. Pasting at the cursor needs a permission Apple only grants outside the sandbox. The direct build is notarized by Apple and opens without a warning." } },
           { "@type": "Question", "name": "Where does the audio go?", "acceptedAnswer": { "@type": "Answer", "text": "Nowhere by default. Apple's on-device recogniser keeps it on the Mac. Cloud engines only run when a Deepgram or Gemini key is added, and then audio goes straight from the Mac to that provider, never through a TalkType server, because there is no TalkType server." } },
           { "@type": "Question", "name": "What happens after payment?", "acceptedAnswer": { "@type": "Answer", "text": "Square sends a receipt, and the confirmation page holds the download plus install steps. The same DMG stays at https://mac.talktype.app/downloads/TalkType.dmg, so a lost copy is never a lost purchase." } },
-          { "@type": "Question", "name": "Does it work in password fields?", "acceptedAnswer": { "@type": "Answer", "text": "No, by design. macOS blocks anything that types for you inside a password box, and TalkType does not try to get around that. Anywhere a paste lands, dictation lands." } },
+          { "@type": "Question", "name": "Does it work in password fields?", "acceptedAnswer": { "@type": "Answer", "text": "No, by design. macOS blocks anything that types inside a password box, and TalkType does not try to get around that. Anywhere a paste lands, dictation lands." } },
           { "@type": "Question", "name": "Which Macs are supported?", "acceptedAnswer": { "@type": "Answer", "text": "macOS 13 Ventura or newer, Apple Silicon or Intel. The DMG carries one universal binary." } }
         ]
       }
@@ -132,16 +132,14 @@
       <img class="hero-ghost" src="assets/ghost.svg" alt="">
       <div class="kicker" style="margin-top: 22px"><span class="dot" aria-hidden="true"></span> macOS menu bar · one payment</div>
       <h1 class="display">Hold Option.<br>Speak. <span class="grad">Release.</span></h1>
-      <p class="lede">A ghost lives in the menu bar and turns speech into clean text at the cursor. Apple on-device by default. Deepgram or Gemini when the words matter more than the wait.</p>
+      <p class="lede">A ghost in the menu bar. Talk into any app and clean text lands at the cursor. On-device by default, nothing uploaded.</p>
       <div class="hero-actions">
         <a class="pill pill-hot" href="/buy">Buy for Mac — A$29</a>
         <a class="pill pill-quiet" href="#how">See how it works</a>
       </div>
       <div class="trust">
         <span>Notarized by Apple</span><i aria-hidden="true"></i>
-        <span>Universal · Apple Silicon + Intel</span><i aria-hidden="true"></i>
-        <span>macOS 13 or newer</span><i aria-hidden="true"></i>
-        <span>English + Spanish</span>
+        <span>macOS 13 or newer</span>
       </div>
 
       <!-- product stage -->
@@ -205,41 +203,7 @@
         <div class="step">
           <span class="n">3</span>
           <h3>Release</h3>
-          <p>Punctuated text lands at the cursor and waits on the clipboard, in case the cursor moved.</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ───────────────────────────── features ───────────────────────────── -->
-  <section class="section">
-    <div class="wrap">
-      <div style="max-width: 640px">
-        <div class="kicker"><span class="dot" aria-hidden="true"></span> What it is</div>
-        <h2 class="section-title" style="margin-top: 16px">Small on purpose.</h2>
-      </div>
-
-      <div class="features">
-        <div class="feature">
-          <span class="glyph" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2.5"/><path d="M8 21h8M12 18v3"/><path d="M7 8h6M7 11.5h9"/></svg>
-          </span>
-          <h3>Every app that takes text</h3>
-          <p>Slack, Mail, VS Code, Notes, Terminal, a browser form. Dictation follows the cursor, not the app.</p>
-        </div>
-        <div class="feature">
-          <span class="glyph" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4.5 6v5.5c0 4.6 3.2 8 7.5 9.5 4.3-1.5 7.5-4.9 7.5-9.5V6z"/><path d="m9 12 2.2 2.2L15.5 10"/></svg>
-          </span>
-          <h3>On-device by default</h3>
-          <p>Apple's recogniser runs on the Neural Engine. Audio stays on the Mac unless a cloud key is added on purpose.</p>
-        </div>
-        <div class="feature">
-          <span class="glyph" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v9M14.6 9.4c-.6-.7-1.5-1.1-2.6-1.1-1.4 0-2.4.8-2.4 1.9 0 1.2 1 1.7 2.6 2 1.6.3 2.6.8 2.6 2 0 1.1-1 1.9-2.6 1.9-1.1 0-2-.4-2.6-1.1"/></svg>
-          </span>
-          <h3>Owned, not rented</h3>
-          <p>A$29 once, and it stays paid. Nothing meters takes, nothing counts them, no account gets created. Cloud keys sit in the macOS Keychain.</p>
+          <p>Punctuated text lands at the cursor — Slack, Mail, Notes, Terminal, any field that takes a paste.</p>
         </div>
       </div>
     </div>
@@ -249,25 +213,24 @@
   <section class="section" id="engines">
     <div class="wrap">
       <div style="max-width: 640px">
-        <div class="kicker"><span class="dot" aria-hidden="true"></span> Three engines, one ghost</div>
+        <div class="kicker"><span class="dot" aria-hidden="true"></span> Optional · off by default</div>
         <h2 class="section-title" style="margin-top: 16px">Pick the trade-off.</h2>
-        <p class="lede">Keep audio on the Mac, stream it to Deepgram while talking, or hand a finished transcript to Gemini for a tidy-up. The menu switches between them.</p>
       </div>
 
       <div class="engines">
         <div class="engine-row">
           <h3>Apple on-device</h3>
-          <p>The default. Runs on the Neural Engine, works on a plane, sends nothing anywhere. Needs on-device recognition for the selected language.</p>
+          <p>The default. Runs on the Neural Engine, works on a plane, sends nothing anywhere. Needs the language installed in macOS first.</p>
           <span class="badge">No key · offline</span>
         </div>
         <div class="engine-row">
           <h3>Deepgram Nova-3</h3>
-          <p>Streaming cloud recognition with a personal key. Words appear while speaking, which makes long takes feel shorter.</p>
+          <p>Streaming cloud recognition with a personal key. Words show up while talking.</p>
           <span class="badge">Own key</span>
         </div>
         <div class="engine-row">
           <h3>Gemini polish</h3>
-          <p>An optional pass that turns rambling into tidy prose, with a custom vocabulary for names, brands and slang.</p>
+          <p>Rambling in, tidy prose out. Names, brands and slang come out spelled the way they should.</p>
           <span class="badge">Optional</span>
         </div>
       </div>
@@ -312,11 +275,11 @@
       </div>
 
       <div class="faq">
-        <details open>
+        <details>
           <summary>Why a DMG instead of the Mac App Store?</summary>
           <p>The App Store edition can hear a shortcut, but it cannot type into another app. Pasting at the cursor needs a permission Apple only grants outside the sandbox. The direct build is notarized by Apple and opens without a warning.</p>
         </details>
-        <details>
+        <details open>
           <summary>Where does the audio go?</summary>
           <p>Nowhere by default. Apple's on-device recogniser keeps it on the Mac. Cloud engines only run when a Deepgram or Gemini key is added, and then audio goes straight from the Mac to that provider — never through a TalkType server, because there is no TalkType server.</p>
         </details>
@@ -326,7 +289,7 @@
         </details>
         <details>
           <summary>Does it work in password fields?</summary>
-          <p>No, by design. macOS blocks anything that types for you inside a password box, and TalkType does not try to get around that. Anywhere a paste lands, dictation lands.</p>
+          <p>No, by design. macOS blocks anything that types inside a password box, and TalkType does not try to get around that. Anywhere a paste lands, dictation lands.</p>
         </details>
         <details>
           <summary>Which Macs are supported?</summary>

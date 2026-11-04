@@ -34,7 +34,7 @@
       checkout.dataset.state = 'idle';
       checkout.disabled = false;
       checkout.removeAttribute('aria-busy');
-      label.textContent = 'Continue to secure payment';
+      label.textContent = 'Pay A$29';
     };
 
     // Returning from Square can restore this page from bfcache with the button
