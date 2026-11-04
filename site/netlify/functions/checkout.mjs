@@ -13,7 +13,8 @@
 //   SQUARE_LOCATION_ID    required
 //   SQUARE_ENVIRONMENT    "production" | "sandbox"  (sandbox unless told)
 //   SQUARE_API_VERSION    optional, defaults below
-//   SITE_URL              optional, used for the post-payment redirect
+//   SITE_URL              optional; otherwise the request origin is used, which
+//                         keeps the redirect on whichever host sold the app
 
 export const PRODUCT = {
   id: 'talktype-mac',
@@ -25,7 +26,7 @@ export const PRODUCT = {
 const SANDBOX_BASE = 'https://connect.squareupsandbox.com';
 const PRODUCTION_BASE = 'https://connect.squareup.com';
 const DEFAULT_VERSION = '2026-01-22';
-const DEFAULT_SITE = 'https://talktype.app/mac';
+const DEFAULT_SITE = 'https://mac.talktype.app';
 
 const json = (body, status = 200) =>
   new Response(JSON.stringify(body), {

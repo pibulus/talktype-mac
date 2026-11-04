@@ -68,8 +68,10 @@ currency rather than assuming it.
 
 ## Hosting (live)
 
-Netlify project **talktype-mac** → https://talktype-mac.netlify.app
+Netlify project **talktype-mac** → **https://mac.talktype.app**
 (team `pibulus`, project id `cd23d988-989e-422b-ae02-1a88a371be37`).
+The `talktype-mac.netlify.app` host still answers; `mac.talktype.app` is the
+canonical one, with a Let's Encrypt certificate provisioned 2026-11-04.
 
 It is deployed as a plain static publish plus one function; no build step.
 
@@ -80,25 +82,58 @@ netlify deploy --dir . --functions netlify/functions --prod
 
 `site/` is linked to that project locally (`.netlify/state.json`, gitignored).
 
-**Current environment:** `SQUARE_ENVIRONMENT=sandbox`, sandbox token and location,
-`SITE_URL=https://talktype-mac.netlify.app`. The whole flow is live and testable
-now — Buy → Square's sandbox testing panel → back to `/thanks.html` with confetti.
+**Current environment:** `SQUARE_ENVIRONMENT=sandbox`, sandbox token and location.
+`SITE_URL` is deliberately unset — the function uses the request origin, so the
+post-payment redirect stays on whichever host sold the app (`mac.talktype.app`
+in production, a review deploy if testing elsewhere). Fallback is
+`https://mac.talktype.app`.
+
+The whole flow is live and testable now — Buy → Square's sandbox testing panel →
+back to `/thanks.html` with confetti.
 
 **To take real money:** replace the site env with the production token and set
 `SQUARE_ENVIRONMENT=production` + `SQUARE_LOCATION_ID=LS821EYMQCANH`, then redeploy
 (nothing else changes).
 
-## Domain
+## Domain — done
 
-The plan is `mac.talktype.app` → this Netlify site, and `talktype.app/mac` 301s
-to it (or serves this bundle directly once the web app's route is retired).
+- Cloudflare: `CNAME mac → talktype-mac.netlify.app`, **DNS only** (grey cloud;
+  Netlify issues the certificate, and a proxied record would double-TLS).
+- Netlify: `custom_domain = mac.talktype.app`, certificate issued, `http` 301s
+  to `https`.
+- Canonical and `og:url` in `index.html` + `buy.html` point at
+  `https://mac.talktype.app/`.
 
-1. Cloudflare DNS for `talktype.app`: add
-   `CNAME mac → talktype-mac.netlify.app` (DNS only, grey cloud — Netlify issues
-   the certificate).
-2. Netlify → Project configuration → Domain management → Add `mac.talktype.app`.
-3. Then update the canonical / `og:url` in `index.html` + `buy.html` to
-   `https://mac.talktype.app/`.
+### `talktype.app/mac` is NOT redirected yet — on purpose
+
+The old SvelteKit page still sells A$29 through a working Square order. The new
+shop's checkout is still **sandbox**, so it cannot take money. Until a production
+token is live on this site, 301-ing `/mac` would remove the only purchase path.
+
+When production payments are verified, add to the talktype.app repo's
+`netlify.toml` and deploy:
+
+```toml
+[[redirects]]
+  from = "/mac"
+  to = "https://mac.talktype.app/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/mac/*"
+  to = "https://mac.talktype.app/:splat"
+  status = 301
+  force = true
+```
+
+### App Store Connect URLs
+
+| field | value |
+|---|---|
+| Support URL | `https://mac.talktype.app/support` |
+| Marketing URL | `https://mac.talktype.app/` |
+| Privacy policy URL | `https://mac.talktype.app/privacy` |
 
 ### Sandbox token note
 
