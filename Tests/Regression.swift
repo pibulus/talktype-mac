@@ -365,6 +365,18 @@ extension AppDelegate {
         pump(0.02)
         expect(AuditKeychain.writes == 0, "KeySetupCardView must never auto-save on appear")
 
+        // A clipboard read is only legal from the explicit paste button, never on appear.
+        // Count reads through the seam so a silent snoop fails here instead of passing.
+        var clipboardReads = 0
+        let originalClipboardReader = KeySetupCardView.readClipboardString
+        KeySetupCardView.readClipboardString = { clipboardReads += 1; return nil }
+        let snoopHost = NSHostingView(rootView: KeySetupCardView(kind: .deepgram, p: .light, embedded: false, onSaved: {}))
+        snoopHost.frame = NSRect(x: 0, y: 0, width: 320, height: 280)
+        snoopHost.layoutSubtreeIfNeeded()
+        pump(0.02)
+        KeySetupCardView.readClipboardString = originalClipboardReader
+        expect(clipboardReads == 0, "KeySetupCardView read NSPasteboard on appear (\(clipboardReads) reads)")
+
         let sovereignForbidden = try! NSRegularExpression(pattern: "\\b(you|your|yours|yourself)\\b", options: [.caseInsensitive])
         let aiForbidden = try! NSRegularExpression(pattern: "\\bAI\\b", options: [])
         for (tableName, table) in [("strings", L10n.strings), ("modeStrings", L10n.modeStrings)] {

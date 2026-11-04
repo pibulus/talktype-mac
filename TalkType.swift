@@ -433,18 +433,19 @@ enum TalkTypeConfig {
                 return "" // Keep the old value for a later migration attempt.
             }
             UserDefaults.standard.removeObject(forKey: deepgramKeyStorageKey)
+            if UserDefaults.standard.string(forKey: engineStorageKey) == nil {
+                UserDefaults.standard.set("deepgram", forKey: engineStorageKey)
+            }
             return legacy
         }
         return ""
     }
     
     static var isUsingDeepgram: Bool {
-        let hasKey = !deepgramApiKey.isEmpty
-        guard hasKey else { return false }
+        guard !deepgramApiKey.isEmpty else { return false }
         if let selected = UserDefaults.standard.string(forKey: engineStorageKey) {
             return selected == "deepgram"
         }
-        UserDefaults.standard.set("deepgram", forKey: engineStorageKey)
         return true
     }
 
@@ -635,7 +636,14 @@ enum KeychainHelper {
     }
 
     private static func checked(_ status: OSStatus, allowMissing: Bool = false, reading: Bool = false) -> Bool {
-        if status == errSecSuccess || (allowMissing && status == errSecItemNotFound) { return true }
+        if status == errSecSuccess || (allowMissing && status == errSecItemNotFound) {
+            if status == errSecSuccess {
+                DispatchQueue.main.async {
+                    if !reportedReadFailures.isEmpty { reportedReadFailures.removeAll() }
+                }
+            }
+            return true
+        }
         let detail = SecCopyErrorMessageString(status, nil) as String? ?? "Status \(status)"
         DispatchQueue.main.async {
             // SwiftUI may read configuration again when the HUD changes. Report a
@@ -720,6 +728,7 @@ struct TranscriptRecord: Identifiable, Codable, Equatable {
 // MARK: - History Store
 class HistoryStore: ObservableObject {
     static let shared = HistoryStore()
+    private static let saveQueue = DispatchQueue(label: "com.pibulus.talktype.history-save", qos: .utility)
     @Published var records: [TranscriptRecord] = []
     
     init() {
@@ -753,13 +762,20 @@ class HistoryStore: ObservableObject {
     }
     
     func clear() {
-        records.removeAll()
-        save()
+        if Thread.isMainThread {
+            records.removeAll()
+            save()
+        } else {
+            DispatchQueue.main.async {
+                self.records.removeAll()
+                self.save()
+            }
+        }
     }
     
     private func save() {
         let snapshot = self.records
-        DispatchQueue.global(qos: .utility).async {
+        Self.saveQueue.async {
             if let data = try? JSONEncoder().encode(snapshot) {
                 UserDefaults.standard.set(data, forKey: TalkTypeConfig.historyStorageKey)
             }
@@ -4282,6 +4298,8 @@ struct KeySetupCardView: View {
 
     @State private var keyInput: String = ""
     @State private var revealKey: Bool = false
+    static var readClipboardString: () -> String? = { NSPasteboard.general.string(forType: .string) }
+
     @State private var isValidating: Bool = false
     @State private var validationSuccess: String? = nil
     @State private var validationError: String? = nil
@@ -4502,7 +4520,7 @@ struct KeySetupCardView: View {
     }
 
     private func pasteFromClipboardAndValidate() {
-        guard let clip = NSPasteboard.general.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines),
+        guard let clip = Self.readClipboardString()?.trimmingCharacters(in: .whitespacesAndNewlines),
               !clip.isEmpty else {
             validationError = L10n.t("keyEmptyError")
             return
