@@ -112,16 +112,13 @@ enum PTTTrigger: String, CaseIterable, Identifiable {
 
 // MARK: - Transcription Language
 enum TranscriptionLanguage: String, CaseIterable {
-    case auto
+    // Two languages, two buttons. "Auto" asked a question the app had already
+    // answered, and offline it could only ever pick one anyway.
     case en
     case es
 
     var title: String {
         switch self {
-        case .auto:
-            // Bilingual is a cloud trick. Offline the recogniser holds one language
-            // at a time, so don't promise two.
-            return TalkTypeConfig.isUsingDeepgram ? L10n.t("auto") : L10n.t("autoSingle")
         case .en: return L10n.t("english")
         case .es: return L10n.t("spanish")
         }
@@ -129,7 +126,6 @@ enum TranscriptionLanguage: String, CaseIterable {
 
     var shortBadge: String {
         switch self {
-        case .auto: return "EN·ES"
         case .en: return "EN"
         case .es: return "ES"
         }
@@ -137,7 +133,6 @@ enum TranscriptionLanguage: String, CaseIterable {
 
     var pillLabel: String {
         switch self {
-        case .auto: return TalkTypeConfig.isUsingDeepgram ? "Bilingual" : "Auto"
         case .en: return "English"
         case .es: return "Español"
         }
@@ -145,12 +140,6 @@ enum TranscriptionLanguage: String, CaseIterable {
 
     var appleLocale: Locale {
         switch self {
-        case .auto:
-            let isSpanish = Locale.current.identifier.starts(with: "es") || Locale.preferredLanguages.first?.starts(with: "es") == true
-            if isSpanish {
-                return Locale.current.identifier.starts(with: "es") ? Locale.current : Locale(identifier: "es-MX")
-            }
-            return Locale(identifier: "en-US")
         case .en: return Locale(identifier: "en-US")
         case .es:
             if Locale.current.identifier.starts(with: "es") {
@@ -169,7 +158,6 @@ enum TranscriptionLanguage: String, CaseIterable {
 
     var deepgramLanguage: String {
         switch self {
-        case .auto: return "multi"
         case .en: return "en"
         case .es: return "es"
         }
@@ -179,8 +167,7 @@ enum TranscriptionLanguage: String, CaseIterable {
 // MARK: - Localization
 enum L10n {
     static func t(_ key: String) -> String {
-        let isSpanish = TalkTypeConfig.language == .es || (TalkTypeConfig.language == .auto && (Locale.current.identifier.starts(with: "es") || Locale.preferredLanguages.first?.starts(with: "es") == true))
-        let lang = isSpanish ? "es" : "en"
+        let lang = TalkTypeConfig.language == .es ? "es" : "en"
         if let val = modeStrings[key]?[lang] ?? modeStrings[key]?["en"] {
             return val
         }
@@ -242,8 +229,6 @@ enum L10n {
     #endif
 
     static let strings: [String: [String: String]] = [
-        "auto": ["en": "Bilingual (English + Español)", "es": "Bilingüe (Español + Inglés)"],
-        "autoSingle": ["en": "Auto (one language at a time)", "es": "Automático (un idioma a la vez)"],
         "english": ["en": "English", "es": "Inglés"],
         "spanish": ["en": "Spanish", "es": "Español"],
         "language": ["en": "Language", "es": "Idioma"],
@@ -427,10 +412,23 @@ enum TalkTypeConfig {
     }
     #endif
 
+    /// Legacy "auto" (and a first launch with no stored choice) resolves to the
+    /// machine's own language rather than a hardcoded English.
+    static var systemDefaultLanguage: TranscriptionLanguage {
+        Locale.current.identifier.lowercased().hasPrefix("es") ? .es : .en
+    }
+
+    static func resolvedLanguage(raw: String?) -> TranscriptionLanguage {
+        guard let raw = raw, let lang = TranscriptionLanguage(rawValue: raw) else {
+            return systemDefaultLanguage
+        }
+        return lang
+    }
+
     static var language: TranscriptionLanguage {
         get {
-            let raw = UserDefaults.standard.string(forKey: languageStorageKey) ?? TranscriptionLanguage.auto.rawValue
-            return TranscriptionLanguage(rawValue: raw) ?? .auto
+            let raw = UserDefaults.standard.string(forKey: languageStorageKey)
+            return resolvedLanguage(raw: raw)
         }
         set {
             UserDefaults.standard.set(newValue.rawValue, forKey: languageStorageKey)
@@ -4182,7 +4180,7 @@ struct OnboardingView: View {
     var appDelegate: AppDelegate
     var onComplete: () -> Void
 
-    @AppStorage(TalkTypeConfig.languageStorageKey) private var storedLanguage: String = TranscriptionLanguage.auto.rawValue
+    @AppStorage(TalkTypeConfig.languageStorageKey) private var storedLanguage: String = ""
     @AppStorage(TalkTypeConfig.engineStorageKey) private var storedEngine: String = "apple"
     @State private var micGranted: Bool = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
     #if MAS_BUILD
@@ -4480,7 +4478,7 @@ struct OnboardingView: View {
             // Clean 3-Segment Capsule Track for Language
             HStack(spacing: 3) {
                 ForEach(TranscriptionLanguage.allCases, id: \.rawValue) { lang in
-                    let isSelected = (TranscriptionLanguage(rawValue: storedLanguage) ?? .auto) == lang
+                    let isSelected = TalkTypeConfig.resolvedLanguage(raw: storedLanguage) == lang
                     Button(action: {
                         storedLanguage = lang.rawValue
                         NSSound(named: "Pop")?.play()
@@ -4587,7 +4585,7 @@ struct OnboardingView: View {
                         .fixedSize(horizontal: false, vertical: true)
 
                     HStack(spacing: 6) {
-                        let activeOffline = (TranscriptionLanguage(rawValue: storedLanguage) ?? .auto).offlineActiveCode
+                        let activeOffline = TalkTypeConfig.resolvedLanguage(raw: storedLanguage).offlineActiveCode
                         Button(action: { storedLanguage = TranscriptionLanguage.en.rawValue }) {
                             Text("English")
                                 .font(.system(size: 11, weight: .bold, design: .rounded))
@@ -4838,7 +4836,7 @@ struct ContentView: View {
     @AppStorage("talktypeDictationCount") private var dictationCount: Int = 0
     @AppStorage("talktypeSuperchargeDismissed") private var superchargeDismissed: Bool = false
     @AppStorage("talktypeHistorySortNewestFirst") private var sortNewestFirst: Bool = true
-    @AppStorage(TalkTypeConfig.languageStorageKey) private var storedLanguage: String = TranscriptionLanguage.auto.rawValue
+    @AppStorage(TalkTypeConfig.languageStorageKey) private var storedLanguage: String = ""
     @State private var isConfirmingClear: Bool = false
     @State private var hasDeepgramKey: Bool = !TalkTypeConfig.deepgramApiKey.isEmpty
     @State private var wordmarkScale: CGFloat = 1.0
@@ -4897,7 +4895,7 @@ struct ContentView: View {
     }
 
     private var activeLanguage: TranscriptionLanguage {
-        TranscriptionLanguage(rawValue: storedLanguage) ?? .auto
+        TalkTypeConfig.resolvedLanguage(raw: storedLanguage)
     }
 
     // Whisper-quiet footer bar for 1-click Language & Voice Engine switching

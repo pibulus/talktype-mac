@@ -282,9 +282,11 @@ extension AppDelegate {
         expect(!app.uiState.showOnboarding && TalkTypeConfig.isOnboardingCompleted, "completeOnboarding did not persist")
         print("PASS onboarding lifecycle & Step 3 live sandbox auto-paste")
 
-        // Verify Bilingual language routing & Deepgram key validation
-        expect(TranscriptionLanguage.auto.deepgramLanguage == "multi", "Bilingual auto mode must route to Deepgram language=multi")
+        // Two languages, two buttons. Legacy "auto" must migrate, never crash.
         expect(TranscriptionLanguage.en.deepgramLanguage == "en" && TranscriptionLanguage.es.deepgramLanguage == "es", "Explicit language codes mismatch")
+        expect(TranscriptionLanguage.allCases.count == 2, "Language picker should offer exactly EN and ES")
+        expect(TalkTypeConfig.resolvedLanguage(raw: "auto") == TalkTypeConfig.systemDefaultLanguage, "Legacy auto must resolve to the system language")
+        expect(TalkTypeConfig.resolvedLanguage(raw: nil) == TalkTypeConfig.systemDefaultLanguage, "Missing choice must resolve to the system language")
         app.promptDeepgramKey()
         expect(app.uiState.activeKeySetup == .deepgram, "promptDeepgramKey did not activate in-popover Deepgram setup")
         app.promptGeminiKey()
