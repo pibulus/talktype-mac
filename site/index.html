@@ -90,10 +90,10 @@
         "@type": "FAQPage",
         "@id": "https://mac.talktype.app/#faq",
         "mainEntity": [
-          { "@type": "Question", "name": "Why a DMG instead of the Mac App Store?", "acceptedAnswer": { "@type": "Answer", "text": "The App Store edition can hear a shortcut, but it cannot type into another app. Pasting at the cursor needs a permission Apple only grants outside the sandbox. The direct build is notarized by Apple and opens without a warning." } },
-          { "@type": "Question", "name": "Where does the audio go?", "acceptedAnswer": { "@type": "Answer", "text": "Nowhere by default. Apple's on-device recogniser keeps it on the Mac. Cloud engines only run when a Deepgram or Gemini key is added, and then audio goes straight from the Mac to that provider, never through a TalkType server, because there is no TalkType server." } },
-          { "@type": "Question", "name": "What happens after payment?", "acceptedAnswer": { "@type": "Answer", "text": "Square sends a receipt, and the confirmation page holds the download plus install steps. The same DMG stays at https://mac.talktype.app/downloads/TalkType.dmg, so a lost copy is never a lost purchase." } },
-          { "@type": "Question", "name": "Does it work in password fields?", "acceptedAnswer": { "@type": "Answer", "text": "No, by design. macOS blocks anything that types inside a password box, and TalkType does not try to get around that. Anywhere a paste lands, dictation lands." } },
+          { "@type": "Question", "name": "Why a DMG instead of the Mac App Store?", "acceptedAnswer": { "@type": "Answer", "text": "The store version cannot paste into other apps — Apple only allows that outside the App Store. This build is notarized, so it opens without a warning." } },
+          { "@type": "Question", "name": "Where does the audio go?", "acceptedAnswer": { "@type": "Answer", "text": "Stays on the Mac. Apple's speech engine does the listening right there. If a Deepgram or Gemini key is added, audio goes from the Mac to that service and nowhere else." } },
+          { "@type": "Question", "name": "What happens after payment?", "acceptedAnswer": { "@type": "Answer", "text": "Square sends a receipt, and the next page has the download and the install steps. The same DMG stays at https://mac.talktype.app/downloads/TalkType.dmg, so a lost copy is never a lost purchase." } },
+          { "@type": "Question", "name": "Does it work in password fields?", "acceptedAnswer": { "@type": "Answer", "text": "No. macOS blocks anything that types into a password box, and that is the right call. Anywhere a paste works, dictation works." } },
           { "@type": "Question", "name": "Which Macs are supported?", "acceptedAnswer": { "@type": "Answer", "text": "macOS 13 Ventura or newer, Apple Silicon or Intel. The DMG carries one universal binary." } }
         ]
       }
@@ -132,7 +132,7 @@
       <img class="hero-ghost" src="assets/ghost.svg" alt="">
       <div class="kicker" style="margin-top: 22px"><span class="dot" aria-hidden="true"></span> macOS menu bar · one payment</div>
       <h1 class="display">Hold Option.<br>Speak. <span class="grad">Release.</span></h1>
-      <p class="lede">A ghost in the menu bar. Talk into any app and clean text lands at the cursor. On-device by default, nothing uploaded.</p>
+      <p class="lede">A ghost in the menu bar. Talk into any app and clean text lands where the cursor is. It stays on the Mac.</p>
       <div class="hero-actions">
         <a class="pill pill-hot" href="/buy">Buy for Mac — A$29</a>
         <a class="pill pill-quiet" href="#how">See how it works</a>
@@ -167,7 +167,7 @@
             <div class="bars"><i></i><i></i><i></i><i></i><i></i></div>
             <div class="text" data-hud-text>and the questionable playlist…</div>
           </div>
-          <div class="hud-caption">↑ over any app · bottom-centre by default</div>
+          <div class="hud-caption">↑ over any app</div>
 
           <div class="mini-history" aria-hidden="true">
             <div class="mh-head">Recent · 50 takes</div>
@@ -184,26 +184,26 @@
   <section class="section" id="how">
     <div class="wrap">
       <div style="max-width: 620px">
-        <div class="kicker"><span class="dot" aria-hidden="true"></span> Three seconds to learn</div>
+        <div class="kicker"><span class="dot" aria-hidden="true"></span> Nothing to set up</div>
         <h2 class="section-title" style="margin-top: 16px">A thumb, not a settings panel.</h2>
-        <p class="lede">No window to open, no dock icon to find. The whole interaction is one key and one release.</p>
+        <p class="lede">No window to open, no dock icon to find. That is the whole app.</p>
       </div>
 
       <div class="steps">
         <div class="step">
           <span class="n">1</span>
           <h3>Hold <kbd>⌥</kbd></h3>
-          <p>Either ⌥ Option key, anywhere on the Mac. A quick tap switches to hands-free for longer thoughts.</p>
+          <p>Either ⌥ Option key, in any app. A quick tap keeps it listening hands-free.</p>
         </div>
         <div class="step">
           <span class="n">2</span>
           <h3>Say the thing</h3>
-          <p>A small capsule floats over every window and tracks the take. Pause as long as the thought takes.</p>
+          <p>A small capsule floats over the window and follows along. Take as long as the thought takes.</p>
         </div>
         <div class="step">
           <span class="n">3</span>
           <h3>Release</h3>
-          <p>Punctuated text lands at the cursor — Slack, Mail, Notes, Terminal, any field that takes a paste.</p>
+          <p>Clean text lands at the cursor. Slack, Mail, Notes, Terminal, anywhere with a text box.</p>
         </div>
       </div>
     </div>
@@ -214,23 +214,23 @@
     <div class="wrap">
       <div style="max-width: 640px">
         <div class="kicker"><span class="dot" aria-hidden="true"></span> Optional · off by default</div>
-        <h2 class="section-title" style="margin-top: 16px">Pick the trade-off.</h2>
+        <h2 class="section-title" style="margin-top: 16px">Three ways to listen.</h2>
       </div>
 
       <div class="engines">
         <div class="engine-row">
           <h3>Apple on-device</h3>
-          <p>The default. Runs on the Neural Engine, works on a plane, sends nothing anywhere. Needs the language installed in macOS first.</p>
+          <p>Comes built in. Works on a plane, in a studio, with the wifi off.</p>
           <span class="badge">No key · offline</span>
         </div>
         <div class="engine-row">
           <h3>Deepgram Nova-3</h3>
-          <p>Streaming cloud recognition with a personal key. Words show up while talking.</p>
+          <p>Words show up while talking.</p>
           <span class="badge">Own key</span>
         </div>
         <div class="engine-row">
           <h3>Gemini polish</h3>
-          <p>Rambling in, tidy prose out. Names, brands and slang come out spelled the way they should.</p>
+          <p>Tidies a take into paragraphs, with names spelled right.</p>
           <span class="badge">Optional</span>
         </div>
       </div>
@@ -259,7 +259,7 @@
         <div class="buy-side">
           <a class="pill pill-hot" href="/buy">Buy for Mac — A$29</a>
           <a class="pill pill-quiet pill-sm" href="https://mac.talktype.app/downloads/TalkType.dmg">Already purchased · Download</a>
-          <p class="small">Card and wallet payments handled by Square. No account is created anywhere.</p>
+          <p class="small">Card and wallet payments handled by Square. No account to make.</p>
           <p class="small" style="margin-top: 10px">Payment trouble or a lost download: <a href="/support">support</a>.</p>
         </div>
       </div>
@@ -277,19 +277,19 @@
       <div class="faq">
         <details>
           <summary>Why a DMG instead of the Mac App Store?</summary>
-          <p>The App Store edition can hear a shortcut, but it cannot type into another app. Pasting at the cursor needs a permission Apple only grants outside the sandbox. The direct build is notarized by Apple and opens without a warning.</p>
+          <p>The store version cannot paste into other apps — Apple only allows that outside the App Store. This build is notarized, so it opens without a warning.</p>
         </details>
         <details open>
           <summary>Where does the audio go?</summary>
-          <p>Nowhere by default. Apple's on-device recogniser keeps it on the Mac. Cloud engines only run when a Deepgram or Gemini key is added, and then audio goes straight from the Mac to that provider — never through a TalkType server, because there is no TalkType server.</p>
+          <p>Stays on the Mac. Apple's speech engine does the listening right there. If a Deepgram or Gemini key is added, audio goes from the Mac to that service and nowhere else.</p>
         </details>
         <details>
           <summary>What happens after payment?</summary>
-          <p>Square sends a receipt, and the confirmation page holds the download plus install steps. The same DMG stays at <a href="https://mac.talktype.app/downloads/TalkType.dmg">mac.talktype.app/downloads/TalkType.dmg</a>, so a lost copy is never a lost purchase.</p>
+          <p>Square sends a receipt, and the next page has the download and the install steps. The same DMG stays at <a href="https://mac.talktype.app/downloads/TalkType.dmg">mac.talktype.app/downloads/TalkType.dmg</a>, so a lost copy is never a lost purchase.</p>
         </details>
         <details>
           <summary>Does it work in password fields?</summary>
-          <p>No, by design. macOS blocks anything that types inside a password box, and TalkType does not try to get around that. Anywhere a paste lands, dictation lands.</p>
+          <p>No. macOS blocks anything that types into a password box, and that is the right call. Anywhere a paste works, dictation works.</p>
         </details>
         <details>
           <summary>Which Macs are supported?</summary>
