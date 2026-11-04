@@ -247,9 +247,6 @@ enum L10n {
         "noRecentTranscripts": ["en": "No Recent Transcripts", "es": "Sin transcripciones recientes"],
         "recentTranscripts": ["en": "Recent Transcripts", "es": "Transcripciones recientes"],
         "historyEmpty": ["en": "History empty", "es": "Historial vacío"],
-        "historyEdit": ["en": "Edit", "es": "Editar"],
-        "historySave": ["en": "Save", "es": "Guardar"],
-        "historyCancel": ["en": "Cancel", "es": "Cancelar"],
         "aboutTalkType": ["en": "About TalkType…", "es": "Acerca de TalkType…"],
         "conversationsMode": ["en": "Conversations", "es": "Conversaciones"],
         "conversationsHelp": ["en": "Labels who said what when more than one person is talking. Needs the cloud engine.", "es": "Etiqueta quién dijo qué cuando habla más de una persona. Necesita el motor en la nube."],
@@ -641,7 +638,7 @@ enum KeychainHelper {
 // MARK: - History Item
 struct TranscriptRecord: Identifiable, Codable, Equatable {
     let id: UUID
-    var text: String
+    let text: String
     let timestamp: Date
     let engine: String
     
@@ -684,18 +681,6 @@ class HistoryStore: ObservableObject {
     func delete(id: UUID) {
         DispatchQueue.main.async {
             self.records.removeAll { $0.id == id }
-            self.save()
-        }
-    }
-
-    /// Correct a misheard word after the fact. The live HUD stays read-only on
-    /// purpose: dictation is one gesture, editing is a separate, calmer moment.
-    func update(id: UUID, text: String) {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        DispatchQueue.main.async {
-            guard let index = self.records.firstIndex(where: { $0.id == id }) else { return }
-            self.records[index].text = trimmed
             self.save()
         }
     }
@@ -3792,11 +3777,6 @@ struct HistoryRecordCard: View {
     let p: Palette
     let onCopy: () -> Void
     let onDelete: () -> Void
-    let onSave: (String) -> Void
-
-    @State private var isEditing = false
-    @State private var draft = ""
-    @FocusState private var editingFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -3807,63 +3787,15 @@ struct HistoryRecordCard: View {
 
                 Spacer()
 
-                if isEditing {
-                    Button(L10n.t("historyCancel")) {
-                        isEditing = false
-                        editingFocused = false
-                    }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 10.5, weight: .semibold, design: .rounded))
-                    .foregroundStyle(p.inkSoft.opacity(0.7))
-
-                    Button(L10n.t("historySave")) {
-                        onSave(draft)
-                        isEditing = false
-                        editingFocused = false
-                    }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 10.5, weight: .bold, design: .rounded))
-                    .foregroundStyle(TT.hot)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3.5)
-                    .background(TT.hot.opacity(0.14))
-                    .clipShape(Capsule())
-                } else {
-                    Button(L10n.t("historyEdit")) {
-                        draft = record.text
-                        isEditing = true
-                        editingFocused = true
-                    }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 10.5, weight: .semibold, design: .rounded))
-                    .foregroundStyle(p.inkSoft.opacity(0.7))
-
-                    CopyPillButton(isCopied: isCopied, action: onCopy)
-                }
+                CopyPillButton(isCopied: isCopied, action: onCopy)
             }
             .padding(.top, 1)
 
-            if isEditing {
-                TextEditor(text: $draft)
-                    .font(.system(size: 12.5, weight: .medium, design: .monospaced))
-                    .foregroundStyle(p.ink)
-                    .scrollContentBackground(.hidden)
-                    .frame(minHeight: 54, maxHeight: 130)
-                    .padding(6)
-                    .background(p.paperLit)
-                    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .strokeBorder(TT.hot.opacity(0.35), lineWidth: 1)
-                    )
-                    .focused($editingFocused)
-            } else {
-                Text(record.text)
-                    .font(.system(size: 12.5, weight: .medium, design: .monospaced))
-                    .lineSpacing(2.5)
-                    .foregroundStyle(p.ink)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
+            Text(record.text)
+                .font(.system(size: 12.5, weight: .medium, design: .monospaced))
+                .lineSpacing(2.5)
+                .foregroundStyle(p.ink)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(12)
         .background(p.card)
@@ -5395,9 +5327,6 @@ struct ContentView: View {
                                     withAnimation(.easeOut(duration: 0.2)) {
                                         history.delete(id: record.id)
                                     }
-                                },
-                                onSave: { edited in
-                                    history.update(id: record.id, text: edited)
                                 }
                             )
                         }
