@@ -14,8 +14,8 @@ Strictly **English** and **Spanish** — auto-detects your macOS system locale o
 
 ## The shortcut
 
-- **Direct build:** hold either ⌥ Option key to dictate and release to finish. A tap shorter than 280 ms starts hands-free recording; tap again to finish. Other modifier choices are available in the menu. Global modifier monitoring requires Accessibility; the menu-bar control works without it. There is no Escape-to-cancel or ordinary-key cancellation handler.
-- **Mac App Store build:** hold ⌃⌥ Space to dictate and release to copy. This Carbon hotkey does not require Accessibility. If another app has registered the shortcut, TalkType reports the conflict and remains usable from the menu bar.
+- **Direct build:** hold either ⌥ Option key to dictate and release to finish. A tap shorter than 280 ms starts hands-free recording; tap again to finish. Other modifier choices are available in the menu. Global modifier monitoring requires Accessibility; the menu-bar control works without it. Press `Escape` while listening to cancel a take cleanly without copying or saving partial text.
+- **Mac App Store build:** hold ⌃⌥ Space to dictate and release to copy (or click the ghost inside the popover to start and click again to finish). Press `Escape` while listening to cancel cleanly. This Carbon hotkey does not require Accessibility. If another app has registered the shortcut, TalkType reports the conflict and remains usable from the menu bar.
 - **During processing:** another take is blocked until the current transcript is delivered. Fast releases are consumed rather than discarded by a time-based debounce.
 
 ## The engine
@@ -60,7 +60,7 @@ Still on you, in order:
 2. **Provisioning profile.** Create a Mac App Store Connect profile for `com.pibulus.talktype` and save it as `TalkType.provisionprofile` (gitignored); the script embeds it as `Contents/embedded.provisionprofile`. Whether a sandboxed `Apple Distribution` app with only basic entitlements can be submitted *without* one is **unverified** — the 2026-11-02 audit could not settle it without an upload, and Xcode always embeds one. Settle it with `altool --validate-app` before the first submission.
 3. **App record and privacy.** Use the same bundle id and Productivity category. Complete privacy answers for the actual release, including optional Deepgram audio and Gemini transcript processing and the providers' retention practices. BYOK and opt-in defaults alone do not determine the correct privacy label.
 4. **Build & validate.** `VERSION=1.0 BUILD_NUMBER=2 ./build.sh mas` — bump `BUILD_NUMBER` on every upload, it defaults to `1` — then `xcrun altool --validate-app -f dist/mas/TalkType-1.0.pkg -t macos --apiKey … --apiIssuer …` or drag the .pkg into Transporter.
-5. **Screenshots.** 2880×1800 (or 1440×900) PNGs. The current `screenshots/appstore-2880x1800.png` is **not submit-ready**: it is a clipped dictation about a missing HUD, and it shows the direct build's Right ⌥ Option shortcut. Recapture with a clean sample transcript and ⌃⌥ Space.
+5. **Screenshots.** Crisp `2880×1800` Retina PNGs live in `screenshots/appstore/` (`01-dictate-anywhere-2880x1800.png`, `02-history-and-vocabulary-2880x1800.png`, `03-private-on-device-2880x1800.png`) plus `screenshots/appstore-2880x1800.png`, generated via `swift scripts/generate-mas-screenshots.swift`.
 6. **Review notes.** Explain that this is a menu bar app with no Dock icon (`LSUIElement`). Grant microphone and Speech Recognition access, then open TextEdit, hold ⌃⌥ Space, speak, release, and press ⌘V. MAS delivery is always clipboard-only and never requires Accessibility. Explain how to select a supported local language and configure the optional cloud services.
 7. **Intel.** Builds are universal by default (`UNIVERSAL` defaults to `1` in `build.sh`), so both the `.pkg` and the `.dmg` carry arm64 and x86_64. Set `UNIVERSAL=0` for an arm64-only build.
 

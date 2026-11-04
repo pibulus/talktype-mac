@@ -131,9 +131,9 @@ When production payments are verified, add to the talktype.app repo's
 
 | field | value |
 |---|---|
-| Support URL | `https://mac.talktype.app/support` |
-| Marketing URL | `https://mac.talktype.app/` |
-| Privacy policy URL | `https://mac.talktype.app/privacy` |
+| Support URL | `https://mac.talktype.app/appstore-support` |
+| Marketing URL | *(leave blank in App Store Connect — avoids Guideline 3.1.1 cross-link)* |
+| Privacy policy URL | `https://mac.talktype.app/appstore-privacy` |
 
 ### Sandbox token note
 
