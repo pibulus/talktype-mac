@@ -251,8 +251,8 @@ enum L10n {
         "conversationsMode": ["en": "Conversations", "es": "Conversaciones"],
         "conversationsHelp": ["en": "Labels who said what when more than one person is talking. Needs the cloud engine.", "es": "Etiqueta quién dijo qué cuando habla más de una persona. Necesita el motor en la nube."],
         "conversationsNeedsCloud": ["en": "Conversations needs the cloud engine — pick Voice Mode first.", "es": "Conversaciones necesita el motor en la nube — elige el modo de voz primero."],
-        "aboutBlurb": ["en": "Menu bar dictation that runs on the Mac's own speech engine. No account, nothing uploaded.", "es": "Dictado en la barra de menús que corre en el motor de voz del Mac. Sin cuenta, sin subir nada."],
-        "madeBy": ["en": "Made by Pablo in Melbourne", "es": "Hecho por Pablo en Melbourne"],
+        "aboutBlurb": ["en": "I talk faster than I type, so I made TalkType.\n\nA little ghost in the menu bar that turns talking into words. The Mac listens on its own, so nothing is uploaded and nothing counts down.", "es": "Hablo más rápido de lo que escribo, así que hice TalkType.\n\nUn pequeño fantasma en la barra de menús que convierte el habla en palabras. El Mac escucha por su cuenta: nada se sube y no hay contador."],
+        "madeBy": ["en": "made by pablo.", "es": "hecho por pablo."],
         "pushToTalkKey": ["en": "Push to Talk Key", "es": "Tecla pulsar para hablar"],
         "transcriptionEngine": ["en": "Voice Mode", "es": "Modo de voz"],
         "appleSpeech": ["en": "Mac Built-in (Offline · Private)", "es": "Integrado en Mac (sin conexión · privado)"],
@@ -3692,7 +3692,9 @@ struct TabPill: View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 11, weight: .bold, design: .rounded))
-                .padding(.horizontal, 10)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .padding(.horizontal, 9)
                 .padding(.vertical, 4)
                 .background(
                     isSelected
@@ -5117,9 +5119,15 @@ struct ContentView: View {
 
             Spacer(minLength: 0)
 
-            Text(L10n.t("madeBy"))
-                .font(.system(size: 10.5, weight: .medium, design: .rounded))
-                .foregroundStyle(p.inkSoft.opacity(0.55))
+            HStack(alignment: .firstTextBaseline) {
+                Text("(•‿•)")
+                    .font(.system(size: 11.5, weight: .medium, design: .monospaced))
+                    .foregroundStyle(p.inkSoft.opacity(0.5))
+                Spacer(minLength: 0)
+                Text(L10n.t("madeBy"))
+                    .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                    .foregroundStyle(p.inkSoft.opacity(0.55))
+            }
         }
         .padding(14)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
