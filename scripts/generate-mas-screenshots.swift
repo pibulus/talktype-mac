@@ -589,7 +589,7 @@ func renderSlide2() {
     }
 
     // Export & Zero-Cloud Footer Badges
-    let badges = ["Up to 50 local takes", "Export All to .txt", "One-click Clear History"]
+    let badges = ["Up to 50 local takes", "Export All to .txt", "Confirmed Clear History"]
     var bx = rightX
     for b in badges {
         let f = roundedFont(25, .bold)
