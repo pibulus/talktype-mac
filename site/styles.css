@@ -19,6 +19,8 @@
   --mint: #2bb59a;
   --focus: #c94b8c;
   --grad: linear-gradient(120deg, #ff60e0 0%, #ff82ca 34%, #ff9a85 64%, #ffb060 86%, #ffcf40 100%);
+  /* Same hues, dropped in lightness — the pastel gradient only clears 1.4:1 as text. */
+  --grad-ink: linear-gradient(120deg, #a8256f 0%, #b03a72 34%, #a04a35 64%, #8a5320 86%, #7a5600 100%);
   --hot: linear-gradient(135deg, #ff82ca 0%, #ffb060 100%);
   --hot-deep: linear-gradient(135deg, #f76cbb 0%, #f79f4c 100%);
   --shadow-soft: 0 18px 44px rgba(30, 23, 20, 0.08);
@@ -153,7 +155,7 @@ h1.display {
   font-weight: 800;
 }
 h1.display .grad {
-  background: var(--grad);
+  background: var(--grad-ink);
   -webkit-background-clip: text; background-clip: text;
   -webkit-text-fill-color: transparent; color: transparent;
 }
@@ -239,7 +241,6 @@ h2.section-title {
   font-family: var(--mono); font-size: 13.5px; line-height: 1.5; color: var(--ink);
   overflow: hidden;
 }
-.pop-transcript .hint { color: rgba(30, 23, 20, 0.42); font-weight: 500; }
 .pop-transcript .caret { display: inline-block; width: 7px; height: 15px; margin-left: 2px; vertical-align: -2px; background: var(--pink); animation: blink 1.1s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
 
@@ -313,20 +314,6 @@ h2.section-title {
   display: inline-block; padding: 1px 7px; border-radius: 6px; font: 700 14px/1.5 var(--mono);
   background: var(--paper); border: 1px solid var(--line); box-shadow: 0 2px 0 rgba(30, 23, 20, 0.06);
 }
-
-/* ---------------------------------------------------------------- features */
-
-.features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 44px; }
-.feature { padding: 4px 2px; }
-.feature .glyph {
-  width: 52px; height: 52px; border-radius: 16px; display: inline-flex; align-items: center; justify-content: center;
-  background: linear-gradient(160deg, rgba(255, 130, 202, 0.18), rgba(255, 176, 96, 0.15));
-  color: #9c4675; border: 1px solid rgba(255, 130, 202, 0.30);
-  box-shadow: 0 8px 18px rgba(255, 130, 202, 0.14);
-}
-.feature .glyph svg { width: 26px; height: 26px; }
-.feature h3 { margin: 16px 0 6px; font-size: 18px; letter-spacing: -0.02em; }
-.feature p { color: var(--ink-soft); font-size: 14.5px; }
 
 .engines { margin-top: 44px; border-top: 1px solid var(--line); }
 .engine-row {
@@ -477,7 +464,7 @@ h2.section-title {
 @media (max-width: 900px) {
   .stage { flex-direction: column; gap: 34px; padding: 40px 24px; }
   .hud-wrap { align-items: center; }
-  .steps, .features { grid-template-columns: 1fr; }
+  .steps { grid-template-columns: 1fr; }
   .pricing-card { grid-template-columns: 1fr; gap: 28px; padding: 30px; }
   .buy-side { border-left: none; border-top: 1px solid var(--line); padding-left: 0; padding-top: 26px; }
   .checkout-grid { grid-template-columns: 1fr; gap: 30px; }
@@ -543,7 +530,7 @@ button.pill:disabled { cursor: progress; opacity: 0.9; }
 .paid-note {
   display: inline-flex; align-items: center; gap: 8px; margin-top: 16px;
   padding: 8px 14px; border-radius: 999px; font-size: 13.5px; font-weight: 600;
-  color: #1f7a63; background: rgba(43, 181, 154, 0.12); border: 1px solid rgba(43, 181, 154, 0.3);
+  color: #1a6b55; background: rgba(43, 181, 154, 0.12); border: 1px solid rgba(43, 181, 154, 0.3);
 }
 .paid-note svg { width: 15px; height: 15px; }
 
@@ -637,3 +624,11 @@ h1.display { text-wrap: balance; }
     text-underline-offset: 3px; justify-content: center;
   }
 }
+
+/* An author `display` on a class beats the UA [hidden] rule, so `/thanks`
+   announced "Payment received" to every visitor. Restore the attribute. */
+[hidden] { display: none !important; }
+.pill[aria-disabled="true"] { cursor: progress; }
+#checkout-error:focus-visible { outline: 2.5px solid var(--focus); outline-offset: 3px; }
+.faq summary::after { content: '+' / ''; }
+.faq details[open] summary::after { content: '–' / ''; }

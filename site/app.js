@@ -32,7 +32,7 @@
 
     const reset = () => {
       checkout.dataset.state = 'idle';
-      checkout.disabled = false;
+      checkout.removeAttribute('aria-disabled');
       checkout.removeAttribute('aria-busy');
       label.textContent = 'Pay A$29';
     };
@@ -44,7 +44,7 @@
     checkout.addEventListener('click', async () => {
       if (checkout.dataset.state === 'busy') return;
       checkout.dataset.state = 'busy';
-      checkout.disabled = true;
+      checkout.setAttribute('aria-disabled', 'true');
       checkout.setAttribute('aria-busy', 'true');
       label.textContent = 'Opening Square…';
       if (error) error.hidden = true;
@@ -66,7 +66,7 @@
         window.location.assign(data.checkoutUrl);
       } catch (e) {
         reset();
-        if (error) error.hidden = false;
+        if (error) { error.hidden = false; error.tabIndex = -1; error.focus(); }
       }
     });
   }
@@ -150,7 +150,7 @@
 
   // Soft reveal for sections. Off by default without IntersectionObserver.
   if ('IntersectionObserver' in window && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    const targets = document.querySelectorAll('.step, .feature, .engine-row, .pricing-card, .faq details');
+    const targets = document.querySelectorAll('.step, .engine-row, .pricing-card, .faq details');
     targets.forEach((el) => {
       el.style.opacity = '0';
       el.style.transform = 'translateY(14px)';
