@@ -1,77 +1,118 @@
-# TalkType — Mac App Store listing draft
+# TalkType — App Store Connect field sheet
 
-This is listing copy and a product-page plan. The app ships as a **paid download**: one price, no trial, no StoreKit, no subscription. Anything below that promises a trial or an unlock is a bug in this file.
+Paste-ready. Everything here matches the **MAS build** (`⌃⌥ Space`, clipboard
+delivery, no Accessibility), not the direct DMG. If a field here disagrees with
+the app, the app wins and this file gets fixed.
 
-## Positioning
+State: paid download, no trial, no StoreKit, no account.
 
-A little ghost in the menu bar that turns speech into text you can use right away.
+---
 
-## English (US)
+## Fields
 
-**Name**
+| Field | Value |
+|---|---|
+| Name (30 max) | `TalkType: Voice to Text` |
+| Subtitle (30 max) | `Say it messy. Get it clean.` |
+| Category | Productivity (secondary: Utilities) |
+| Keywords (100 max) | `dictation,voice to text,speech to text,transcribe,voice typing,notes,memo,microphone,writing` |
+| Support URL | `https://mac.talktype.app/support` |
+| Marketing URL | `https://mac.talktype.app/` |
+| Privacy policy URL | `https://mac.talktype.app/privacy` |
+| Copyright | `2026 Pablo Alvarado` |
+| SKU | `talktype-mac` |
+| Bundle ID | `com.pibulus.talktype` |
+| Price | US$19.99 launch month, then US$29.99 |
 
-TalkType: Voice to Text
+**Promotional text** (170 max, editable without a new build)
 
-**Subtitle**
+```
+Meet the little ghost in your Mac's menu bar. Hold ⌃⌥ Space, say what you mean, get words you can use.
+```
 
-Say it messy. Get it clean.
+Never put the direct-sale price or a link to mac.talktype.app in any store field:
+guideline 3.1.1 treats that as steering buyers outside the store. The promo field
+is the one place that can change without a new build.
 
-**Promotional text**
+---
 
-Meet the little ghost in your Mac’s menu bar. Say what you mean, get words you can use.
+## Description
 
-**Description**
+```
+A little ghost lives in your Mac's menu bar and turns speech into clean text, right where the cursor is.
 
-> Do not paste this section into App Store Connect as written. It promises a
-> 50-dictation trial and a lifetime unlock; the build has no StoreKit and no
-> counter, so submitting it would be a guideline 2.3.1 / 3.1.1 rejection.
-> Ship the copy only after the paywall exists, or cut the trial sentence.
+Hold ⌃⌥ Space in any app, speak naturally, and let go. The words land in your clipboard, ready for ⌘V — in Mail, Notes, Slack, Terminal, or anything else that takes text.
 
-Meet the little ghost in your Mac’s menu bar. TalkType turns spoken thoughts into text you can copy into the app you’re using.
+THREE ENGINES, ONE GHOST
+• Apple on-device — free, offline, and private. Audio never leaves your Mac.
+• Deepgram Nova-3 — optional streaming recognition with your own key, for long takes.
+• Gemini polish — an optional pass that turns rambling into tidy prose.
 
-Tap to start, speak naturally, and keep recent transcripts close at hand. Add names and phrases to custom vocabulary to help recognition get them right.
+BUILT TO STAY OUT OF THE WAY
+• Recent transcripts in the menu bar, ready to copy or clear
+• Custom vocabulary for names, brands and slang
+• English and Spanish, with automatic system-language detection
+• One keyboard shortcut, no account, no subscription, no telemetry
+• Menu bar only — no Dock icon, no windows to manage
 
-- Dictation from the menu bar
-- English and Spanish
-- Custom vocabulary for names and phrases
-- Recent transcripts you can copy or delete
-- Optional Deepgram live transcription
-- Optional Gemini text polish
+Optional cloud engines use your own API keys. Provider terms and usage charges
+may apply, and the audio goes straight from your Mac to that provider.
 
-One purchase, no account, no subscription. Optional cloud engines use your own API keys.
+Made in Melbourne by Pablo.
+```
 
-Optional cloud engines use your own API keys; provider terms and usage charges may apply.
+No trial claims, no price comparisons, no links to the direct store.
 
-**Keywords**
+---
 
-dictation,voice to text,speech to text,transcribe,voice typing,notes,memo,microphone,writing
+## Review notes
 
-## Purchase plan (decided)
+```
+TalkType is a menu bar utility (LSUIElement). It has no Dock icon and no main window.
 
-- **Paid app, one price.** No trial, no in-app purchase, no StoreKit, nothing to restore.
-- Price: **US$19.99 for the launch month, then US$29.99** (App Store Connect auto-sets the AU storefront).
-- Direct sale on talktype.app/mac is **A$59** (~US$39) — the same product at the same value, with no store fee in the middle. Never mention that inside the app.
-- No subscription and no TalkType-hosted transcription charges. Optional provider usage remains on the user’s own provider account.
+1. Launch the app. A ghost appears in the menu bar; the popover card opens on the right of the menu bar.
+2. macOS asks for Microphone access, and for Speech Recognition the first time on-device dictation runs. Both are needed for the built-in engine.
+3. Click the ghost (or press ⌃⌥ Space) and speak. Release to finish. The transcript is copied to the clipboard and appears in the History tab. Press ⌘V in any app to use it.
+4. Right-click the ghost for settings: voice engine, custom vocabulary, language, privacy policy, quit.
+5. No account, no login, no server operated by the developer. Cloud engines (Deepgram, Gemini) are off by default and only run after the user pastes their own API key; audio goes from the Mac directly to that provider.
 
-## App Store icon
+There is no trial, no purchase flow inside the app, and no external store link.
+```
 
-`screenshots/appicon-1024.png` — 1024×1024, no transparency, exported from `Assets/AppIcon.icns`.
+---
 
-## Screenshot story
+## App privacy answers
 
-Use real captures from the Mac App Store build, with short captions and one consistent peach, pink, and cream treatment.
+- **Data collection:** *No, we do not collect data from this app.*
+- Nothing reaches a TalkType server (there isn't one), no analytics, no
+  identifiers, no tracking.
+- Add one nuance in the notes if asked: cloud engines are opt-in, run on the
+  user's own provider account, and stay off until a key is entered.
 
-1. **Say it messy. Get it clean.** Show the ghost and a short, polished sample transcript.
-2. **A little ghost, right in your menu bar.** Show the real start-dictation interaction.
-3. **Give it your words.** Show custom vocabulary with a friendly example name.
-4. **Your recent words, close by.** Show transcript history and its delete controls.
-5. **Choose your speech setup.** Show Apple Speech and the optional cloud choices with accurate labels.
+---
 
-Keep every screenshot’s controls and behavior true to the shipped App Store build. Do not promise a global shortcut or automatic paste unless that exact build supports it.
+## Screenshots
 
-## Still needed before submission
+One is enough to submit, five is better. `2880 × 1800` (or `1440 × 900`).
 
-- Finalize the in-app privacy link (the MAS build currently opens the *web app* policy — point it at a Mac-specific one) and the App Store privacy answers: **Data Not Collected**.
-- Confirm the App Store build’s dictation, clipboard, shortcut, and cloud behavior, then revise any copy that depends on it.
-- Localize the approved listing and screenshot captions into Spanish.
-- Replace the current App Store screenshot with a clean, intentional sample transcript.
+**Recipe for a clean one** (this is the current blocker — the checked-in image
+is a bug report):
+
+1. Launch the MAS build, click the ghost.
+2. Type a friendly, finished-looking sample into the popover — or dictate one.
+3. `⌘⇧4`, then press `Space`, then click the popover. macOS saves it to the
+   Desktop as a window shot with a soft shadow.
+4. Scale to 2880×1800 on the cream background, keep the copy true to the MAS
+   build (`⌃⌥ Space`, "copied to clipboard", never "Right ⌥ Option").
+
+---
+
+## Before submitting
+
+1. Download a Mac App Store provisioning profile for `com.pibulus.talktype` and
+   drop it at `TalkType.provisionprofile` (the audit's finding M5).
+2. `VERSION=1.0 BUILD_NUMBER=2 ./build.sh mas` — the build number must increase
+   on every upload.
+3. `xcrun altool --validate-app -f dist/TalkType-1.0.pkg -t macos --apiKey … --apiIssuer …`
+4. Upload with Transporter, then fill the fields above.
+5. Keep `SQUARE`/direct pricing out of the app and out of this listing.
