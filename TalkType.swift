@@ -246,6 +246,8 @@ enum L10n {
         "conversationsNeedsCloud": ["en": "Conversations needs the cloud engine — pick Voice Mode first.", "es": "Conversaciones necesita el motor en la nube — elige el modo de voz primero."],
         "aboutBlurb": ["en": "I talk faster than I type, so I made TalkType.\n\nA little ghost in the menu bar that turns talking into words. The Mac listens on its own, so nothing is uploaded and nothing counts down.\n\nA Deepgram key makes it sharper. Better names, better punctuation, better in a noisy room.", "es": "Hablo más rápido de lo que escribo, así que hice TalkType.\n\nUn pequeño fantasma en la barra de menús que convierte el habla en palabras. El Mac escucha por su cuenta: nada se sube y no hay contador.\n\nUna clave de Deepgram lo afina. Mejores nombres, mejor puntuación, mejor en un sitio ruidoso."],
         "madeBy": ["en": "made by pablo", "es": "hecho por pablo"],
+        "madeByPablo": ["en": "Made by Pablo…", "es": "Hecho por Pablo…"],
+        "showMore": ["en": "Show more", "es": "Ver más"],
         "pushToTalkKey": ["en": "Push to Talk Key", "es": "Tecla pulsar para hablar"],
         "transcriptionEngine": ["en": "Voice Mode", "es": "Modo de voz"],
         "appleSpeech": ["en": "Mac Built-in (Offline · Private)", "es": "Integrado en Mac (sin conexión · privado)"],
@@ -1681,6 +1683,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         let setupItem = NSMenuItem(title: L10n.t("runSetupGuide"), action: #selector(runSetupGuide), keyEquivalent: "")
         setupItem.target = self
         appMenu.addItem(setupItem)
+
+        let privacyItem = NSMenuItem(title: L10n.t("privacyPolicy"), action: #selector(openPrivacyPolicy), keyEquivalent: "")
+        privacyItem.target = self
+        appMenu.addItem(privacyItem)
 
         let voiceParent = NSMenuItem(title: "Voice", action: nil, keyEquivalent: "")
         voiceParent.submenu = voiceMenu
@@ -4838,6 +4844,8 @@ struct ContentView: View {
     @AppStorage("talktypeHistorySortNewestFirst") private var sortNewestFirst: Bool = true
     @AppStorage(TalkTypeConfig.languageStorageKey) private var storedLanguage: String = ""
     @State private var isConfirmingClear: Bool = false
+    /// History pages in rather than dumping all fifty takes into one scroll strip.
+    @State private var visibleHistoryCount = 12
     @State private var hasDeepgramKey: Bool = !TalkTypeConfig.deepgramApiKey.isEmpty
     @State private var wordmarkScale: CGFloat = 1.0
     var appDelegate: AppDelegate
@@ -5167,7 +5175,7 @@ struct ContentView: View {
 
             VStack(spacing: 6) {
                 aboutRow(L10n.t("talkTypeWeb"), "https://talktype.app")
-                aboutRow(L10n.t("privacyPolicy"), "https://talktype.app/privacy")
+                aboutRow(L10n.t("madeByPablo"), "https://madebypablo.app")
             }
 
             Spacer(minLength: 0)
@@ -5375,7 +5383,7 @@ struct ContentView: View {
 
                 ScrollView(.vertical, showsIndicators: false) {
                     LazyVStack(spacing: 10) {
-                        ForEach(sortedRecords) { record in
+                        ForEach(sortedRecords.prefix(visibleHistoryCount)) { record in
                             HistoryRecordCard(
                                 record: record,
                                 isCopied: copiedId == record.id,
@@ -5395,6 +5403,24 @@ struct ContentView: View {
                                     }
                                 }
                             )
+                        }
+
+                        if sortedRecords.count > visibleHistoryCount {
+                            Button {
+                                withAnimation(.easeOut(duration: 0.18)) {
+                                    visibleHistoryCount += 12
+                                }
+                            } label: {
+                                Text("\(L10n.t("showMore")) (\(sortedRecords.count - visibleHistoryCount))")
+                                    .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                                    .foregroundStyle(TT.hot)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 7)
+                                    .background(TT.hot.opacity(0.12))
+                                    .clipShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.top, 2)
                         }
                     }
                     .padding(4)
