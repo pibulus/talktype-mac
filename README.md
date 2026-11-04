@@ -33,12 +33,14 @@ UNIVERSAL=0 ./build.sh mas          # arm64-only; universal is the default
 VERSION=1.0.1 BUILD_NUMBER=2 ./build.sh mas
 LOCAL_BUILD=1 ./build.sh direct    # explicitly labeled local test DMG; no notarization upload
 ALLOW_ADHOC_MAS=1 ./build.sh mas    # sandboxed local test when MAS certificates are absent
-open build/TalkType.app
+open build/direct/TalkType.app
 ```
 
-Install with `ditto build/TalkType.app /Applications/TalkType.app`.
+Install with `ditto build/direct/TalkType.app /Applications/TalkType.app`.
 
-The direct release target requires a `Developer ID Application` certificate, enables Hardened Runtime, and packages a DMG via `create-dmg` with an `hdiutil` fallback. It uses `NOTARY_PROFILE`, or a stored `AC_PASSWORD` / `talktype-notary` profile, to notarize and staple. Missing tickets, notarization failures, and Gatekeeper rejection fail the release build and remove the image. Local test images use the `-LOCAL-ONLY.dmg` suffix. Build commands replace `build/` and `dist/`; preserve a release before building the other mode.
+The direct release target requires a `Developer ID Application` certificate, enables Hardened Runtime, and packages a DMG via `create-dmg` with an `hdiutil` fallback. It uses `NOTARY_PROFILE`, or a stored `AC_PASSWORD` / `talktype-notary` profile, to notarize and staple. Missing tickets, notarization failures, and Gatekeeper rejection fail the release build and remove the image. Local test images use the `-LOCAL-ONLY.dmg` suffix.
+
+Each lane keeps its own folder — `build/direct/`, `build/mas/`, `dist/direct/`, `dist/mas/` — and only clears its own. Building the DMG can no longer delete the pkg, or the other way round, and `dist/direct/TalkType-1.0.dmg` stays put while you work on the App Store target.
 
 If `notarytool` returns HTTP 403 with a missing or expired agreement, the Apple Developer account holder must resolve the required agreement before notarization can continue. Replacing a working Keychain profile does not resolve that server-side rejection.
 
@@ -57,7 +59,7 @@ Still on you, in order:
 1. **Certificates.** "Apple Distribution" (or "3rd Party Mac Developer Application") and "3rd Party Mac Developer Installer" in the login keychain. The script picks them up.
 2. **Provisioning profile.** Create a Mac App Store Connect profile for `com.pibulus.talktype` and save it as `TalkType.provisionprofile` (gitignored); the script embeds it as `Contents/embedded.provisionprofile`. Whether a sandboxed `Apple Distribution` app with only basic entitlements can be submitted *without* one is **unverified** — the 2026-11-02 audit could not settle it without an upload, and Xcode always embeds one. Settle it with `altool --validate-app` before the first submission.
 3. **App record and privacy.** Use the same bundle id and Productivity category. Complete privacy answers for the actual release, including optional Deepgram audio and Gemini transcript processing and the providers' retention practices. BYOK and opt-in defaults alone do not determine the correct privacy label.
-4. **Build & validate.** `VERSION=1.0 BUILD_NUMBER=2 ./build.sh mas` — bump `BUILD_NUMBER` on every upload, it defaults to `1` — then `xcrun altool --validate-app -f dist/TalkType-1.0.pkg -t macos --apiKey … --apiIssuer …` or drag the .pkg into Transporter.
+4. **Build & validate.** `VERSION=1.0 BUILD_NUMBER=2 ./build.sh mas` — bump `BUILD_NUMBER` on every upload, it defaults to `1` — then `xcrun altool --validate-app -f dist/mas/TalkType-1.0.pkg -t macos --apiKey … --apiIssuer …` or drag the .pkg into Transporter.
 5. **Screenshots.** 2880×1800 (or 1440×900) PNGs. The current `screenshots/appstore-2880x1800.png` is **not submit-ready**: it is a clipped dictation about a missing HUD, and it shows the direct build's Right ⌥ Option shortcut. Recapture with a clean sample transcript and ⌃⌥ Space.
 6. **Review notes.** Explain that this is a menu bar app with no Dock icon (`LSUIElement`). Grant microphone and Speech Recognition access, then open TextEdit, hold ⌃⌥ Space, speak, release, and press ⌘V. MAS delivery is always clipboard-only and never requires Accessibility. Explain how to select a supported local language and configure the optional cloud services.
 7. **Intel.** Builds are universal by default (`UNIVERSAL` defaults to `1` in `build.sh`), so both the `.pkg` and the `.dmg` carry arm64 and x86_64. Set `UNIVERSAL=0` for an arm64-only build.

@@ -113,6 +113,6 @@ is a bug report):
    drop it at `TalkType.provisionprofile` (the audit's finding M5).
 2. `VERSION=1.0 BUILD_NUMBER=2 ./build.sh mas` — the build number must increase
    on every upload.
-3. `xcrun altool --validate-app -f dist/TalkType-1.0.pkg -t macos --apiKey … --apiIssuer …`
+3. `xcrun altool --validate-app -f dist/mas/TalkType-1.0.pkg -t macos --apiKey … --apiIssuer …`
 4. Upload with Transporter, then fill the fields above.
 5. Keep `SQUARE`/direct pricing out of the app and out of this listing.

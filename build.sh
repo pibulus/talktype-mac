@@ -10,11 +10,6 @@ APP_NAME="TalkType"
 VERSION="${VERSION:-1.0}"
 BUILD_NUMBER="${BUILD_NUMBER:-1}"
 SRC_FILE="TalkType.swift"
-BUILD_DIR="build"
-DIST_DIR="dist"
-APP_DIR="${BUILD_DIR}/${APP_NAME}.app"
-BIN_DIR="${APP_DIR}/Contents/MacOS"
-RES_DIR="${APP_DIR}/Contents/Resources"
 
 TARGET_MODE="${1:-direct}" # "direct" or "mas"
 UNIVERSAL="${UNIVERSAL:-1}"  # UNIVERSAL=1 builds a fat arm64 + x86_64 binary by default
@@ -23,6 +18,16 @@ case "${TARGET_MODE}" in
     direct|mas) ;;
     *) echo "Usage: ./build.sh direct|mas" >&2; exit 1 ;;
 esac
+
+# One folder per lane. Building the DMG used to wipe the pkg and vice versa,
+# because both lanes shared build/ and dist/ and cleaned them at the top.
+BUILD_ROOT="build"
+DIST_ROOT="dist"
+BUILD_DIR="${BUILD_ROOT}/${TARGET_MODE}"
+DIST_DIR="${DIST_ROOT}/${TARGET_MODE}"
+APP_DIR="${BUILD_DIR}/${APP_NAME}.app"
+BIN_DIR="${APP_DIR}/Contents/MacOS"
+RES_DIR="${APP_DIR}/Contents/Resources"
 
 echo "🎨 Building ${APP_NAME} v${VERSION} (${BUILD_NUMBER}) (${TARGET_MODE} target)..."
 
