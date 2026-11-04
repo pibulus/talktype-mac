@@ -7,10 +7,13 @@
   <meta name="description" content="Download TalkType for Mac and put the ghost in the menu bar.">
   <meta name="robots" content="noindex">
   <meta name="theme-color" content="#fff6e6">
+  <meta name="color-scheme" content="light">
   <link rel="icon" href="assets/ghost.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+
+<a class="skip-link" href="#main">Skip to content</a>
 
 <header class="topbar">
   <div class="wrap topbar-inner">
@@ -18,15 +21,16 @@
       <img src="assets/ghost.svg" alt="">
       TalkType <span class="tag">for Mac</span>
     </a>
-    <nav class="nav-links">
+    <nav class="nav-links" aria-label="Primary navigation">
       <a href="index.html">Mac page</a>
       <a href="https://talktype.app/extension">Extension</a>
       <a href="support.html">Support</a>
     </nav>
+    <a class="pill pill-quiet pill-sm" href="support.html">Support</a>
   </div>
 </header>
 
-<main class="thanks">
+<main id="main" class="thanks">
   <div class="wrap">
     <img class="ghost-big" src="assets/ghost.svg" alt="">
     <h1 class="display" style="font-size: clamp(36px, 5.4vw, 60px); margin-top: 20px">The ghost is yours.</h1>
@@ -64,9 +68,9 @@
       <img src="assets/ghost.svg" alt="" style="width: 24px; height: 24px">
       TalkType
     </a>
-    <nav class="footer-links">
+    <nav class="footer-links" aria-label="Footer navigation">
       <a href="https://talktype.app">talktype.app</a>
-      <a href="https://talktype.app/privacy">Privacy</a>
+      <a href="privacy.html">Privacy</a>
       <a href="support.html">Support</a>
     </nav>
     <a class="made" href="https://madebypablo.app">Made by Pablo · Melbourne · <span id="version">v1.0</span></a>

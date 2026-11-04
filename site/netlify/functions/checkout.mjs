@@ -27,6 +27,22 @@ const SANDBOX_BASE = 'https://connect.squareupsandbox.com';
 const PRODUCTION_BASE = 'https://connect.squareup.com';
 const DEFAULT_VERSION = '2026-01-22';
 const DEFAULT_SITE = 'https://mac.talktype.app';
+const ALLOWED_ORIGINS = new Set([
+  'https://mac.talktype.app',
+  'https://talktype.app'
+]);
+
+function resolveSiteUrl(context, request) {
+  const netlifySite = context?.site?.url?.replace(/\/$/, '');
+  if (netlifySite && /^https:\/\/[a-z0-9.-]+$/i.test(netlifySite)) {
+    return netlifySite;
+  }
+  const origin = request.headers.get('origin')?.replace(/\/$/, '');
+  if (origin && ALLOWED_ORIGINS.has(origin)) {
+    return origin;
+  }
+  return DEFAULT_SITE;
+}
 
 const json = (body, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -130,7 +146,7 @@ export default async function handler(request, context) {
     : (globalThis.Deno?.env?.toObject?.() || {});
   const env = { ...baseEnv };
   if (!env.SITE_URL) {
-    env.SITE_URL = context?.site?.url || request.headers.get('origin') || DEFAULT_SITE;
+    env.SITE_URL = resolveSiteUrl(context, request);
   }
 
   try {

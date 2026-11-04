@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TalkType for Mac — Support</title>
+  <meta name="description" content="Support guide for TalkType on the Mac App Store: shortcut keys, clipboard delivery, microphone and speech permissions, menu bar controls, optional cloud keys, and App Store billing.">
+  <meta name="theme-color" content="#fff6e6">
+  <meta name="color-scheme" content="light">
+  <link rel="canonical" href="https://mac.talktype.app/appstore-support">
+  <link rel="icon" href="assets/ghost.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/icon-180.png">
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="TalkType for Mac — Support">
+  <meta property="og:description" content="Shortcut keys, permissions, menu bar controls, local history, and direct human support for TalkType on macOS.">
+  <meta property="og:url" content="https://mac.talktype.app/appstore-support">
+  <meta property="og:image" content="https://mac.talktype.app/assets/icon-512.png">
+  <meta property="og:image:width" content="512">
+  <meta property="og:image:height" content="512">
+  <meta property="og:image:alt" content="TalkType ghost app icon">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="TalkType for Mac — Support">
+  <meta name="twitter:description" content="Shortcut keys, permissions, menu bar controls, local history, and direct human support for TalkType on macOS.">
+  <meta name="twitter:image" content="https://mac.talktype.app/assets/icon-512.png">
+
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="topbar">
+  <div class="wrap topbar-inner">
+    <a class="brand" href="/appstore-support">
+      <img src="assets/ghost.svg" alt="">
+      TalkType <span class="tag">for Mac</span>
+    </a>
+    <nav class="nav-links" aria-label="Support navigation">
+      <a href="/appstore-support" aria-current="page">Support</a>
+      <a href="/appstore-privacy">Privacy Policy</a>
+    </nav>
+    <div class="topbar-actions">
+      <a class="pill pill-quiet pill-sm" href="/appstore-privacy">Privacy</a>
+      <a class="pill pill-hot pill-sm" href="mailto:pibulus@gmail.com">Email support</a>
+    </div>
+  </div>
+</header>
+
+<main id="main" class="prose">
+  <div class="wrap narrow">
+    <div class="kicker"><span class="dot"></span> Mac App Store Support</div>
+    <h1>One person answers.</h1>
+    <p class="lede">One independent developer builds and supports TalkType in Melbourne. Notes sent to <a href="mailto:pibulus@gmail.com">pibulus@gmail.com</a> with the macOS version and a short description of what happened usually receive a reply within one day, Melbourne time.</p>
+
+    <div class="prose-card">
+      <h2>Everyday mechanics</h2>
+      <div class="prose-grid">
+        <div class="prose-tile">
+          <strong>Hold <kbd>⌃⌥ Space</kbd> anywhere</strong>
+          <span>Holding Control + Option + Space starts listening, and releasing finishes the take. A quick tap on <kbd>⌃⌥ Space</kbd> latches hands-free mode.</span>
+        </div>
+        <div class="prose-tile">
+          <strong>Popover ghost &amp; <kbd>Escape</kbd></strong>
+          <span>Clicking the ghost inside the menu bar popover starts a take, and a second click finishes it. Pressing <kbd>Escape</kbd> while listening cancels cleanly.</span>
+        </div>
+        <div class="prose-tile">
+          <strong>Clipboard ready for <kbd>⌘V</kbd></strong>
+          <span>Finished transcripts copy straight to the macOS clipboard so <kbd>⌘V</kbd> pastes clean text into any open document, editor, or chat box.</span>
+        </div>
+        <div class="prose-tile">
+          <strong>50 takes of local History</strong>
+          <span>Recent transcripts stay inside the History tab up to 50 takes, exportable to plain <code>.txt</code> and clearable at any time.</span>
+        </div>
+      </div>
+    </div>
+
+    <h2>Permissions on macOS</h2>
+    <p>TalkType relies on two standard macOS permissions and nothing else:</p>
+    <ul>
+      <li><strong>Microphone</strong> (<code>System Settings → Privacy &amp; Security → Microphone</code>) so the active audio input can hear speech during a take.</li>
+      <li><strong>Speech Recognition</strong> (<code>System Settings → Privacy &amp; Security → Speech Recognition</code>) so Apple's on-device recognizer can transcribe offline on the Mac's Neural Engine.</li>
+    </ul>
+    <p>When either permission was declined on first launch, toggling TalkType back on in Privacy &amp; Security and reopening the app restores dictation immediately. Right-clicking the menu bar ghost surfaces any missing permission at the top of the menu.</p>
+
+    <h2>Menu bar controls</h2>
+    <p>Right-clicking (or Control-clicking) the ghost in the macOS menu bar opens the complete control menu:</p>
+    <ul>
+      <li><strong>Voice Mode</strong> — chooses Apple's offline Neural Engine recognizer or optional cloud recognition once an API key is stored.</li>
+      <li><strong>Conversations</strong> — enables multi-speaker labels during cloud transcription takes.</li>
+      <li><strong>Auto-Polish</strong> — runs an optional prose cleanup pass after transcription when a Gemini key is configured.</li>
+      <li><strong>Custom Vocabulary</strong> — teaches preferred spellings for names, places, studios, and technical terms.</li>
+      <li><strong>Language</strong> — switches recognition between <strong>English</strong> and <strong>Español</strong>.</li>
+      <li><strong>Left/Right Click swap</strong> — flips whether a primary click opens the popover or toggles dictation directly.</li>
+      <li><strong>HUD Position</strong> — places the floating waveform capsule where it fits the display best.</li>
+      <li><strong>Launch at Login</strong> — keeps the ghost ready in the menu bar after restarting macOS.</li>
+      <li><strong>Setup Guide</strong>, <strong>Privacy Policy</strong>, and <strong>Quit</strong>.</li>
+    </ul>
+
+    <h2>Menu bar icon hidden behind the notch</h2>
+    <p>macOS hides status bar icons when the menu bar runs out of horizontal room, especially on MacBook displays with a camera housing. Closing a few neighbouring menu bar items frees space so the ghost reappears; <kbd>⌃⌥ Space</kbd> continues to work even while the icon is crowded out.</p>
+
+    <h2>Engines and privacy</h2>
+    <p>Apple's speech recognizer runs 100% offline on the Mac's Neural Engine by default — audio stays on the Mac, with zero TalkType servers, zero user accounts, zero analytics, and zero tracking. Optional personal-key cloud engines — Deepgram Nova-3 streaming to <code>api.deepgram.com</code> (with <code>mip_opt_out=true</code> model-training opt-out) and Google Gemini prose polish to <code>generativelanguage.googleapis.com</code> — remain strictly off by default until an API key is saved into the macOS Keychain (<code>kSecClassGenericPassword</code>). Full details live on the <a href="/appstore-privacy">Privacy Policy</a>.</p>
+
+    <h2>Purchases, receipts, and refunds</h2>
+    <p>Mac App Store purchases, receipts, App Store redownloads across personal Macs, and refund requests are handled directly by Apple through the App Store and <code>reportaproblem.apple.com</code>.</p>
+
+    <div class="prose-actions">
+      <a class="pill pill-hot" href="mailto:pibulus@gmail.com">Email pibulus@gmail.com</a>
+      <a class="pill pill-quiet" href="/appstore-privacy">Read the Privacy Policy</a>
+    </div>
+  </div>
+</main>
+
+<footer class="footer">
+  <div class="wrap footer-inner">
+    <a class="brand" href="/appstore-support">
+      <img src="assets/ghost.svg" alt="" width="24" height="24">
+      TalkType
+    </a>
+    <nav class="footer-links" aria-label="Footer navigation">
+      <a href="/appstore-support" aria-current="page">Support</a>
+      <a href="/appstore-privacy">Privacy Policy</a>
+      <a href="mailto:pibulus@gmail.com">pibulus@gmail.com</a>
+    </nav>
+    <span class="made">Made by Pablo · Melbourne</span>
+  </div>
+</footer>
+
+</body>
+</html>

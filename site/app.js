@@ -1,8 +1,9 @@
 // TalkType for Mac — the site's only script. Small on purpose.
 (function () {
   // The HUD strip in the hero re-reads like a live take.
+  const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const hud = document.querySelector('[data-hud-text]');
-  if (hud) {
+  if (hud && !reducedMotion) {
     const lines = [
       'and the questionable playlist…',
       'ship it friday, not monday…',
@@ -31,6 +32,7 @@
       if (checkout.dataset.state === 'busy') return;
       checkout.dataset.state = 'busy';
       checkout.disabled = true;
+      checkout.setAttribute('aria-busy', 'true');
       label.textContent = 'Opening Square…';
       if (error) error.hidden = true;
 
@@ -46,6 +48,7 @@
       } catch (e) {
         checkout.dataset.state = 'idle';
         checkout.disabled = false;
+        checkout.removeAttribute('aria-busy');
         label.textContent = 'Continue to secure payment';
         if (error) error.hidden = false;
       }

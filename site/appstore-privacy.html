@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TalkType for Mac — Privacy Policy</title>
+  <meta name="description" content="Privacy policy for TalkType on the Mac App Store: offline Neural Engine speech recognition by default, local clipboard and history, macOS Keychain storage, and zero tracking.">
+  <meta name="theme-color" content="#fff6e6">
+  <meta name="color-scheme" content="light">
+  <link rel="canonical" href="https://mac.talktype.app/appstore-privacy">
+  <link rel="icon" href="assets/ghost.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/icon-180.png">
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="TalkType for Mac — Privacy Policy">
+  <meta property="og:description" content="Audio stays on the Mac by default. Zero TalkType servers, zero accounts, zero analytics, and macOS Keychain storage for optional cloud keys.">
+  <meta property="og:url" content="https://mac.talktype.app/appstore-privacy">
+  <meta property="og:image" content="https://mac.talktype.app/assets/icon-512.png">
+  <meta property="og:image:width" content="512">
+  <meta property="og:image:height" content="512">
+  <meta property="og:image:alt" content="TalkType ghost app icon">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="TalkType for Mac — Privacy Policy">
+  <meta name="twitter:description" content="Audio stays on the Mac by default. Zero TalkType servers, zero accounts, zero analytics, and macOS Keychain storage for optional cloud keys.">
+  <meta name="twitter:image" content="https://mac.talktype.app/assets/icon-512.png">
+
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="topbar">
+  <div class="wrap topbar-inner">
+    <a class="brand" href="/appstore-support">
+      <img src="assets/ghost.svg" alt="">
+      TalkType <span class="tag">for Mac</span>
+    </a>
+    <nav class="nav-links" aria-label="Privacy navigation">
+      <a href="/appstore-support">Support</a>
+      <a href="/appstore-privacy" aria-current="page">Privacy Policy</a>
+    </nav>
+    <div class="topbar-actions">
+      <a class="pill pill-quiet pill-sm" href="/appstore-support">Support</a>
+      <a class="pill pill-hot pill-sm" href="mailto:pibulus@gmail.com">Email</a>
+    </div>
+  </div>
+</header>
+
+<main id="main" class="prose">
+  <div class="wrap narrow">
+    <div class="kicker"><span class="dot"></span> Mac App Store Privacy Policy</div>
+    <h1>Audio stays on the Mac.</h1>
+    <p class="lede">TalkType runs with zero TalkType servers, zero user accounts, zero analytics, and zero tracking. Every detail of how audio, transcripts, permissions, and optional keys behave on macOS appears below. Last updated 4 November 2026.</p>
+
+    <div class="prose-card">
+      <h2>At a glance</h2>
+      <div class="prose-grid">
+        <div class="prose-tile">
+          <strong>100% offline default</strong>
+          <span>Apple's on-device speech recognizer runs locally on the Mac's Neural Engine without uploading voice audio.</span>
+        </div>
+        <div class="prose-tile">
+          <strong>Zero telemetry</strong>
+          <span>No analytics SDKs, no crash uploaders, no advertising identifiers, and no TalkType backend server.</span>
+        </div>
+        <div class="prose-tile">
+          <strong>Keychain isolation</strong>
+          <span>Optional personal API keys stay off by default and live solely in the macOS Keychain.</span>
+        </div>
+        <div class="prose-tile">
+          <strong>Local History &amp; clipboard</strong>
+          <span>Transcripts copy to the local clipboard (<kbd>⌘V</kbd>) and keep up to 50 takes inside the sandboxed app container.</span>
+        </div>
+      </div>
+    </div>
+
+    <h2>Default on-device engine</h2>
+    <p>Out of the box, TalkType transcribes speech locally on the Mac's Neural Engine through Apple's Speech framework configured for on-device recognition. Voice audio stays on the Mac, nothing reaches this website, and no TalkType server exists to receive audio or text.</p>
+
+    <h2>Permissions used</h2>
+    <p>TalkType requests Microphone access (<code>System Settings → Privacy &amp; Security → Microphone</code>) and Speech Recognition access (<code>System Settings → Privacy &amp; Security → Speech Recognition</code>). Audio capture runs strictly during an active take started via <kbd>⌃⌥ Space</kbd> or by clicking the ghost in the menu bar popover, and stops the instant the shortcut releases, the ghost is clicked again, or <kbd>Escape</kbd> cancels the take.</p>
+
+    <h2>Optional cloud engines (strictly off by default)</h2>
+    <p>Two optional personal-key cloud integrations stay completely disabled unless an API key is added from the menu bar settings:</p>
+    <ul>
+      <li><strong>Deepgram Nova-3</strong> (<code>api.deepgram.com</code>) — streams audio directly from the Mac over encrypted TLS to Deepgram for real-time recognition and optional conversation speaker labels, sending <code>mip_opt_out=true</code> on every session to opt out of Deepgram model-improvement training.</li>
+      <li><strong>Google Gemini</strong> (<code>generativelanguage.googleapis.com</code>) — sends finished transcripts directly from the Mac over encrypted TLS to Google's Gemini endpoint for optional prose polish and custom vocabulary formatting.</li>
+    </ul>
+    <p>Those requests travel straight between the Mac and the chosen provider under that provider's own terms and privacy policy. TalkType never relays, logs, or sees the traffic. Removing a key returns TalkType strictly to offline on-device recognition.</p>
+
+    <h2>Keychain storage</h2>
+    <p>Optional API keys are stored solely inside the macOS Keychain using <code>kSecClassGenericPassword</code> items scoped to TalkType. Keys are never written to plain-text preferences, never backed up to external servers by TalkType, and never sent anywhere other than the matching provider's authentication header.</p>
+
+    <h2>Clipboard, local History, and preferences</h2>
+    <p>Completed transcripts copy locally to the macOS clipboard ready for <kbd>⌘V</kbd> in any app. Up to 50 recent takes, custom vocabulary entries, language selection (English / Español), and HUD layout preferences remain inside TalkType's sandboxed container on the Mac. Exporting History writes a plain <code>.txt</code> file to a chosen local folder, and clearing History erases stored takes immediately.</p>
+
+    <h2>App Store privacy label and contact</h2>
+    <p>On the Mac App Store, TalkType declares <strong>Data Not Collected</strong>: no analytics, no identifiers, no diagnostics, and no tracking across apps or websites. Mac App Store billing and receipts stay with Apple. Support messages sent to <a href="mailto:pibulus@gmail.com">pibulus@gmail.com</a> stay strictly within that email conversation for resolving the note.</p>
+
+    <div class="prose-actions">
+      <a class="pill pill-quiet" href="/appstore-support">Back to Support</a>
+      <a class="pill pill-hot" href="mailto:pibulus@gmail.com">Email pibulus@gmail.com</a>
+    </div>
+  </div>
+</main>
+
+<footer class="footer">
+  <div class="wrap footer-inner">
+    <a class="brand" href="/appstore-support">
+      <img src="assets/ghost.svg" alt="" width="24" height="24">
+      TalkType
+    </a>
+    <nav class="footer-links" aria-label="Footer navigation">
+      <a href="/appstore-support">Support</a>
+      <a href="/appstore-privacy" aria-current="page">Privacy Policy</a>
+      <a href="mailto:pibulus@gmail.com">pibulus@gmail.com</a>
+    </nav>
+    <span class="made">Made by Pablo · Melbourne</span>
+  </div>
+</footer>
+
+</body>
+</html>

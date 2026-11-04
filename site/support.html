@@ -3,13 +3,32 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>TalkType for Mac — support</title>
-  <meta name="description" content="Help with TalkType for Mac: install, permissions, the shortcut, lost downloads and refunds.">
+  <title>TalkType for Mac — Support</title>
+  <meta name="description" content="Support for TalkType for Mac: install, permissions, modifier shortcuts, Escape to cancel, DMG redownloads, and 30-day refunds.">
   <meta name="theme-color" content="#fff6e6">
+  <meta name="color-scheme" content="light">
+  <link rel="canonical" href="https://mac.talktype.app/support">
   <link rel="icon" href="assets/ghost.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/icon-180.png">
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="TalkType for Mac — Support">
+  <meta property="og:description" content="Direct human support for TalkType for Mac: permissions, shortcut keys, DMG downloads, and 30-day refunds.">
+  <meta property="og:url" content="https://mac.talktype.app/support">
+  <meta property="og:image" content="https://mac.talktype.app/assets/og-card.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="TalkType for Mac — the ghost in the menu bar">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="TalkType for Mac — Support">
+  <meta name="twitter:description" content="Direct human support for TalkType for Mac: permissions, shortcut keys, DMG downloads, and 30-day refunds.">
+  <meta name="twitter:image" content="https://mac.talktype.app/assets/og-card.png">
+
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+
+<a class="skip-link" href="#main">Skip to content</a>
 
 <header class="topbar">
   <div class="wrap topbar-inner">
@@ -17,51 +36,52 @@
       <img src="assets/ghost.svg" alt="">
       TalkType <span class="tag">for Mac</span>
     </a>
-    <nav class="nav-links">
+    <nav class="nav-links" aria-label="Primary navigation">
       <a href="index.html">Mac page</a>
       <a href="buy.html">Buy</a>
+      <a href="privacy.html">Privacy</a>
       <a href="https://talktype.app/extension">Extension</a>
     </nav>
     <a class="pill pill-quiet pill-sm" href="mailto:pibulus@gmail.com">Email support</a>
   </div>
 </header>
 
-<main class="prose">
+<main id="main" class="prose">
   <div class="wrap narrow">
     <div class="kicker"><span class="dot"></span> Support</div>
-    <h1 style="margin-top: 14px">Talk to a human.</h1>
-    <p class="lede">One person makes this app. Email <a href="mailto:pibulus@gmail.com">pibulus@gmail.com</a> with the macOS version and what happened — a reply usually lands within a day, Melbourne time.</p>
+    <h1>One person answers.</h1>
+    <p class="lede">One developer builds and supports TalkType in Melbourne. Notes to <a href="mailto:pibulus@gmail.com">pibulus@gmail.com</a> with the macOS version and what happened usually receive a reply within one day, Melbourne time.</p>
 
-    <h2>The ghost never appears in the menu bar</h2>
-    <p>macOS hides menu bar items when the bar is full, especially on a MacBook with a notch. Quit a few other menu bar apps, or use a manager such as Bartender, and the ghost returns. The app is still running either way.</p>
+    <h2>Menu bar ghost hidden behind the notch</h2>
+    <p>macOS hides extra menu bar items when horizontal space fills up, especially on a MacBook with a camera housing. Closing a few other menu bar items or using a bar organizer such as Ice or Bartender brings the ghost back into view. Dictation continues running either way.</p>
 
-    <h2>Nothing pastes into the app</h2>
-    <p>Automatic paste needs Accessibility: System Settings → Privacy &amp; Security → Accessibility → enable TalkType. Without it the transcript still lands on the clipboard, and ⌘V does the rest. Password fields refuse synthetic keystrokes by design and cannot be made to accept them.</p>
+    <h2>Nothing pastes automatically at the cursor</h2>
+    <p>Automatic cursor paste relies on Accessibility under <code>System Settings → Privacy &amp; Security → Accessibility → TalkType</code>. Without Accessibility enabled, finished transcripts still copy straight to the clipboard, and <kbd>⌘V</kbd> pastes them anywhere. Password and secure-input fields block synthetic keystrokes across macOS by design.</p>
 
-    <h2>Microphone or Speech Recognition was denied</h2>
-    <p>System Settings → Privacy &amp; Security → Microphone (or Speech Recognition) → enable TalkType, then quit and reopen the app. The menu shows the exact permission still missing.</p>
+    <h2>Microphone or Speech Recognition permission</h2>
+    <p>Microphone and Speech Recognition toggles live under <code>System Settings → Privacy &amp; Security</code>. Enabling TalkType there and reopening the app restores audio capture immediately. Right-clicking the menu bar ghost highlights any permission still missing.</p>
 
-    <h2>The shortcut does nothing</h2>
-    <p>Something else owns Right Option, or the keyboard layout does not report it as a modifier. The menu offers Left Option, either Option, or a standard push-to-talk key instead.</p>
+    <h2>Shortcut keys and cancelling</h2>
+    <p>Either <kbd>⌥ Option</kbd> triggers push-to-talk, and a quick tap latches hands-free mode for longer takes. When another tool claims a modifier or a compact keyboard maps keys differently, right-clicking the menu bar ghost offers Either <kbd>⌥ Option</kbd>, Right <kbd>⌥ Option</kbd>, Left <kbd>⌥ Option</kbd>, Globe / <kbd>fn</kbd>, Right <kbd>⌘</kbd>, or <kbd>⌃⌥ Space</kbd>. Pressing <kbd>Escape</kbd> while listening cancels the take cleanly without pasting.</p>
 
-    <h2>Lost the DMG</h2>
-    <p>The build stays at <a href="https://talktype.app/downloads/TalkType.dmg">talktype.app/downloads/TalkType.dmg</a>. A receipt is not required to re-download, because the app is not licensed per install and nobody enjoys a scavenger hunt.</p>
+    <h2>Redownloading the DMG</h2>
+    <p>The current notarized build stays at <a href="https://talktype.app/downloads/TalkType.dmg">talktype.app/downloads/TalkType.dmg</a>. No licence key or receipt lookup gates the download.</p>
 
     <h2>Refunds</h2>
-    <p>Email the Square receipt within 30 days and the payment is refunded, no interrogation. If the app simply did not fit, saying why helps the next build.</p>
+    <p>Forwarding the Square receipt to <a href="mailto:pibulus@gmail.com">pibulus@gmail.com</a> within 30 days triggers a full refund, no interrogation. A short line on what missed the mark helps improve the next build.</p>
 
     <h2>Privacy</h2>
-    <p>The short version: audio is processed on the Mac by default, keys live in the Keychain, and there is no analytics or account system. The longer version is on <a href="privacy.html">the privacy page</a>.</p>
+    <p>Audio stays on the Mac by default, optional keys live in the macOS Keychain, and zero analytics or account servers exist. Full details live on <a href="privacy.html">the privacy page</a>.</p>
   </div>
 </main>
 
 <footer class="footer">
   <div class="wrap footer-inner">
-    <a class="brand" href="index.html" style="font-size: 15px">
-      <img src="assets/ghost.svg" alt="" style="width: 24px; height: 24px">
+    <a class="brand" href="index.html">
+      <img src="assets/ghost.svg" alt="" width="24" height="24">
       TalkType
     </a>
-    <nav class="footer-links">
+    <nav class="footer-links" aria-label="Footer navigation">
       <a href="https://talktype.app">talktype.app</a>
       <a href="privacy.html">Privacy</a>
       <a href="mailto:pibulus@gmail.com">pibulus@gmail.com</a>
