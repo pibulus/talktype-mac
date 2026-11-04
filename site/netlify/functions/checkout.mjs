@@ -19,7 +19,7 @@
 export const PRODUCT = {
   id: 'talktype-mac',
   name: 'TalkType for Mac (Lifetime)',
-  amountCents: 4900, // A$49.00 — the one price. Mirror it in site HTML.
+  amountCents: 2900, // A$29.00 launch price (A$39 from 2026-12-04). Mirror it in site HTML.
   currency: 'AUD'
 };
 

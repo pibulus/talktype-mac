@@ -26,9 +26,9 @@ cd site && python3 -m http.server 8898
 
 ## Price
 
-**A$49 once** (about US$32). Two places must agree:
+**A$29 for the launch month** (about US$19), A$39 after 4 December. Two places must agree:
 
-- `netlify/functions/checkout.mjs` → `PRODUCT.amountCents: 4900`
+- `netlify/functions/checkout.mjs` → `PRODUCT.amountCents: 2900`
 - the visible copy: `index.html` (pricing card, CTA, meta) and `buy.html`
   (order lines, total). The OG card is baked, so regenerate it if the number moves.
 

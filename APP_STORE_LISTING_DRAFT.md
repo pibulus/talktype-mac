@@ -49,7 +49,7 @@ dictation,voice to text,speech to text,transcribe,voice typing,notes,memo,microp
 ## Purchase plan (decided)
 
 - **Paid app, one price.** No trial, no in-app purchase, no StoreKit, nothing to restore.
-- Price: **US$29.99** (App Store Connect auto-sets the AU storefront, roughly A$50).
+- Price: **US$19.99 for the launch month, then US$29.99** (App Store Connect auto-sets the AU storefront).
 - Direct sale on talktype.app/mac is **A$59** (~US$39) — the same product at the same value, with no store fee in the middle. Never mention that inside the app.
 - No subscription and no TalkType-hosted transcription charges. Optional provider usage remains on the user’s own provider account.
 
