@@ -3,361 +3,220 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>TalkType for Mac — Menu-Bar Dictation, Hold Option to Talk</title>
-  <meta name="description" content="Hold Option, speak, release: clean text at the cursor in any Mac app. Apple on-device by default, optional cloud streaming or polish. A$29 once, no subscription.">
+  <title>TalkType for Mac — Talk faster than you type.</title>
+  <meta name="description" content="For when your brain moves faster than your fingers. A little ghost in the menu bar that turns talking into text. A$29, one time, yours forever.">
   <meta name="theme-color" content="#fff6e6">
   <meta name="color-scheme" content="light">
-  <!-- Canonical host: mac.talktype.app (Netlify project talktype-mac). -->
   <link rel="canonical" href="https://mac.talktype.app/">
   <link rel="icon" href="assets/ghost.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/icon-180.png">
 
   <meta property="og:type" content="website">
-  <meta property="og:title" content="TalkType for Mac — Menu-Bar Dictation, Hold Option to Talk">
-  <meta property="og:description" content="Hold Option, speak, release: clean text at the cursor in any Mac app. A$29 once, on-device by default.">
+  <meta property="og:title" content="TalkType for Mac — Talk faster than you type.">
   <meta property="og:site_name" content="TalkType for Mac">
   <meta property="og:locale" content="en_AU">
+  <meta property="og:description" content="For when your brain moves faster than your fingers. A little ghost in the menu bar that turns talking into text. A$29, one time, yours forever.">
   <meta property="og:image" content="https://mac.talktype.app/assets/og-card.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta property="og:image:alt" content="TalkType for Mac — the ghost in the menu bar">
   <meta property="og:url" content="https://mac.talktype.app/">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="TalkType for Mac — Menu-Bar Dictation, Hold Option to Talk">
-  <meta name="twitter:description" content="Hold Option, speak, release: clean text at the cursor in any Mac app. A$29 once, on-device by default.">
+  <meta name="twitter:title" content="TalkType for Mac — Talk faster than you type.">
+  <meta name="twitter:description" content="For when your brain moves faster than your fingers. A little ghost in the menu bar that turns talking into text. A$29, one time, yours forever.">
   <meta name="twitter:image" content="https://mac.talktype.app/assets/og-card.png">
 
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@graph": [
-      {
-        "@type": "WebSite",
-        "@id": "https://mac.talktype.app/#website",
-        "url": "https://mac.talktype.app/",
-        "name": "TalkType for Mac",
-        "inLanguage": "en-AU",
-        "publisher": { "@id": "https://mac.talktype.app/#publisher" }
-      },
-      {
-        "@type": "SoftwareApplication",
-        "@id": "https://mac.talktype.app/#app",
-        "name": "TalkType for Mac",
-        "alternateName": "TalkType",
-        "applicationCategory": "ProductivityApplication",
-        "applicationSubCategory": "Dictation and speech to text",
-        "operatingSystem": "macOS 13 or later",
-        "softwareVersion": "1.0",
-        "url": "https://mac.talktype.app/",
-        "downloadUrl": "https://mac.talktype.app/downloads/TalkType.dmg",
-        "image": "https://mac.talktype.app/assets/og-card.png",
-        "description": "A menu-bar dictation utility for macOS that turns speech into clean text at the cursor. Apple's on-device recogniser by default, with optional Deepgram Nova-3 and Cloud Polish engines on a personal key.",
-        "inLanguage": ["en", "es"],
-        "featureList": [
-          "Hold Option to dictate into any Mac app",
-          "Apple on-device recognition, nothing uploaded by default",
-          "Optional Deepgram Nova-3 streaming recognition on a personal key",
-          "Optional Cloud Polish with custom vocabulary on a personal key",
-          "50 takes of local history and clipboard backup",
-          "No account, no telemetry, keys in the macOS Keychain"
-        ],
-        "offers": {
-          "@type": "Offer",
-          "price": "29.00",
-          "priceCurrency": "AUD",
-          "availability": "https://schema.org/InStock",
-          "url": "https://mac.talktype.app/buy"
-        },
-        "publisher": { "@id": "https://mac.talktype.app/#publisher" },
-        "author": { "@id": "https://mac.talktype.app/#author" }
-      },
-      {
-        "@type": "Organization",
-        "@id": "https://mac.talktype.app/#publisher",
-        "name": "Made by Pablo",
-        "url": "https://madebypablo.app",
-        "email": "pibulus@gmail.com",
-        "address": { "@type": "PostalAddress", "addressLocality": "Melbourne" }
-      },
-      {
-        "@type": "Person",
-        "@id": "https://mac.talktype.app/#author",
-        "name": "Pablo",
-        "url": "https://madebypablo.app"
-      },
-      {
-        "@type": "FAQPage",
-        "@id": "https://mac.talktype.app/#faq",
-        "mainEntity": [
-          { "@type": "Question", "name": "Why a DMG instead of the Mac App Store?", "acceptedAnswer": { "@type": "Answer", "text": "Apple's App Store restricts apps from pasting text into other windows. Since that's the entire point of TalkType, we ship it directly. The build is fully notarized by Apple, so it installs safely without warnings." } },
-          { "@type": "Question", "name": "Where does the audio go?", "acceptedAnswer": { "@type": "Answer", "text": "Stays on the Mac. Apple's speech engine does the listening right there. If an API key is added for cloud recognition or polish, audio goes from the Mac to that service and nowhere else." } },
-          { "@type": "Question", "name": "What happens after payment?", "acceptedAnswer": { "@type": "Answer", "text": "Square sends a receipt, and the next page has the download and the install steps. The same DMG stays at https://mac.talktype.app/downloads/TalkType.dmg, so a lost copy is never a lost purchase." } },
-          { "@type": "Question", "name": "Does it work in password fields?", "acceptedAnswer": { "@type": "Answer", "text": "No. macOS blocks anything that types into a password box, and that is the right call. Anywhere a paste works, dictation works." } },
-          { "@type": "Question", "name": "Which Macs are supported?", "acceptedAnswer": { "@type": "Answer", "text": "macOS 13 Ventura or newer, Apple Silicon or Intel. The DMG carries one universal binary." } }
-        ]
-      }
-    ]
+    "@type": "SoftwareApplication",
+    "name": "TalkType for Mac",
+    "operatingSystem": "macOS 13.0 or later",
+    "applicationCategory": "ProductivityApplication",
+    "description": "A little ghost in the menu bar that turns talking into text wherever your cursor is.",
+    "url": "https://mac.talktype.app/",
+    "image": "https://mac.talktype.app/assets/og-card.png",
+    "softwareVersion": "1.0",
+    "author": {
+      "@type": "Person",
+      "name": "Pablo Alvarado",
+      "url": "https://pibul.us"
+    },
+    "offers": {
+      "@type": "Offer",
+      "url": "https://mac.talktype.app/buy",
+      "price": "29.00",
+      "priceCurrency": "AUD",
+      "availability": "https://schema.org/InStock"
+    }
   }
   </script>
 
-  <link rel="stylesheet" href="styles.css?v=5">
+  <link rel="stylesheet" href="styles.css?v=8">
 </head>
 <body>
 
-<a class="skip-link" href="#main">Skip to content</a>
+  <a class="skip-link" href="#main">Skip to content</a>
 
-<header class="topbar">
-  <div class="wrap topbar-inner">
-    <a class="brand" href="/">
-      <img src="assets/ghost.svg" alt="">
-      TalkType <span class="tag">for Mac</span>
-    </a>
-    <nav class="nav-links" aria-label="Primary navigation">
-      <a href="#how">How it works</a>
-      <a href="#faq">FAQ</a>
-      <a href="https://talktype.app/extension">Extension</a>
-    </nav>
-    <a class="pill pill-hot pill-sm" href="/buy">Buy — A$29</a>
-  </div>
-</header>
-
-<main id="main">
-
-  <!-- ───────────────────────────── hero ───────────────────────────── -->
-  <section class="hero">
-    <div class="wrap">
-      <img class="hero-ghost" src="assets/ghost.svg" alt="">
-      <div class="kicker" style="margin-top: 22px"><span class="dot" aria-hidden="true"></span> Say it messy · get it clean</div>
-      <h1 class="display">Hold Option.<br>Speak. <span class="grad">Release.</span></h1>
-      <p class="lede">A little ghost in the menu bar that turns talking into text wherever your cursor is. Zero cloud uploads, zero subscriptions.</p>
-      <div class="hero-actions">
-        <a class="pill pill-hot pill-hero" href="/buy">Buy for Mac — A$29</a>
-        <a class="pill pill-quiet pill-hero" href="#how">See how it works</a>
-      </div>
-      <div class="trust">
-        <span>Notarized by Apple</span><i aria-hidden="true"></i>
-        <span>macOS 13 or newer</span>
-      </div>
-
-      <!-- Live HUD & App Stage — 1:1 port of LiveTranscriptHUDView + Popover from TalkType.swift -->
-      <div class="stage" id="hud-demo-stage">
-        <div class="hud-showcase">
-          <div class="hud-live" id="live-hud" data-phase="listening" role="region" aria-label="Interactive TalkType HUD preview">
-            <button class="hud-ghost-btn" id="hud-trigger" type="button" title="Click or hold ⌥ Option to test">
-              <span class="hud-ghost-halo" aria-hidden="true"></span>
-              <img class="hud-ghost-img" src="assets/ghost.svg" alt="TalkType Ghost">
-            </button>
-
-            <div class="hud-scroll" id="hud-scroll">
-              <div class="hud-track" id="hud-track">
-                <span class="hud-stream-text" data-hud-text>Friday works. Bring the good coffee and the questionable playlist…</span>
-              </div>
-            </div>
-
-            <div class="hud-activity" id="hud-activity" aria-hidden="true">
-              <!-- Listening state: pulsing ring + hot dot -->
-              <div class="hud-ind hud-ind-listening">
-                <span class="hud-pulse-ring"></span>
-                <span class="hud-hot-dot"></span>
-              </div>
-              <!-- Processing state: 5-bar waveform + Thinking -->
-              <div class="hud-ind hud-ind-processing">
-                <div class="hud-wave"><i></i><i></i><i></i><i></i><i></i></div>
-                <span class="hud-ind-label">Tidying…</span>
-              </div>
-              <!-- Ready state: checkmark + Pasted -->
-              <div class="hud-ind hud-ind-ready">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m4 12.5 5 5L20 6.5"/></svg>
-                <span class="hud-ind-label">Ready</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="hud-controls">
-            <span class="hud-hint" id="hud-hint">Hold <kbd>⌥ Option</kbd> right now or click the ghost to try it</span>
-          </div>
-        </div>
-
-        <div class="stage-cards">
-          <div class="popover" aria-hidden="true">
-            <div class="pop-head">
-              <div class="wordmark">Talk<em>Type</em></div>
-              <div class="tabs"><b>Live</b><i>History&nbsp;50</i></div>
-            </div>
-            <div class="pop-transcript">
-              <span data-pop-text>Friday works. Bring the good coffee and the questionable playlist. The demo script is already in the drive.</span><span class="caret"></span>
-            </div>
-            <div class="pop-ghost"><img src="assets/ghost.svg" alt=""></div>
-            <div class="pop-status">Click ghost or hold <span class="key">either ⌥ Option</span></div>
-            <div class="pop-foot">
-              <div class="seg"><span class="on">EN</span><span>ES</span></div>
-              <div class="engine-pill">On-device</div>
-            </div>
-          </div>
-
-          <div class="mini-history" aria-hidden="true">
-            <div class="mh-head">Recent · 50 takes</div>
-            <div class="mh-row" data-mh-0>Friday works. Bring the good coffee and the questionable playlist.</div>
-            <div class="mh-row" data-mh-1>Ship the beta Thursday, not Friday. All notarization checks passed.</div>
-            <div class="mh-row" data-mh-2>Invoice for the November workshop attached.</div>
-          </div>
-        </div>
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <a class="brand" href="/">
+        <img src="assets/ghost.svg" alt="" width="34" height="34">
+        <span>TalkType</span>
+        <span class="tag">for Mac</span>
+      </a>
+      <nav class="nav-links" aria-label="Primary">
+        <a href="#flow">How it works</a>
+        <a href="#pricing">Pricing</a>
+        <a href="https://talktype.app/extension">Extension</a>
+      </nav>
+      <div class="topbar-actions">
+        <a class="pill pill-hot pill-sm" href="buy.html" data-buy>Buy — A$29</a>
       </div>
     </div>
-  </section>
+  </header>
 
-  <!-- ───────────────────────────── how ───────────────────────────── -->
-  <section class="section" id="how">
-    <div class="wrap">
-      <div class="section-head">
-        <div class="kicker"><span class="dot" aria-hidden="true"></span> Nothing to set up</div>
-        <h2 class="section-title">A thumb, not a settings panel.</h2>
-        <p class="lede">No window to open, no dock icon to find. That is the whole app.</p>
-      </div>
+  <main id="main">
 
-      <ol class="steps">
-        <li class="step">
-          <span class="n" aria-hidden="true">1</span>
-          <div class="step-body">
-            <h3>Hold <kbd>⌥ Option</kbd></h3>
-            <p>Hold Option anywhere. No windows to open, no dashboard to load, no settings panel to configure. The app is just a thumb press away.</p>
+    <!-- ============================================================ SECTION 1: THE HERO (2-COLUMN: HOOK LEFT, SINGLE CAPSULE RIGHT) -->
+    <section class="hero wrap">
+      <div class="hero-spread">
+
+        <!-- Left Column: Massive Editorial Hook -->
+        <div class="hero-copy">
+          <img class="hero-ghost" src="assets/ghost.svg" alt="TalkType ghost" width="76" height="76">
+
+          <h1 class="display">
+            Talk faster than you type.
+          </h1>
+
+          <p class="lede">
+            For when your brain moves faster than your fingers. A little ghost in the menu bar that turns talking into text. No accounts to make, no subscriptions to cancel. Just hold a key, speak your mind, and let the Mac do the typing.
+          </p>
+
+          <div class="hero-actions">
+            <a class="pill pill-hot pill-hero" href="buy.html" data-buy>Buy for Mac — A$29</a>
           </div>
-        </li>
-        <li class="step">
-          <span class="n" aria-hidden="true">2</span>
-          <div class="step-body">
-            <h3>Speak.</h3>
-            <p>The ghost listens. Words unfurl in a glowing capsule hovering over your screen, so you know exactly what your Mac is hearing.</p>
+        </div>
+
+        <!-- Right Column: Single Uncluttered Glowing HUD Capsule Floating in Empty Warm Space -->
+        <div class="hero-stage-col">
+          <div id="hud-demo-stage" role="region" aria-label="Live TalkType capsule">
+            <div class="hud-ambient-glow" aria-hidden="true"></div>
+
+            <div class="hud-live" id="live-hud" data-phase="listening">
+              <button type="button" class="hud-ghost-halo" id="hud-trigger" aria-label="Try live voice transcription">
+                <img class="hud-ghost-img" src="assets/ghost.svg" alt="" width="34" height="34">
+              </button>
+              <div class="hud-stream-mask" id="hud-stream-mask">
+                <div class="hud-stream-track" id="hud-stream-track">
+                  <span class="hud-stream-text" id="hud-stream-text" data-hud-text>Running five minutes late — grab me a flat white and save the sunny table.</span>
+                </div>
+              </div>
+              <div class="hud-indicator" aria-hidden="true">
+                <div class="hud-ind-listen">
+                  <span class="hud-pulse-ring"></span>
+                  <span class="hud-pulse-dot"></span>
+                </div>
+                <div class="hud-ind-wave">
+                  <span></span><span></span><span></span><span></span><span></span>
+                </div>
+                <div class="hud-ind-ready">
+                  <svg viewBox="0 0 16 16" fill="none"><path d="M3.5 8.5L6.5 11.5L12.5 4.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  <span>Ready</span>
+                </div>
+              </div>
+            </div>
           </div>
-        </li>
-        <li class="step">
-          <span class="n" aria-hidden="true">3</span>
-          <div class="step-body">
-            <h3>Release.</h3>
-            <p>Let go. The clean text drops instantly into Slack, Notion, your code editor, or any random text box on the web. No copy-pasting.</p>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ============================================================ SECTION 2: THE FLOW (STAGGERED ASYMMETRIC BLUSH LOZENGES) -->
+    <section id="flow" class="section wrap">
+      <div class="steps-staggered">
+        <article class="step-lozenge step-left">
+          <h2>Catch the thought.</h2>
+          <p>Hold your shortcut key anywhere. Don't open a new window, don't break your flow. Just talk before you forget what you were going to say.</p>
+        </article>
+
+        <article class="step-lozenge step-right">
+          <h2>Take your time.</h2>
+          <p>A glowing capsule follows along as you speak. Stumble over your words, take a breath, pause—it waits for you.</p>
+        </article>
+
+        <article class="step-lozenge step-mid">
+          <h2>Drop it exactly where you need it.</h2>
+          <p>Let go, and the clean text lands right at your cursor. In a chat, an email, a messy web form, or a blank document. No copy-pasting required.</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- ============================================================ SECTION 3: TRANSLATED FOR HUMANS ("IT JUST WORKS.") -->
+    <section class="section wrap">
+      <div class="works-spread">
+        <div class="works-lozenge">
+          <h2>It just works.</h2>
+          <p>
+            It uses your Mac's built-in hearing, so it works perfectly on an airplane, in a cafe, or when your Wi-Fi is terrible. Want it to spell your friends' tricky names perfectly or handle a noisy room? You can give it a brain boost in the settings later. But out of the box, it’s ready to go.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ SECTION 4: THE CLOSE (CHECKOUT TICKET) -->
+    <section id="pricing" class="section wrap">
+      <div class="pricing-ticket">
+        <div class="ticket-main">
+          <h2 class="ticket-title">One price. Yours forever.</h2>
+          <div class="price">
+            <span class="cur">A$</span><span class="amount">29</span>
           </div>
-        </li>
-      </ol>
-    </div>
-  </section>
+          <p class="price-statement">A$29. No monthly fees, no meters counting down. Buy it once, and it’s yours.</p>
 
-  <!-- ───────────────────────────── engines ───────────────────────────── -->
-  <section class="section" id="engines">
-    <div class="wrap">
-      <div class="section-head">
-        <div class="kicker"><span class="dot" aria-hidden="true"></span> Optional · off by default</div>
-        <h2 class="section-title">Three ways to listen.</h2>
-        <p class="lede">On-device out of the box, with optional personal-key modes when needed.</p>
-      </div>
-
-      <div class="engines">
-        <div class="engine-row">
-          <h3>Apple on-device</h3>
-          <p>Comes built in. Works on a plane, in a studio, with the wifi off.</p>
-          <span class="badge">No key · offline</span>
+          <div class="ticket-actions">
+            <a class="pill pill-hot pill-hero" href="buy.html" data-buy>Buy for Mac — A$29</a>
+            <a class="pill pill-quiet" href="thanks.html">Already purchased · Download</a>
+          </div>
         </div>
-        <div class="engine-row">
-          <h3>Deepgram Nova-3</h3>
-          <p>Words stream onto the screen while talking. Takes an API key.</p>
-          <span class="badge">API key</span>
-        </div>
-        <div class="engine-row">
-          <h3>Cloud Polish</h3>
-          <p>Tidies a take into paragraphs, with custom names spelled right. Takes an API key.</p>
-          <span class="badge">API key · optional</span>
-        </div>
-      </div>
-    </div>
-  </section>
 
-  <!-- ───────────────────────────── pricing ───────────────────────────── -->
-  <section class="section" id="pricing">
-    <div class="wrap">
-      <div class="section-head">
-        <div class="kicker"><span class="dot" aria-hidden="true"></span> Pricing</div>
-        <h2 class="section-title">One price. No meter.</h2>
-      </div>
-
-      <div class="pricing-card">
-        <div>
-          <div class="price"><span class="cur">A$</span><span class="amount">29</span></div>
-          <p class="price-statement">A$29. One time. Yours forever.</p>
-          <p class="price-note">Lifetime licence for one Mac, every 1.x update included. About US$19 at today&#39;s rate.</p>
+        <div class="ticket-specs">
           <ul class="includes">
-            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m4 12.5 5 5L20 6.5"/></svg> Notarized DMG, opens without a warning</li>
-            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m4 12.5 5 5L20 6.5"/></svg> Universal binary — Apple Silicon and Intel</li>
-            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m4 12.5 5 5L20 6.5"/></svg> All three modes, English and Spanish, custom vocabulary, 50 takes of history</li>
-            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m4 12.5 5 5L20 6.5"/></svg> The Chrome extension, free, for every text box on the web</li>
+            <li>
+              <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4.5 10.5l3.6 3.6 7.4-8.2" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span>Lifetime license for one Mac.</span>
+            </li>
+            <li>
+              <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4.5 10.5l3.6 3.6 7.4-8.2" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span>Notarized DMG — installs safely without warnings.</span>
+            </li>
+            <li>
+              <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4.5 10.5l3.6 3.6 7.4-8.2" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span>Universal binary (Apple Silicon &amp; Intel).</span>
+            </li>
+            <li>
+              <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4.5 10.5l3.6 3.6 7.4-8.2" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span>Includes the TalkType Chrome extension.</span>
+            </li>
           </ul>
         </div>
-        <div class="buy-side">
-          <a class="pill pill-hot pill-hero" href="/buy">Buy for Mac — A$29</a>
-          <a class="pill pill-quiet pill-sm" href="https://mac.talktype.app/downloads/TalkType.dmg">Already purchased · Download</a>
-          <p class="small">Card and wallet payments handled by Square. Nothing to sign up for.</p>
-          <p class="small" style="margin-top: 10px">Payment trouble or a lost download: <a href="/support" class="inline-link">support</a>.</p>
-        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ============================================================ SECTION 5: MINIMALIST FOOTER -->
+  <footer class="footer">
+    <div class="wrap footer-inner">
+      <a class="made" href="https://pibul.us" target="_blank" rel="noopener">made by pablo<span class="made-dot">.</span></a>
+      <div class="footer-links">
+        <a href="support.html">Support &amp; FAQ</a>
+        <a href="privacy.html">Privacy</a>
       </div>
     </div>
-  </section>
+  </footer>
 
-  <!-- ───────────────────────────── faq ───────────────────────────── -->
-  <section class="section" id="faq">
-    <div class="wrap">
-      <div class="section-head">
-        <div class="kicker"><span class="dot" aria-hidden="true"></span> Good to know</div>
-        <h2 class="section-title">Before the download.</h2>
-      </div>
-
-      <div class="faq">
-        <details open>
-          <summary>Why a DMG instead of the Mac App Store?</summary>
-          <p>Apple's App Store restricts apps from pasting text into other windows. Since that's the entire point of TalkType, we ship it directly. The build is fully notarized by Apple, so it installs safely without warnings.</p>
-        </details>
-        <details open>
-          <summary>Where does the audio go?</summary>
-          <p>Stays on the Mac. Apple's speech engine does the listening right there. If an API key is added for cloud recognition or polish, audio goes from the Mac to that service and nowhere else.</p>
-        </details>
-        <details>
-          <summary>What happens after payment?</summary>
-          <p>Square sends a receipt, and the next page has the download and the install steps. The same DMG stays at <a href="https://mac.talktype.app/downloads/TalkType.dmg">mac.talktype.app/downloads/TalkType.dmg</a>, so a lost copy is never a lost purchase.</p>
-        </details>
-        <details>
-          <summary>Does it work in password fields?</summary>
-          <p>No. macOS blocks anything that types into a password box, and that is the right call. Anywhere a paste works, dictation works.</p>
-        </details>
-        <details>
-          <summary>Which Macs are supported?</summary>
-          <p>macOS 13 Ventura or newer, Apple Silicon or Intel. The DMG carries one universal binary.</p>
-        </details>
-      </div>
-    </div>
-  </section>
-
-  <!-- ───────────────────────────── who made it ───────────────────────────── -->
-  <section class="section">
-    <div class="wrap">
-      <div class="maker-note">
-        <img src="assets/ghost.svg" alt="" width="44" height="44">
-        <p class="lede">I talk faster than I type, so I made TalkType.</p>
-        <p class="maker-sub">One small thing in the menu bar. The Mac listens on its own, so nothing is uploaded and nothing counts down.</p>
-      </div>
-    </div>
-  </section>
-
-</main>
-
-<footer class="footer">
-  <div class="wrap footer-inner">
-    <a class="made" href="https://madebypablo.app">made by pablo<span class="made-dot">.</span></a>
-    <nav class="footer-links" aria-label="Footer navigation">
-      <a href="https://talktype.app">talktype.app</a>
-      <a href="/privacy">Privacy</a>
-      <a href="/support">Support</a>
-      <span class="version-stamp" id="version">v1.0</span>
-    </nav>
-  </div>
-</footer>
-
-<script src="app.js?v=4"></script>
+  <script src="app.js?v=8" defer></script>
 </body>
 </html>

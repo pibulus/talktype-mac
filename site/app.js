@@ -3,8 +3,8 @@
   const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const hudEl = document.getElementById('live-hud');
   const hudText = document.querySelector('[data-hud-text]');
-  const hudScroll = document.getElementById('hud-scroll');
-  const hudTrack = document.getElementById('hud-track');
+  const hudScroll = document.getElementById('hud-stream-mask') || document.getElementById('hud-scroll');
+  const hudTrack = document.getElementById('hud-stream-track') || document.getElementById('hud-track');
   const hudTrigger = document.getElementById('hud-trigger');
   const hudHint = document.getElementById('hud-hint');
   const popText = document.querySelector('[data-pop-text]');
@@ -16,10 +16,10 @@
   ];
 
   const demoTakes = [
-    'Friday works. Bring the good coffee and the questionable playlist — the demo script is already in the drive.',
-    'Ship the beta Thursday, not Friday. All notarization checks passed on both Apple Silicon and Intel.',
-    'Two coffees, one idea, go. No window to open, no dock icon to hunt down, just hold Option and talk.',
-    'Invoice for the November workshop attached. Thanks again for having us in the studio.'
+    'Running five minutes late — grab me a flat white and save the sunny table outside.',
+    'Hey, just wanted to get this out of my head before I forget what I was going to say.',
+    'Friday works. Bring the good coffee and the questionable playlist, we can sort the rest there.',
+    'Can we push tomorrow morning by half an hour? School drop-off is running a little wild today.'
   ];
 
   let takeIndex = 0;
@@ -347,6 +347,14 @@
     };
     requestAnimationFrame(tick);
   }
+
+  // Open FAQ / Tech Specs drawer when clicked from footer
+  document.querySelectorAll('[data-open-specs]').forEach((link) => {
+    link.addEventListener('click', () => {
+      const faq = document.getElementById('faq');
+      if (faq && faq.tagName === 'DETAILS') faq.open = true;
+    });
+  });
 
   // Version stamp: the artifact should be able to answer what it is.
   fetch('/version.json')
