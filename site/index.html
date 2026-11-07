@@ -52,7 +52,7 @@
   }
   </script>
 
-  <link rel="stylesheet" href="styles.css?v=8">
+  <link rel="stylesheet" href="styles.css?v=9">
 </head>
 <body>
 
@@ -78,20 +78,20 @@
 
   <main id="main">
 
-    <!-- ============================================================ SECTION 1: THE HERO (2-COLUMN: HOOK LEFT, SINGLE CAPSULE RIGHT) -->
+    <!-- ============================================================ 1. THE 100vh HERO (EVERYTHING ABOVE THE FOLD) -->
     <section class="hero wrap">
       <div class="hero-spread">
 
-        <!-- Left Column: Massive Editorial Hook -->
+        <!-- Left Column: The Hook -->
         <div class="hero-copy">
-          <img class="hero-ghost" src="assets/ghost.svg" alt="TalkType ghost" width="76" height="76">
+          <img class="hero-ghost" src="assets/ghost.svg" alt="TalkType ghost" width="68" height="68">
 
           <h1 class="display">
             Talk faster than you type.
           </h1>
 
           <p class="lede">
-            For when your brain moves faster than your fingers. A little ghost in the menu bar that turns talking into text. No accounts to make, no subscriptions to cancel. Just hold a key, speak your mind, and let the Mac do the typing.
+            For when your brain moves faster than your fingers. A little ghost in the menu bar that turns talking into text. No accounts, no subscriptions. Just hold a key, speak your mind, and let the Mac do the typing.
           </p>
 
           <div class="hero-actions">
@@ -99,7 +99,7 @@
           </div>
         </div>
 
-        <!-- Right Column: Single Uncluttered Glowing HUD Capsule Floating in Empty Warm Space -->
+        <!-- Right Column: The Live HUD & Minimalist Hint -->
         <div class="hero-stage-col">
           <div id="hud-demo-stage" role="region" aria-label="Live TalkType capsule">
             <div class="hud-ambient-glow" aria-hidden="true"></div>
@@ -127,61 +127,54 @@
                 </div>
               </div>
             </div>
+
+            <span class="hud-hint" id="hud-hint">Hold ⌥ Option or click the ghost to try it</span>
           </div>
         </div>
 
       </div>
     </section>
 
-    <!-- ============================================================ SECTION 2: THE FLOW (STAGGERED ASYMMETRIC BLUSH LOZENGES) -->
-    <section id="flow" class="section wrap">
-      <div class="steps-staggered">
-        <article class="step-lozenge step-left">
+    <!-- ============================================================ 2. THE 3-COLUMN TYPOGRAPHY GRID (NO BOXES, PURE EDITORIAL) -->
+    <section id="flow" class="flow-section wrap">
+      <div class="flow-grid">
+        <div class="flow-col">
           <h2>Catch the thought.</h2>
-          <p>Hold your shortcut key anywhere. Don't open a new window, don't break your flow. Just talk before you forget what you were going to say.</p>
-        </article>
+          <p>Hold your shortcut key anywhere. Don't open a new window, don't break your flow.</p>
+        </div>
 
-        <article class="step-lozenge step-right">
+        <div class="flow-col">
           <h2>Take your time.</h2>
           <p>A glowing capsule follows along as you speak. Stumble over your words, take a breath, pause—it waits for you.</p>
-        </article>
+        </div>
 
-        <article class="step-lozenge step-mid">
-          <h2>Drop it exactly where you need it.</h2>
-          <p>Let go, and the clean text lands right at your cursor. In a chat, an email, a messy web form, or a blank document. No copy-pasting required.</p>
-        </article>
-      </div>
-    </section>
-
-    <!-- ============================================================ SECTION 3: TRANSLATED FOR HUMANS ("IT JUST WORKS.") -->
-    <section class="section wrap">
-      <div class="works-spread">
-        <div class="works-lozenge">
-          <h2>It just works.</h2>
-          <p>
-            It uses your Mac's built-in hearing, so it works perfectly on an airplane, in a cafe, or when your Wi-Fi is terrible. Want it to spell your friends' tricky names perfectly or handle a noisy room? You can give it a brain boost in the settings later. But out of the box, it’s ready to go.
-          </p>
+        <div class="flow-col">
+          <h2>Drop it anywhere.</h2>
+          <p>Let go, and the text lands right at your cursor. In a chat, an email, or a messy web form. No copy-pasting.</p>
         </div>
       </div>
+
+      <!-- The Tech: Compact Editorial Note -->
+      <div class="tech-editorial">
+        <h2>It just works.</h2>
+        <p>
+          It uses your Mac's built-in hearing, so it works perfectly offline. Need to handle a noisy room or tricky names? You can plug in a cloud API key later. But out of the box, it’s ready to go.
+        </p>
+      </div>
     </section>
 
-    <!-- ============================================================ SECTION 4: THE CLOSE (CHECKOUT TICKET) -->
-    <section id="pricing" class="section wrap">
+    <!-- ============================================================ 3. THE CHECKOUT TICKET (UNIFIED & CLASSY) -->
+    <section id="pricing" class="pricing-section wrap">
       <div class="pricing-ticket">
-        <div class="ticket-main">
-          <h2 class="ticket-title">One price. Yours forever.</h2>
+        <div class="ticket-left">
+          <h2 class="ticket-title">One price.<br>Yours forever.</h2>
           <div class="price">
             <span class="cur">A$</span><span class="amount">29</span>
           </div>
-          <p class="price-statement">A$29. No monthly fees, no meters counting down. Buy it once, and it’s yours.</p>
-
-          <div class="ticket-actions">
-            <a class="pill pill-hot pill-hero" href="buy.html" data-buy>Buy for Mac — A$29</a>
-            <a class="pill pill-quiet" href="thanks.html">Already purchased · Download</a>
-          </div>
+          <p class="price-statement">No monthly fees, no meters counting down. Buy it once, and it’s yours.</p>
         </div>
 
-        <div class="ticket-specs">
+        <div class="ticket-right">
           <ul class="includes">
             <li>
               <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4.5 10.5l3.6 3.6 7.4-8.2" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -200,13 +193,18 @@
               <span>Includes the TalkType Chrome extension.</span>
             </li>
           </ul>
+
+          <div class="ticket-actions">
+            <a class="pill pill-hot pill-hero" href="buy.html" data-buy>Buy for Mac — A$29</a>
+            <a class="already-link" href="thanks.html">Already purchased · Download</a>
+          </div>
         </div>
       </div>
     </section>
 
   </main>
 
-  <!-- ============================================================ SECTION 5: MINIMALIST FOOTER -->
+  <!-- ============================================================ 4. MINIMALIST FOOTER -->
   <footer class="footer">
     <div class="wrap footer-inner">
       <a class="made" href="https://pibul.us" target="_blank" rel="noopener">made by pablo<span class="made-dot">.</span></a>
@@ -217,6 +215,6 @@
     </div>
   </footer>
 
-  <script src="app.js?v=8" defer></script>
+  <script src="app.js?v=9" defer></script>
 </body>
 </html>

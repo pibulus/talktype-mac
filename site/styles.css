@@ -1,6 +1,6 @@
-/* TalkType for Mac — Warm, Tactile Glassmorphism.
-   2-column Hero with uncluttered floating HUD capsule, staggered blush lozenges,
-   human-translated copy, premium checkout ticket, and minimalist footer. */
+/* TalkType for Mac — Classy, Compact, High-Converting Desktop Brochure.
+   100vh 2-column Hero, live glowing HUD capsule + monospace hint,
+   pure 3-column typography grid on warm cream, and unified checkout ticket. */
 
 @property --hud-angle {
   syntax: '<angle>';
@@ -17,7 +17,7 @@
   --ink: #1e1714;
   --ink-soft: #564a42;
   --ink-mute: #6e6056;
-  --line: rgba(30, 23, 20, 0.11);
+  --line: rgba(30, 23, 20, 0.10);
   --line-soft: rgba(30, 23, 20, 0.07);
   --pink: #ff82ca;
   --tangerine: #ffb060;
@@ -51,10 +51,9 @@ body {
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   background:
-    radial-gradient(1100px 660px at 76% 12%, rgba(255, 178, 142, 0.48), transparent 70%),
-    radial-gradient(920px 600px at 14% 42%, rgba(255, 130, 202, 0.14), transparent 72%),
-    radial-gradient(1040px 640px at 80% 76%, rgba(255, 190, 140, 0.28), transparent 70%),
-    linear-gradient(180deg, #fffaf1 0%, #fff6e6 48%, #ffefdc 100%);
+    radial-gradient(1000px 620px at 74% 18%, rgba(255, 180, 146, 0.42), transparent 70%),
+    radial-gradient(900px 580px at 50% 88%, rgba(255, 190, 140, 0.24), transparent 72%),
+    linear-gradient(180deg, #fffaf1 0%, #fff6e6 50%, #ffefdc 100%);
   background-repeat: no-repeat;
   overflow-x: clip;
 }
@@ -91,7 +90,7 @@ summary:focus-visible {
 
 .wrap {
   width: 100%;
-  max-width: 1280px;
+  max-width: 1240px;
   margin: 0 auto;
   padding: 0 48px;
 }
@@ -103,7 +102,7 @@ summary:focus-visible {
   position: sticky;
   top: 0;
   z-index: 50;
-  background: rgba(255, 250, 241, 0.82);
+  background: rgba(255, 250, 241, 0.84);
   backdrop-filter: saturate(1.25) blur(20px);
   -webkit-backdrop-filter: saturate(1.25) blur(20px);
   border-bottom: 1px solid var(--line-soft);
@@ -112,7 +111,7 @@ summary:focus-visible {
   display: flex;
   align-items: center;
   gap: 20px;
-  min-height: 76px;
+  min-height: 74px;
 }
 .brand {
   display: inline-flex;
@@ -220,18 +219,12 @@ summary:focus-visible {
   background: var(--paper);
   transform: translateY(-3px) scale(1.025);
   border-color: rgba(255, 130, 202, 0.45);
-  box-shadow:
-    0 18px 36px rgba(255, 130, 202, 0.16),
-    0 6px 14px rgba(30, 23, 20, 0.06);
-}
-.pill-quiet:active {
-  transform: translateY(1px) scale(0.97);
 }
 .pill-hero {
-  min-height: 70px;
-  height: 70px;
-  padding: 0 46px;
-  font-size: 20.5px;
+  min-height: 68px;
+  height: 68px;
+  padding: 0 44px;
+  font-size: 20px;
 }
 .pill-sm {
   min-height: 44px;
@@ -240,15 +233,20 @@ summary:focus-visible {
   font-size: 14.5px;
 }
 
-/* ---------------------------------------------------------------- SECTION 1: HERO 2-COLUMN SPREAD */
+/* ---------------------------------------------------------------- 1. THE 100vh HERO (ABOVE THE FOLD) */
 
 .hero {
-  padding: 92px 0 48px;
+  min-height: calc(100vh - 74px);
+  display: flex;
+  align-items: center;
+  padding-top: 32px;
+  padding-bottom: 48px;
 }
 .hero-spread {
+  width: 100%;
   display: grid;
-  grid-template-columns: minmax(0, 1.02fr) minmax(0, 0.98fr);
-  gap: 4.5rem;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 4rem;
   align-items: center;
 }
 .hero-copy,
@@ -260,20 +258,20 @@ summary:focus-visible {
 }
 .hero-ghost {
   display: block;
-  width: 78px;
-  height: 78px;
-  margin-bottom: 24px;
-  filter: drop-shadow(0 18px 28px rgba(255, 96, 224, 0.28));
+  width: 68px;
+  height: 68px;
+  margin-bottom: 22px;
+  filter: drop-shadow(0 16px 26px rgba(255, 96, 224, 0.28));
   animation: hover 6s ease-in-out infinite;
 }
 @keyframes hover {
   0%, 100% { transform: translateY(0) rotate(-1.5deg); }
-  50% { transform: translateY(-8px) rotate(1.5deg); }
+  50% { transform: translateY(-7px) rotate(1.5deg); }
 }
 
 h1.display {
   margin: 0;
-  font-size: clamp(3.8rem, 5.8vw, 6.4rem);
+  font-size: clamp(3.6rem, 5.4vw, 5.8rem);
   line-height: 0.94;
   letter-spacing: -0.05em;
   font-weight: 800;
@@ -283,11 +281,11 @@ h1.display {
 }
 
 .lede {
-  margin-top: 28px;
+  margin-top: 24px;
   color: var(--ink-soft);
-  font-size: clamp(19.5px, 1.45vw, 22.5px);
+  font-size: clamp(18.5px, 1.38vw, 21.5px);
   line-height: 1.56;
-  max-width: 48ch;
+  max-width: 46ch;
   text-align: left;
 }
 
@@ -296,28 +294,29 @@ h1.display {
   flex-wrap: wrap;
   gap: 16px;
   justify-content: flex-start;
-  margin-top: 40px;
+  margin-top: 34px;
 }
 
-/* ---------------------------------------------------------------- RIGHT COLUMN: UNCLUTTERED FLOATING LIVE HUD */
+/* ---------------------------------------------------------------- RIGHT COLUMN: LIVE HUD & MONOSPACE HINT */
 
 #hud-demo-stage {
   position: relative;
   width: 100%;
-  min-height: 360px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 40px 12px;
+  gap: 18px;
+  padding: 36px 8px;
 }
 
 .hud-ambient-glow {
   position: absolute;
-  width: 580px;
-  height: 320px;
+  width: 560px;
+  height: 300px;
   border-radius: 50%;
   background:
-    radial-gradient(circle at 46% 48%, rgba(255, 130, 202, 0.38) 0%, rgba(255, 176, 96, 0.30) 42%, rgba(255, 209, 89, 0.14) 68%, transparent 82%);
+    radial-gradient(circle at 46% 48%, rgba(255, 130, 202, 0.36) 0%, rgba(255, 176, 96, 0.28) 44%, rgba(255, 209, 89, 0.14) 68%, transparent 82%);
   filter: blur(36px);
   pointer-events: none;
   z-index: 0;
@@ -334,7 +333,7 @@ h1.display {
   z-index: 2;
   width: 100%;
   max-width: 560px;
-  min-height: 82px;
+  min-height: 80px;
   padding: 14px 20px;
   border-radius: 26px;
   display: flex;
@@ -354,19 +353,19 @@ h1.display {
   backdrop-filter: saturate(1.4) blur(22px);
   -webkit-backdrop-filter: saturate(1.4) blur(22px);
   box-shadow:
-    0 28px 64px rgba(255, 130, 202, 0.34),
-    0 12px 32px rgba(255, 176, 96, 0.22),
-    0 6px 16px rgba(30, 23, 20, 0.09),
+    0 28px 64px rgba(255, 130, 202, 0.32),
+    0 12px 32px rgba(255, 176, 96, 0.20),
+    0 6px 16px rgba(30, 23, 20, 0.08),
     0 2px 0 rgba(255, 254, 247, 0.75) inset;
   animation: hud-spin 4s linear infinite;
   transition: transform 0.32s var(--spring), box-shadow 0.28s ease;
 }
 .hud-live:hover {
-  transform: translateY(-4px) scale(1.018);
+  transform: translateY(-3px) scale(1.015);
   box-shadow:
-    0 36px 76px rgba(255, 130, 202, 0.44),
-    0 16px 38px rgba(255, 176, 96, 0.28),
-    0 8px 20px rgba(30, 23, 20, 0.11),
+    0 34px 72px rgba(255, 130, 202, 0.42),
+    0 16px 38px rgba(255, 176, 96, 0.26),
+    0 8px 20px rgba(30, 23, 20, 0.10),
     0 2px 0 rgba(255, 254, 247, 0.85) inset;
 }
 @keyframes hud-spin {
@@ -379,8 +378,8 @@ h1.display {
   padding: 0;
   cursor: pointer;
   flex: 0 0 auto;
-  width: 48px;
-  height: 48px;
+  width: 46px;
+  height: 46px;
   border-radius: 50%;
   display: inline-flex;
   align-items: center;
@@ -424,7 +423,7 @@ h1.display {
 
 .hud-stream-text {
   font-family: var(--sans);
-  font-size: 17.5px;
+  font-size: 17px;
   font-weight: 600;
   letter-spacing: -0.01em;
   color: rgba(38, 31, 36, 0.92);
@@ -509,139 +508,110 @@ h1.display {
 }
 .hud-ind-ready svg { width: 15px; height: 15px; }
 
-/* ---------------------------------------------------------------- SECTION 2: THE FLOW (STAGGERED BLUSH LOZENGES) */
-
-.section {
+.hud-hint {
   position: relative;
-  padding: 144px 0 0;
-  scroll-margin-top: 80px;
+  z-index: 2;
+  font-family: var(--mono);
+  font-size: 13.5px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+  opacity: 0.52;
+  text-align: center;
 }
 
-.steps-staggered {
-  display: flex;
-  flex-direction: column;
-  gap: 56px;
+/* ---------------------------------------------------------------- 2. THE 3-COLUMN TYPOGRAPHY GRID (NO BOXES) */
+
+.flow-section {
+  padding-top: 88px;
+  padding-bottom: 24px;
+  border-top: 1px solid var(--line);
+  scroll-margin-top: 76px;
 }
 
-.step-lozenge {
-  position: relative;
-  width: min(680px, 64%);
-  padding: 4rem 4.2rem;
-  border-radius: 36px;
+.flow-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4rem;
+  align-items: start;
+}
+
+.flow-col {
   text-align: left;
-  background:
-    radial-gradient(480px 240px at 15% 0%, rgba(255, 176, 96, 0.10), transparent 70%),
-    linear-gradient(145deg, rgba(255, 253, 248, 0.72) 0%, rgba(255, 130, 202, 0.055) 60%, rgba(255, 186, 130, 0.075) 100%);
-  backdrop-filter: saturate(1.2) blur(20px);
-  -webkit-backdrop-filter: saturate(1.2) blur(20px);
-  border: 1.5px solid rgba(255, 130, 202, 0.22);
-  box-shadow:
-    0 32px 76px rgba(255, 130, 202, 0.13),
-    0 12px 32px rgba(30, 23, 20, 0.04),
-    0 2px 0 rgba(255, 254, 248, 0.92) inset;
-  transition: transform 0.34s var(--spring), box-shadow 0.28s ease, border-color 0.22s ease;
 }
-.step-lozenge:hover {
-  transform: translateY(-6px) scale(1.012);
-  border-color: rgba(255, 130, 202, 0.44);
-  box-shadow:
-    0 40px 90px rgba(255, 130, 202, 0.20),
-    0 16px 38px rgba(255, 176, 96, 0.12),
-    0 2px 0 rgba(255, 254, 248, 0.96) inset;
+.flow-col h2 {
+  margin: 0 0 14px;
+  font-size: clamp(1.75rem, 2.4vw, 2.25rem);
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+  font-weight: 800;
+  color: var(--ink);
+}
+.flow-col p {
+  color: var(--ink-soft);
+  font-size: 18px;
+  line-height: 1.6;
+  max-width: 34ch;
 }
 
-.step-lozenge.step-left {
-  margin-left: 0;
-  margin-right: auto;
+/* Compact Tech Editorial directly beneath the 3-column grid */
+.tech-editorial {
+  margin-top: 88px;
+  padding-top: 72px;
+  border-top: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: 0.85fr 1.15fr;
+  gap: 4rem;
+  align-items: baseline;
+  text-align: left;
 }
-.step-lozenge.step-right {
-  margin-left: auto;
-  margin-right: 0;
-}
-.step-lozenge.step-mid {
-  margin-left: 16%;
-  margin-right: auto;
-}
-
-.step-lozenge h2 {
-  margin: 0 0 16px;
-  font-size: clamp(2.2rem, 3.6vw, 3.3rem);
+.tech-editorial h2 {
+  margin: 0;
+  font-size: clamp(2.1rem, 3.2vw, 3rem);
   line-height: 1.02;
   letter-spacing: -0.042em;
   font-weight: 800;
   color: var(--ink);
 }
-.step-lozenge p {
+.tech-editorial p {
   color: var(--ink-soft);
-  font-size: clamp(19px, 1.45vw, 22px);
-  line-height: 1.58;
-  max-width: 46ch;
-}
-
-/* ---------------------------------------------------------------- SECTION 3: "IT JUST WORKS." (UNIFIED WARM SPREAD) */
-
-.works-spread {
-  display: flex;
-  justify-content: flex-end;
-}
-.works-lozenge {
-  width: min(860px, 78%);
-  padding: 4.2rem 4.6rem;
-  border-radius: 40px;
-  text-align: left;
-  background:
-    radial-gradient(560px 280px at 85% 15%, rgba(255, 176, 96, 0.18), transparent 72%),
-    radial-gradient(480px 260px at 15% 85%, rgba(255, 130, 202, 0.14), transparent 70%),
-    linear-gradient(150deg, rgba(255, 253, 248, 0.80) 0%, rgba(255, 130, 202, 0.055) 55%, rgba(255, 234, 212, 0.45) 100%);
-  backdrop-filter: saturate(1.2) blur(22px);
-  -webkit-backdrop-filter: saturate(1.2) blur(22px);
-  border: 1.5px solid rgba(255, 130, 202, 0.26);
-  box-shadow:
-    0 34px 80px rgba(255, 130, 202, 0.14),
-    0 14px 36px rgba(30, 23, 20, 0.05),
-    0 2px 0 rgba(255, 254, 248, 0.92) inset;
-}
-.works-lozenge h2 {
-  margin: 0 0 18px;
-  font-size: clamp(2.5rem, 4.2vw, 3.8rem);
-  line-height: 1.0;
-  letter-spacing: -0.045em;
-  font-weight: 800;
-  color: var(--ink);
-}
-.works-lozenge p {
-  color: var(--ink-soft);
-  font-size: clamp(19.5px, 1.5vw, 23px);
+  font-size: clamp(18.5px, 1.4vw, 21px);
   line-height: 1.6;
   max-width: 54ch;
 }
 
-/* ---------------------------------------------------------------- SECTION 4: THE CLOSE (PREMIUM TICKET) */
+/* ---------------------------------------------------------------- 3. THE CHECKOUT TICKET (UNIFIED & CLASSY) */
+
+.pricing-section {
+  padding-top: 88px;
+  scroll-margin-top: 76px;
+}
 
 .pricing-ticket {
   display: grid;
-  grid-template-columns: 1.08fr 0.92fr;
+  grid-template-columns: 0.95fr 1.05fr;
   gap: 56px;
-  padding: 4.2rem 4.6rem;
-  border-radius: 40px;
+  align-items: center;
+  padding: 4rem 4.4rem;
+  border-radius: 36px;
   text-align: left;
   background:
-    radial-gradient(640px 340px at 90% 10%, rgba(255, 130, 202, 0.18), transparent 72%),
-    radial-gradient(540px 300px at 10% 95%, rgba(255, 176, 96, 0.18), transparent 70%),
-    linear-gradient(150deg, rgba(255, 253, 248, 0.88) 0%, rgba(255, 130, 202, 0.06) 55%, rgba(255, 232, 210, 0.54) 100%);
+    radial-gradient(640px 340px at 90% 10%, rgba(255, 130, 202, 0.16), transparent 72%),
+    radial-gradient(540px 300px at 10% 95%, rgba(255, 176, 96, 0.16), transparent 70%),
+    linear-gradient(150deg, rgba(255, 253, 248, 0.88) 0%, rgba(255, 130, 202, 0.05) 55%, rgba(255, 232, 210, 0.50) 100%);
   backdrop-filter: blur(22px);
   -webkit-backdrop-filter: blur(22px);
-  border: 1.5px solid rgba(255, 130, 202, 0.32);
+  border: 1.5px solid rgba(255, 130, 202, 0.30);
   box-shadow:
-    0 40px 92px rgba(255, 130, 202, 0.18),
-    0 18px 44px rgba(30, 23, 20, 0.06),
+    0 36px 84px rgba(255, 130, 202, 0.16),
+    0 16px 40px rgba(30, 23, 20, 0.05),
     0 2px 0 rgba(255, 254, 248, 0.94) inset;
 }
 
 .ticket-title {
-  margin: 0 0 14px;
-  font-size: clamp(2.5rem, 4.2vw, 3.8rem);
-  line-height: 1.0;
+  margin: 0 0 16px;
+  font-size: clamp(2.4rem, 3.8vw, 3.5rem);
+  line-height: 0.98;
   letter-spacing: -0.045em;
   font-weight: 800;
 }
@@ -650,39 +620,31 @@ h1.display {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  margin: 14px 0 12px;
+  margin: 12px 0 12px;
 }
 .price .cur {
-  font-size: 30px;
+  font-size: 28px;
   font-weight: 800;
   color: var(--ink-mute);
 }
 .price .amount {
-  font-size: clamp(4.4rem, 6vw, 6.2rem);
+  font-size: clamp(4.2rem, 5.6vw, 5.8rem);
   font-weight: 800;
   letter-spacing: -0.055em;
   line-height: 0.92;
 }
 .price-statement {
-  font-size: clamp(18.5px, 1.35vw, 21px);
-  font-weight: 600;
-  line-height: 1.5;
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1.55;
   color: var(--ink-soft);
-  max-width: 40ch;
-  margin-bottom: 32px;
+  max-width: 34ch;
 }
 
-.ticket-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px;
-  align-items: center;
-}
-
-.ticket-specs {
+.ticket-right {
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  gap: 32px;
   border-left: 1.5px solid rgba(30, 23, 20, 0.09);
   padding-left: 48px;
 }
@@ -691,30 +653,49 @@ h1.display {
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 22px;
+  gap: 16px;
 }
 .includes li {
   display: flex;
-  gap: 14px;
+  gap: 13px;
   align-items: flex-start;
-  font-size: 18px;
+  font-size: 17.5px;
   font-weight: 600;
   line-height: 1.45;
   color: var(--ink);
 }
 .includes li svg {
   flex: 0 0 auto;
-  width: 22px;
-  height: 22px;
+  width: 21px;
+  height: 21px;
   margin-top: 2px;
   color: #d94b94;
 }
 
-/* ---------------------------------------------------------------- SECTION 5: MINIMALIST FOOTER */
+.ticket-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 18px 24px;
+}
+.already-link {
+  font-family: var(--mono);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  transition: color 0.15s;
+}
+.already-link:hover {
+  color: var(--ink);
+}
+
+/* ---------------------------------------------------------------- 4. MINIMALIST FOOTER */
 
 .footer {
-  margin-top: 132px;
-  padding: 40px 0 56px;
+  margin-top: 96px;
+  padding: 36px 0 48px;
   border-top: 1px solid var(--line);
 }
 .footer-inner {
@@ -729,7 +710,7 @@ h1.display {
   align-items: center;
   min-height: 44px;
   font-family: var(--mono);
-  font-size: 17px;
+  font-size: 16.5px;
   font-weight: 800;
   letter-spacing: -0.02em;
   color: var(--ink);
@@ -919,31 +900,35 @@ button.pill:disabled, .pill[aria-disabled="true"] { cursor: progress; opacity: 0
 
 @media (max-width: 1024px) {
   .wrap { padding: 0 28px; }
+  .hero {
+    min-height: auto;
+    padding-top: 48px;
+    padding-bottom: 56px;
+  }
   .hero-spread {
     grid-template-columns: minmax(0, 1fr);
-    gap: 32px;
+    gap: 36px;
   }
   #hud-demo-stage {
-    min-height: 200px;
     padding: 24px 0;
   }
-  .step-lozenge,
-  .step-lozenge.step-left,
-  .step-lozenge.step-right,
-  .step-lozenge.step-mid,
-  .works-lozenge {
-    width: 100%;
-    max-width: 100%;
-    margin-left: 0;
-    margin-right: 0;
-    padding: 2.8rem 2.4rem;
+  .flow-grid {
+    grid-template-columns: 1fr;
+    gap: 36px;
+  }
+  .flow-col p { max-width: 52ch; }
+  .tech-editorial {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    margin-top: 56px;
+    padding-top: 56px;
   }
   .pricing-ticket {
     grid-template-columns: 1fr;
     gap: 36px;
     padding: 3rem 2.4rem;
   }
-  .ticket-specs {
+  .ticket-right {
     border-left: none;
     border-top: 1.5px solid rgba(30, 23, 20, 0.09);
     padding-left: 0;
@@ -955,19 +940,18 @@ button.pill:disabled, .pill[aria-disabled="true"] { cursor: progress; opacity: 0
 
 @media (max-width: 640px) {
   .wrap { padding: 0 18px; }
-  .hero { padding-top: 36px; }
-  .hero-ghost { width: 60px; height: 60px; margin-bottom: 18px; }
+  .hero { padding-top: 32px; padding-bottom: 40px; }
+  .hero-ghost { width: 58px; height: 58px; margin-bottom: 16px; }
   .pill-hero { min-height: 60px; height: 60px; padding: 0 28px; font-size: 18px; width: 100%; }
   .ticket-actions .pill { width: 100%; }
   .topbar-inner { min-height: 62px; gap: 10px; }
   .brand span.tag { display: none; }
   .hud-live { padding: 11px 15px; min-height: 70px; border-radius: 22px; }
   .hud-stream-text { font-size: 15.5px; }
-  .section { padding-top: 88px; }
-  .steps-staggered { gap: 28px; }
-  .step-lozenge, .works-lozenge, .pricing-ticket { padding: 2.2rem 1.8rem; border-radius: 28px; }
+  .flow-section, .pricing-section { padding-top: 56px; }
+  .pricing-ticket { padding: 2.2rem 1.6rem; border-radius: 28px; }
   .prose-grid { grid-template-columns: 1fr; }
-  .footer { margin-top: 84px; padding: 32px 0 44px; }
+  .footer { margin-top: 64px; padding: 28px 0 40px; }
   .footer-inner { flex-direction: column; align-items: flex-start; gap: 8px; }
   .footer-links { margin-left: -10px; }
 }
