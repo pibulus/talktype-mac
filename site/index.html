@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>TalkType for Mac — Talk faster than you type.</title>
-  <meta name="description" content="For when your brain moves faster than your fingers. A little ghost in the menu bar that turns talking into text. A$29, one time, yours forever.">
+  <title>TalkType for Mac: talk faster than you type, A$29 once</title>
+  <meta name="description" content="A little ghost in the menu bar that turns talking into text, anywhere on the Mac. On device, English and Español, A$29 once. No account, no subscription.">
   <meta name="theme-color" content="#fff6e6">
   <meta name="color-scheme" content="light">
   <link rel="canonical" href="https://mac.talktype.app/">
@@ -15,7 +15,7 @@
   <meta property="og:title" content="TalkType for Mac — Talk faster than you type.">
   <meta property="og:site_name" content="TalkType for Mac">
   <meta property="og:locale" content="en_AU">
-  <meta property="og:description" content="For when your brain moves faster than your fingers. A little ghost in the menu bar that turns talking into text. A$29, one time, yours forever.">
+  <meta property="og:description" content="A little ghost in the menu bar that turns talking into text, anywhere on the Mac. On device, English and Español, A$29 once. No account, no subscription.">
   <meta property="og:image" content="https://mac.talktype.app/assets/og-card.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
@@ -23,7 +23,7 @@
   <meta property="og:url" content="https://mac.talktype.app/">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="TalkType for Mac — Talk faster than you type.">
-  <meta name="twitter:description" content="For when your brain moves faster than your fingers. A little ghost in the menu bar that turns talking into text. A$29, one time, yours forever.">
+  <meta name="twitter:description" content="A little ghost in the menu bar that turns talking into text, anywhere on the Mac. On device, English and Español, A$29 once. No account, no subscription.">
   <meta name="twitter:image" content="https://mac.talktype.app/assets/og-card.png">
 
   <script type="application/ld+json">
@@ -33,7 +33,7 @@
     "name": "TalkType for Mac",
     "operatingSystem": "macOS 13.0 or later",
     "applicationCategory": "ProductivityApplication",
-    "description": "A little ghost in the menu bar that turns talking into text wherever your cursor is.",
+    "description": "A little ghost in the menu bar that turns talking into text wherever the cursor is.",
     "url": "https://mac.talktype.app/",
     "image": "https://mac.talktype.app/assets/og-card.png",
     "softwareVersion": "1.0",
@@ -52,7 +52,7 @@
   }
   </script>
 
-  <link rel="stylesheet" href="styles.css?v=9">
+  <link rel="stylesheet" href="styles.css?v=10">
 </head>
 <body>
 
@@ -61,160 +61,170 @@
   <header class="topbar">
     <div class="wrap topbar-inner">
       <a class="brand" href="/">
-        <img src="assets/ghost.svg" alt="" width="34" height="34">
+        <img src="assets/ghost.svg" alt="" width="28" height="28">
         <span>TalkType</span>
         <span class="tag">for Mac</span>
       </a>
-      <nav class="nav-links" aria-label="Primary">
-        <a href="#flow">How it works</a>
-        <a href="#pricing">Pricing</a>
-        <a href="https://talktype.app/extension">Extension</a>
-      </nav>
-      <div class="topbar-actions">
-        <a class="pill pill-hot pill-sm" href="buy.html" data-buy>Buy — A$29</a>
+
+      <div class="modes" role="tablist" aria-label="Ways to try it">
+        <span class="modes-thumb" id="modes-thumb" aria-hidden="true"></span>
+        <button type="button" role="tab" class="mode is-on" id="tab-catch" data-mode="catch" aria-selected="true" aria-controls="stage" tabindex="0">Text a friend</button>
+        <button type="button" role="tab" class="mode" id="tab-handsfree" data-mode="handsfree" aria-selected="false" aria-controls="stage" tabindex="-1">Answer an email</button>
+        <button type="button" role="tab" class="mode" id="tab-polish" data-mode="polish" aria-selected="false" aria-controls="stage" tabindex="-1">Jot a note</button>
       </div>
+
+      <a class="pill pill-hot pill-sm" href="buy.html" data-buy>Buy — A$29</a>
     </div>
   </header>
 
   <main id="main">
 
-    <!-- ============================================================ 1. THE 100vh HERO (EVERYTHING ABOVE THE FOLD) -->
-    <section class="hero wrap">
-      <div class="hero-spread">
+    <!-- ============================================================ PLATE 01 — THE PROMISE AND THE INSTRUMENT -->
+    <section class="plate plate-one">
+      <div class="wrap plate-one-grid">
 
-        <!-- Left Column: The Hook -->
         <div class="hero-copy">
-          <img class="hero-ghost" src="assets/ghost.svg" alt="TalkType ghost" width="68" height="68">
+          <button type="button" class="ghost-sticker" id="sticker" aria-label="Start the demo">
+            <img src="assets/ghost.svg" alt="" width="112" height="112">
+          </button>
 
-          <h1 class="display">
-            Talk faster than you type.
-          </h1>
+          <p class="kicker"><span class="dot" aria-hidden="true"></span>Menu bar voice to text</p>
+
+          <h1 class="lockup">Talk faster<br>than you type.</h1>
 
           <p class="lede">
-            For when your brain moves faster than your fingers. A little ghost in the menu bar that turns talking into text. No accounts, no subscriptions. Just hold a key, speak your mind, and let the Mac do the typing.
+            A ghost in the menu bar. Hold a key and it listens. Let go and the words land at the cursor, in whatever app was open.
           </p>
 
+          <p class="origin">I think faster when I talk. So I made TalkType.</p>
+
           <div class="hero-actions">
-            <a class="pill pill-hot pill-hero" href="buy.html" data-buy>Buy for Mac — A$29</a>
+            <a class="pill pill-hot pill-hero" href="buy.html" data-buy>Buy TalkType</a>
           </div>
+
+          <p class="subline">A$29 once for one Mac. Updates come with it, nothing renews.</p>
         </div>
 
-        <!-- Right Column: The Live HUD & Minimalist Hint -->
-        <div class="hero-stage-col">
-          <div id="hud-demo-stage" role="region" aria-label="Live TalkType capsule">
-            <div class="hud-ambient-glow" aria-hidden="true"></div>
+        <div class="stage-col">
+          <div class="stage" id="stage" role="tabpanel" aria-labelledby="tab-catch" data-mode="catch" data-app="Messages">
 
-            <div class="hud-live" id="live-hud" data-phase="listening">
-              <button type="button" class="hud-ghost-halo" id="hud-trigger" aria-label="Try live voice transcription">
-                <img class="hud-ghost-img" src="assets/ghost.svg" alt="" width="34" height="34">
+            <!-- The floating HUD capsule: what the app shows at the cursor -->
+            <div class="capsule" id="live-hud" data-phase="ready">
+              <button type="button" class="capsule-ghost" id="hud-trigger" aria-label="Start listening">
+                <img src="assets/ghost.svg" alt="" width="30" height="30">
               </button>
-              <div class="hud-stream-mask" id="hud-stream-mask">
-                <div class="hud-stream-track" id="hud-stream-track">
-                  <span class="hud-stream-text" id="hud-stream-text" data-hud-text>Running five minutes late — grab me a flat white and save the sunny table.</span>
+              <div class="capsule-mask" id="capsule-mask">
+                <div class="capsule-track" id="capsule-track">
+                  <span class="capsule-text" id="capsule-text">Hold ⌥ and the ghost starts listening.</span>
                 </div>
               </div>
-              <div class="hud-indicator" aria-hidden="true">
-                <div class="hud-ind-listen">
-                  <span class="hud-pulse-ring"></span>
-                  <span class="hud-pulse-dot"></span>
+              <div class="capsule-ind" aria-hidden="true">
+                <div class="ind-listen">
+                  <span class="pulse-ring"></span>
+                  <span class="pulse-dot"></span>
                 </div>
-                <div class="hud-ind-wave">
+                <div class="ind-wave">
                   <span></span><span></span><span></span><span></span><span></span>
                 </div>
-                <div class="hud-ind-ready">
+                <div class="ind-ready">
                   <svg viewBox="0 0 16 16" fill="none"><path d="M3.5 8.5L6.5 11.5L12.5 4.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                  <span>Ready</span>
                 </div>
               </div>
             </div>
 
-            <span class="hud-hint" id="hud-hint">Hold ⌥ Option or click the ghost to try it</span>
+            <!-- The surface: where the words land -->
+            <div class="surface">
+              <div class="surface-bar">
+                <span class="surface-app" id="surface-app">Messages</span>
+                <span class="surface-chip" id="surface-chip">saved · 14 takes</span>
+              </div>
+              <p class="surface-context" id="surface-context">Mum, 6:02 pm · Dinner at 7?</p>
+              <p class="surface-text is-empty" id="surface-text">Words land here.</p>
+              <div class="surface-prompt">
+                <span class="prompt-lead" id="prompt-lead">Try this out loud</span>
+                <p class="prompt-line" id="prompt-line">“Twinkle, twinkle, little star, how I wonder what you are.”</p>
+                <button type="button" class="prompt-next" id="prompt-next">Another line</button>
+              </div>
+            </div>
+
           </div>
+
+          <p class="caption" id="stage-caption">A message home, sent from the kitchen while the kettle goes.</p>
+          <p class="hint" id="hud-hint">Hold <kbd>⌥</kbd> Option, or press the ghost</p>
         </div>
 
       </div>
     </section>
 
-    <!-- ============================================================ 2. THE 3-COLUMN TYPOGRAPHY GRID (NO BOXES, PURE EDITORIAL) -->
-    <section id="flow" class="flow-section wrap">
-      <div class="flow-grid">
-        <div class="flow-col">
-          <h2>Catch the thought.</h2>
-          <p>Hold your shortcut key anywhere. Don't open a new window, don't break your flow.</p>
+    <!-- ============================================================ PLATE 02 — THE EVIDENCE AND THE PRICE -->
+    <section class="plate plate-two" id="evidence">
+      <div class="wrap plate-two-grid">
+
+        <div class="beats">
+          <article class="beat">
+            <span class="beat-num">01</span>
+            <h2>A key, held anywhere</h2>
+            <p>The shortcut works inside every app on the Mac, the stubborn ones included. Nothing opens, nothing gets switched away from.</p>
+          </article>
+          <article class="beat">
+            <span class="beat-num">02</span>
+            <h2>The pause is allowed</h2>
+            <p>Stumble, restart the sentence, breathe in the middle of it. The capsule keeps the thread and waits for the end.</p>
+          </article>
+          <article class="beat">
+            <span class="beat-num">03</span>
+            <h2>Arrives already typed</h2>
+            <p>Whatever was open stays open. The words appear where the cursor was, looking like a quick pair of hands put them there.</p>
+          </article>
         </div>
 
-        <div class="flow-col">
-          <h2>Take your time.</h2>
-          <p>A glowing capsule follows along as you speak. Stumble over your words, take a breath, pause—it waits for you.</p>
-        </div>
+        <div class="ticket">
+          <h2 class="ticket-title">One payment, then quiet.</h2>
 
-        <div class="flow-col">
-          <h2>Drop it anywhere.</h2>
-          <p>Let go, and the text lands right at your cursor. In a chat, an email, or a messy web form. No copy-pasting.</p>
-        </div>
-      </div>
-
-      <!-- The Tech: Compact Editorial Note -->
-      <div class="tech-editorial">
-        <h2>It just works.</h2>
-        <p>
-          It uses your Mac's built-in hearing, so it works perfectly offline. Need to handle a noisy room or tricky names? You can plug in a cloud API key later. But out of the box, it’s ready to go.
-        </p>
-      </div>
-    </section>
-
-    <!-- ============================================================ 3. THE CHECKOUT TICKET (UNIFIED & CLASSY) -->
-    <section id="pricing" class="pricing-section wrap">
-      <div class="pricing-ticket">
-        <div class="ticket-left">
-          <h2 class="ticket-title">One price.<br>Yours forever.</h2>
-          <div class="price">
-            <span class="cur">A$</span><span class="amount">29</span>
+          <div class="price" aria-label="A$29">
+            <span class="cur" aria-hidden="true">A$</span><span class="amount" aria-hidden="true">29</span>
           </div>
-          <p class="price-statement">No monthly fees, no meters counting down. Buy it once, and it’s yours.</p>
-        </div>
 
-        <div class="ticket-right">
+          <p class="price-statement">For one Mac, kept as long as the Mac lasts. Nothing renews on its own.</p>
+
           <ul class="includes">
             <li>
               <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4.5 10.5l3.6 3.6 7.4-8.2" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              <span>Lifetime license for one Mac.</span>
+              <span>Words stay on the Mac. Wifi off, still works.</span>
             </li>
             <li>
               <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4.5 10.5l3.6 3.6 7.4-8.2" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              <span>Notarized DMG — installs safely without warnings.</span>
+              <span>Signed and notarized, so it opens like any app.</span>
             </li>
             <li>
               <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4.5 10.5l3.6 3.6 7.4-8.2" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              <span>Universal binary (Apple Silicon &amp; Intel).</span>
+              <span>One build for Apple Silicon and Intel, macOS 13 and later.</span>
             </li>
             <li>
               <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4.5 10.5l3.6 3.6 7.4-8.2" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              <span>Includes the TalkType Chrome extension.</span>
+              <span>Comes with the Chrome extension, for the text boxes a browser keeps to itself.</span>
             </li>
           </ul>
 
-          <div class="ticket-actions">
-            <a class="pill pill-hot pill-hero" href="buy.html" data-buy>Buy for Mac — A$29</a>
-            <a class="already-link" href="thanks.html">Already purchased · Download</a>
-          </div>
+          <a class="pill pill-hot pill-ticket" href="buy.html" data-buy>Buy TalkType</a>
+          <a class="already-link" href="thanks.html">Bought it already: the download is still here.</a>
         </div>
+
+      </div>
+
+      <div class="wrap rail">
+        <p class="rail-spec">On device · English &amp; Español · macOS 13+ · Universal binary</p>
+        <nav class="rail-links" aria-label="Footer">
+          <a href="https://talktype.app/extension">Extension</a>
+          <a href="support.html">Support &amp; FAQ</a>
+          <a href="privacy.html">Privacy</a>
+          <a class="made" href="https://madebypablo.app">made by pablo<span class="made-dot">.</span></a>
+        </nav>
       </div>
     </section>
 
   </main>
 
-  <!-- ============================================================ 4. MINIMALIST FOOTER -->
-  <footer class="footer">
-    <div class="wrap footer-inner">
-      <a class="made" href="https://pibul.us" target="_blank" rel="noopener">made by pablo<span class="made-dot">.</span></a>
-      <div class="footer-links">
-        <a href="support.html">Support &amp; FAQ</a>
-        <a href="privacy.html">Privacy</a>
-      </div>
-    </div>
-  </footer>
-
-  <script src="app.js?v=9" defer></script>
+  <script src="app.js?v=10" defer></script>
 </body>
 </html>

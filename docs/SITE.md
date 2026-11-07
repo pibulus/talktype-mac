@@ -4,7 +4,9 @@ Lives in `site/`. Plain HTML, one stylesheet, one small script, one Netlify
 function. No build step, no framework, no tracker.
 
 ```
-index.html    the main page: hero, product stage, how it works, engines, pricing, FAQ
+index.html    the main page: two plates. Plate 01 is the instrument (three
+              scenes on one stage), plate 02 is the three beats, the ticket
+              and the rail. Exactly 200svh on desktop.
 buy.html      order summary → POST /api/checkout → Square payment link
 thanks.html   post-payment download + install steps + confetti (noindex)
 netlify.toml  static publish + the /api/checkout redirect + headers
@@ -12,10 +14,28 @@ netlify/functions/checkout.mjs   the only server code: mints a Square link
 support.html  install/permission help, refunds, contact
 privacy.html  what leaves the Mac, in plain words
 styles.css    cream paper, warm ink, one peach gradient — the app's own palette
-app.js        HUD line cycle, version stamp, soft reveal
+app.js        the three scenes, the prompt deck, the live demo, the version stamp
 assets/       ghost.svg, app icon PNGs, og-card.png
 version.json  version stamp; the footer reads it
 ```
+
+## The demo, and the microphone header
+
+`app.js` carries `DEMO_ENGINE`, defaulting to `browser`. That lane uses the
+browser's own `SpeechRecognition`, needs no key and no server, and stores
+nothing. If it is missing or the mic is blocked, the scene plays its scripted
+take and the hint says so plainly.
+
+`netlify.toml` MUST keep `Permissions-Policy: microphone=(self)`. With the old
+`microphone=()` the whole origin lost the mic and every "live" demo silently
+fell through to the scripted take — it looked like it worked, so nothing
+reported it.
+
+The `proxy` lane is written but not armed. Turning it on means a Netlify
+function that forwards audio to Deepgram, which contradicts the "no TalkType
+server receives audio" promise on `privacy.html` unless that page and the demo
+both disclose it. Netlify functions are HTTP-only, so word-by-word streaming on
+that lane needs Deno Deploy, not this host.
 
 ## Preview
 
