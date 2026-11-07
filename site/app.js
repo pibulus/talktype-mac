@@ -1,27 +1,239 @@
-// TalkType for Mac — the site's only script. Small on purpose.
+// TalkType for Mac — live interactive HUD preview + Square checkout.
 (function () {
-  // The HUD strip in the hero re-reads like a live take.
   const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const hud = document.querySelector('[data-hud-text]');
-  if (hud && !reducedMotion) {
-    const lines = [
-      'and the questionable playlist…',
-      'ship it friday, not monday…',
-      'two coffees, one idea, go…',
-      'note to self: breathe…'
-    ];
-    let i = 0;
-    setInterval(() => {
-      if (document.hidden) return; // no repaints while the tab is backgrounded
-      i = (i + 1) % lines.length;
-      hud.style.opacity = '0';
-      setTimeout(() => {
-        hud.textContent = lines[i];
-        hud.style.opacity = '1';
-      }, 220);
-    }, 4200);
-    hud.style.transition = 'opacity 0.22s ease';
+  const hudEl = document.getElementById('live-hud');
+  const hudText = document.querySelector('[data-hud-text]');
+  const hudScroll = document.getElementById('hud-scroll');
+  const hudTrack = document.getElementById('hud-track');
+  const hudTrigger = document.getElementById('hud-trigger');
+  const hudHint = document.getElementById('hud-hint');
+  const popText = document.querySelector('[data-pop-text]');
+  const popGhost = document.querySelector('.pop-ghost');
+  const mhRows = [
+    document.querySelector('[data-mh-0]'),
+    document.querySelector('[data-mh-1]'),
+    document.querySelector('[data-mh-2]')
+  ];
+
+  const demoTakes = [
+    'Friday works. Bring the good coffee and the questionable playlist — the demo script is already in the drive.',
+    'Ship the beta Thursday, not Friday. All notarization checks passed on both Apple Silicon and Intel.',
+    'Two coffees, one idea, go. No window to open, no dock icon to hunt down, just hold Option and talk.',
+    'Invoice for the November workshop attached. Thanks again for having us in the studio.'
+  ];
+
+  let takeIndex = 0;
+  let wordTimer = null;
+  let cycleTimer = null;
+  let isUserInteracting = false;
+  let recognition = null;
+  let historyList = [
+    demoTakes[0],
+    demoTakes[1],
+    demoTakes[3]
+  ];
+
+  function updateHudText(text) {
+    if (!hudText) return;
+    hudText.textContent = text;
+    if (hudScroll) {
+      hudScroll.classList.toggle('masked', text.length > 28);
+    }
+    if (hudTrack) {
+      hudTrack.scrollLeft = hudTrack.scrollWidth;
+    }
+    if (hudEl && !reducedMotion) {
+      hudEl.classList.add('word-bounce');
+      setTimeout(() => hudEl.classList.remove('word-bounce'), 130);
+    }
   }
+
+  function pushToHistory(cleanTake) {
+    if (popText) popText.textContent = cleanTake;
+    if (historyList[0] !== cleanTake) {
+      historyList = [cleanTake, historyList[0], historyList[1]];
+    }
+    mhRows.forEach((row, idx) => {
+      if (row && historyList[idx]) row.textContent = historyList[idx];
+    });
+  }
+
+  function clearDemoTimers() {
+    if (wordTimer) { clearInterval(wordTimer); wordTimer = null; }
+    if (cycleTimer) { clearTimeout(cycleTimer); cycleTimer = null; }
+  }
+
+  function playSimulatedTake(sentence, onComplete) {
+    clearDemoTimers();
+    if (!hudEl || !hudText) return;
+    const words = sentence.split(' ');
+    let idx = 0;
+    hudEl.dataset.phase = 'listening';
+    updateHudText(words[0] || '');
+
+    wordTimer = setInterval(() => {
+      if (document.hidden && !isUserInteracting) return;
+      idx += 1;
+      if (idx < words.length) {
+        updateHudText(words.slice(0, idx + 1).join(' '));
+      } else {
+        clearInterval(wordTimer);
+        wordTimer = null;
+        // Phase 2: processing waveform
+        hudEl.dataset.phase = 'processing';
+        cycleTimer = setTimeout(() => {
+          // Phase 3: ready + paste into popover & recent takes
+          hudEl.dataset.phase = 'ready';
+          pushToHistory(sentence);
+          cycleTimer = setTimeout(() => {
+            if (onComplete) onComplete();
+          }, 1400);
+        }, 680);
+      }
+    }, 155);
+  }
+
+  function startAutoLoop() {
+    if (reducedMotion || !hudEl) return;
+    const step = () => {
+      if (isUserInteracting) return;
+      const sentence = demoTakes[takeIndex % demoTakes.length];
+      takeIndex += 1;
+      playSimulatedTake(sentence, () => {
+        if (!isUserInteracting) {
+          cycleTimer = setTimeout(step, 900);
+        }
+      });
+    };
+    step();
+  }
+
+  // Interactive preview: click the ghost (or hold Option) to trigger a live take.
+  function triggerInteractiveDemo() {
+    if (!hudEl) return;
+    const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (isUserInteracting && recognition) {
+      recognition.stop();
+      return;
+    }
+
+    clearDemoTimers();
+    isUserInteracting = true;
+    hudEl.dataset.activeHold = 'true';
+    hudEl.dataset.phase = 'listening';
+
+    if (SpeechRec) {
+      try {
+        recognition = new SpeechRec();
+        recognition.continuous = false;
+        recognition.interimResults = true;
+        recognition.lang = 'en-AU';
+        updateHudText('Listening — speak a sentence…');
+        if (hudHint) hudHint.innerHTML = 'Listening live (15s preview) · click ghost to finish';
+
+        const stopTimeout = setTimeout(() => {
+          if (recognition) recognition.stop();
+        }, 15000);
+
+        let latestTranscript = '';
+        recognition.onresult = (event) => {
+          let combined = '';
+          for (let i = 0; i < event.results.length; i++) {
+            combined += event.results[i][0].transcript;
+          }
+          latestTranscript = combined.slice(0, 220);
+          if (latestTranscript) updateHudText(latestTranscript);
+        };
+
+        const finishLive = () => {
+          clearTimeout(stopTimeout);
+          recognition = null;
+          hudEl.dataset.activeHold = 'false';
+          const finalClean = (latestTranscript || demoTakes[takeIndex % demoTakes.length]).trim();
+          hudEl.dataset.phase = 'processing';
+          setTimeout(() => {
+            hudEl.dataset.phase = 'ready';
+            pushToHistory(finalClean);
+            if (hudHint) hudHint.innerHTML = 'Hold <kbd>⌥ Option</kbd> right now or click the ghost to try it';
+            setTimeout(() => {
+              isUserInteracting = false;
+              startAutoLoop();
+            }, 2200);
+          }, 550);
+        };
+
+        recognition.onend = finishLive;
+        recognition.onerror = () => {
+          clearTimeout(stopTimeout);
+          recognition = null;
+          // Graceful fallback if mic permission is declined
+          const fallback = demoTakes[takeIndex % demoTakes.length];
+          takeIndex += 1;
+          playSimulatedTake(fallback, () => {
+            hudEl.dataset.activeHold = 'false';
+            isUserInteracting = false;
+            if (hudHint) hudHint.innerHTML = 'Hold <kbd>⌥ Option</kbd> right now or click the ghost to try it';
+            startAutoLoop();
+          });
+        };
+
+        recognition.start();
+        return;
+      } catch (_) {
+        // Fall through to simulated take
+      }
+    }
+
+    const sample = demoTakes[takeIndex % demoTakes.length];
+    takeIndex += 1;
+    playSimulatedTake(sample, () => {
+      hudEl.dataset.activeHold = 'false';
+      isUserInteracting = false;
+      startAutoLoop();
+    });
+  }
+
+  if (hudTrigger) {
+    hudTrigger.addEventListener('click', triggerInteractiveDemo);
+  }
+  if (popGhost) {
+    popGhost.style.cursor = 'pointer';
+    popGhost.addEventListener('click', triggerInteractiveDemo);
+  }
+
+  // Holding ⌥ Option on the keyboard triggers the HUD right on the page
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Alt' && !e.repeat && hudEl && !isUserInteracting) {
+      isUserInteracting = true;
+      hudEl.dataset.activeHold = 'true';
+      if (hudHint) hudHint.innerHTML = 'Holding <kbd>⌥ Option</kbd> — release to paste at cursor';
+      const sample = demoTakes[takeIndex % demoTakes.length];
+      takeIndex += 1;
+      playSimulatedTake(sample, () => {});
+    }
+  });
+
+  window.addEventListener('keyup', (e) => {
+    if (e.key === 'Alt' && hudEl && hudEl.dataset.activeHold === 'true') {
+      clearDemoTimers();
+      hudEl.dataset.activeHold = 'false';
+      hudEl.dataset.phase = 'processing';
+      setTimeout(() => {
+        hudEl.dataset.phase = 'ready';
+        if (hudText && hudText.textContent) {
+          pushToHistory(hudText.textContent);
+        }
+        if (hudHint) hudHint.innerHTML = 'Hold <kbd>⌥ Option</kbd> right now or click the ghost to try it';
+        setTimeout(() => {
+          isUserInteracting = false;
+          startAutoLoop();
+        }, 1800);
+      }, 420);
+    }
+  });
+
+  startAutoLoop();
 
   // Checkout: ask our function for a Square payment link, then hand the buyer
   // to Square. Card details never touch this page.
@@ -37,8 +249,6 @@
       label.textContent = 'Pay A$29';
     };
 
-    // Returning from Square can restore this page from bfcache with the button
-    // still disabled and the label stuck on "Opening Square…".
     addEventListener('pageshow', (e) => { if (e.persisted) reset(); });
 
     checkout.addEventListener('click', async () => {
@@ -54,7 +264,6 @@
         headers: { 'content-type': 'application/json' },
         body: '{}'
       };
-      // A stalled Square call must never leave the button disabled forever.
       if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) {
         request.signal = AbortSignal.timeout(12000);
       }
@@ -147,37 +356,4 @@
       if (el && v && v.version) el.textContent = 'v' + v.version;
     })
     .catch(() => {});
-
-  // Soft reveal for sections. Off by default without IntersectionObserver.
-  if ('IntersectionObserver' in window && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    const targets = document.querySelectorAll('.step, .engine-row, .pricing-card, .faq details');
-    targets.forEach((el) => {
-      el.style.opacity = '0';
-      el.style.transform = 'translateY(14px)';
-      el.style.transition = 'opacity 0.6s ease, transform 0.6s cubic-bezier(0.22, 0.61, 0.36, 1)';
-    });
-    const io = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.style.opacity = '1';
-            entry.target.style.transform = 'none';
-            io.unobserve(entry.target);
-          }
-        });
-      },
-      { rootMargin: '0px 0px -8% 0px', threshold: 0.05 }
-    );
-    targets.forEach((el) => io.observe(el));
-
-    // Failsafe: a section must never stay invisible because an observer
-    // callback was missed (an odd viewport, a bfcache restore, a headless
-    // screenshot). Everything is revealed after a few seconds regardless.
-    setTimeout(() => {
-      targets.forEach((el) => {
-        el.style.opacity = '1';
-        el.style.transform = 'none';
-      });
-    }, 2500);
-  }
 })();
