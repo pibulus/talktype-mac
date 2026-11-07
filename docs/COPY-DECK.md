@@ -153,3 +153,26 @@ nothing is stored.
 3. The states tell the truth in order: waiting, listening, landed. The fallback blames the demo, never the reader, and answers the next question before it gets asked.
 4. The beats run act, permission, result. "The pause is allowed" is the wisdom line: every other voice tool penalizes thinking out loud, and this one is built for it.
 5. Price copy sells silence. "One payment, then quiet" is the whole offer, and the bullets are the things a buyer would have had to email support to find out.
+
+---
+
+## Amendments after Pablo's tone pass (2026-11-08)
+
+Direction: **kitchen-table spine with zine cadence.** Say what it is and why it is,
+keep the chant rhythm, no engineering words (no Neural Engine, no key/account
+explainer), ghost mentioned twice at most. The pill kicker was cut so the lockup
+leads, and the three beats were rewritten to the same voice.
+
+| key | replaced with | why |
+|---|---|---|
+| `lede` | Talking is quicker than typing. A little ghost in the menu bar turns voice into text, in whatever app is already open. | what it is + why it is, in the chant cadence. The mechanics moved to the hint under the stage. |
+| `beat_1_title` | Lives in the menu bar | names the place before the benefit |
+| `beat_1_line` | The tiny ghost sits up top in every app, one key away. Nothing opens, nothing gets switched away from. | ghost once, plainly |
+| `beat_2_title` | Talk over the pauses | the wisdom line, shorter and warmer than "The pause is allowed" |
+| `beat_2_line` | Thinking out loud is the method. The capsule keeps the thread while the sentence finds its way to the end. | |
+| `beat_3_title` | Lands already typed | |
+| `beat_3_line` | The cursor never moves. The words arrive where they were always going to be. | |
+| `chip.listening` | holding the thread / no hurry / mid thought | the capsule already says "listening", so the chip stops repeating it |
+| — | kicker removed | "Menu bar voice to text" repeated the lede and the menu bar strip |
+| — | menu bar strip added | a tiny ghost icon sits up top, where it actually lives |
+| `ticket_*` | unchanged | "One payment, then quiet" already had the cadence |

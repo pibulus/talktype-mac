@@ -26,8 +26,8 @@
       hint: 'Hold <kbd>⌥</kbd> Option, or press the ghost',
       chip: {
         pending: 'Nothing sent yet',
-        listening: 'Listening, holding the thread',
-        processing: 'Writing it down',
+        listening: 'holding the thread',
+        processing: 'writing it down',
         landed: 'Message landed'
       },
       demo: 'Running ten minutes late, start without me.',
@@ -46,8 +46,8 @@
       hint: 'Tap the ghost once, then keep talking',
       chip: {
         pending: 'Reply not started',
-        listening: 'Paused, no hurry',
-        processing: 'Writing it down',
+        listening: 'no hurry',
+        processing: 'writing it down',
         landed: 'Reply ready'
       },
       demo: 'Thanks for the note. Friday works, and the deck can wait until Monday so nobody is writing slides at midnight.',
@@ -66,8 +66,8 @@
       hint: 'Say it messy. The tidying happens after',
       chip: {
         pending: 'Blank note',
-        listening: 'Mid thought',
-        processing: 'Tidying',
+        listening: 'mid thought',
+        processing: 'tidying',
         landed: 'Tidied and landed'
       },
       demo: 'so um I was thinking we could maybe push it to like half past',
@@ -106,6 +106,7 @@
   const sticker = document.getElementById('sticker');
   const surfaceText = document.getElementById('surface-text');
   const surfaceApp = document.getElementById('surface-app');
+  const menubarApp = document.getElementById('menubar-app');
   const surfaceContext = document.getElementById('surface-context');
   const surfaceChip = document.getElementById('surface-chip');
   const promptLead = document.getElementById('prompt-lead');
@@ -410,6 +411,7 @@
     stage.dataset.mode = key;
     stage.dataset.app = SCENES[key].app;
     surfaceApp.textContent = SCENES[key].app;
+    if (menubarApp) menubarApp.textContent = SCENES[key].app;
     if (surfaceContext) surfaceContext.textContent = SCENES[key].context;
     captionEl.textContent = SCENES[key].caption;
     hint.innerHTML = SCENES[key].hint;

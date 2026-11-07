@@ -88,12 +88,10 @@
             <img src="assets/ghost.svg" alt="" width="112" height="112">
           </button>
 
-          <p class="kicker"><span class="dot" aria-hidden="true"></span>Menu bar voice to text</p>
-
           <h1 class="lockup">Talk faster<br>than you type.</h1>
 
           <p class="lede">
-            A ghost in the menu bar. Hold a key and it listens. Let go and the words land at the cursor, in whatever app was open.
+            Talking is quicker than typing. A little ghost in the menu bar turns voice into text, in whatever app is already open.
           </p>
 
           <p class="origin">I think faster when I talk. So I made TalkType.</p>
@@ -107,6 +105,15 @@
 
         <div class="stage-col">
           <div class="stage" id="stage" role="tabpanel" aria-labelledby="tab-catch" data-mode="catch" data-app="Messages">
+
+            <div class="menubar" aria-hidden="true">
+              <span class="menubar-app" id="menubar-app">Messages</span>
+              <span class="menubar-items">File&nbsp;&nbsp;Edit&nbsp;&nbsp;View</span>
+              <span class="menubar-right">
+                <span class="menubar-clock">Tue 9:41</span>
+                <img class="menubar-ghost" src="assets/ghost.svg" alt="" width="15" height="15">
+              </span>
+            </div>
 
             <!-- The floating HUD capsule: what the app shows at the cursor -->
             <div class="capsule" id="live-hud" data-phase="ready">
@@ -163,18 +170,18 @@
         <div class="beats">
           <article class="beat">
             <span class="beat-num">01</span>
-            <h2>A key, held anywhere</h2>
-            <p>The shortcut works inside every app on the Mac, the stubborn ones included. Nothing opens, nothing gets switched away from.</p>
+            <h2>Lives in the menu bar</h2>
+            <p>The tiny ghost sits up top in every app, one key away. Nothing opens, nothing gets switched away from.</p>
           </article>
           <article class="beat">
             <span class="beat-num">02</span>
-            <h2>The pause is allowed</h2>
-            <p>Stumble, restart the sentence, breathe in the middle of it. The capsule keeps the thread and waits for the end.</p>
+            <h2>Talk over the pauses</h2>
+            <p>Thinking out loud is the method. The capsule keeps the thread while the sentence finds its way to the end.</p>
           </article>
           <article class="beat">
             <span class="beat-num">03</span>
-            <h2>Arrives already typed</h2>
-            <p>Whatever was open stays open. The words appear where the cursor was, looking like a quick pair of hands put them there.</p>
+            <h2>Lands already typed</h2>
+            <p>The cursor never moves. The words arrive where they were always going to be.</p>
           </article>
         </div>
 
