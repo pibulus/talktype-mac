@@ -300,20 +300,20 @@ cat > "${APP_DIR}/Contents/Info.plist" << PLIST
     <key>NSHumanReadableCopyright</key>
     <string>Copyright © 2026 Pablo Alvarado. All rights reserved.</string>
     <key>NSSpeechRecognitionUsageDescription</key>
-    <string>TalkType uses on-device speech recognition to transcribe your voice into text accurately.</string>
+    <string>On-device speech recognition transcribes spoken words into text on the Mac.</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>TalkType uses your microphone exclusively to capture your voice for speech-to-text dictation.</string>
+    <string>Microphone access captures spoken words for speech-to-text dictation on the Mac.</string>
 </dict>
 </plist>
 PLIST
 
 # 3. Copy Assets, AppIcon & Compile Assets.car (ITMS-90032 / App Store Connect icon catalog)
 cp Assets/*.png "${RES_DIR}/" 2>/dev/null || true
+rm -f "${RES_DIR}/ghost.png"
 if [ ! -f "Assets/AppIcon.icns" ]; then
     echo "Release gate failed: missing Assets/AppIcon.icns." >&2
     exit 1
 fi
-cp "Assets/AppIcon.icns" "${RES_DIR}/"
 
 ICON_WORK_DIR=$(mktemp -d "${TMPDIR:-/tmp}/talktype-actool.XXXXXX")
 ICONSET_TMP="${ICON_WORK_DIR}/AppIcon.iconset"
@@ -358,6 +358,36 @@ xcrun actool "${XCASSETS_TMP}" \
     --app-icon AppIcon \
     --output-partial-info-plist "${ACT_PLIST_TMP}" >/dev/null
 rm -rf "${ICON_WORK_DIR}"
+
+# Copy full 10-representation AppIcon.icns after actool (actool writes a 4-size stub)
+# and strip synthetic PNG metadata chunks (eXIf/tEXt/iTXt/zTXt/tIME) inside icon slots.
+cp "Assets/AppIcon.icns" "${RES_DIR}/AppIcon.icns"
+python3 - "${RES_DIR}/AppIcon.icns" <<'PY'
+import pathlib, struct, sys
+p = pathlib.Path(sys.argv[1])
+icns = p.read_bytes()
+if icns[:4] == b"icns":
+    drop = {b"tEXt", b"zTXt", b"iTXt", b"eXIf", b"tIME"}
+    slots, pos = bytearray(), 8
+    while pos < len(icns):
+        ostype = icns[pos:pos+4]
+        length = struct.unpack(">I", icns[pos+4:pos+8])[0]
+        payload = icns[pos+8:pos+length]
+        if payload.startswith(b"\x89PNG\r\n\x1a\n"):
+            out, q = bytearray(b"\x89PNG\r\n\x1a\n"), 8
+            while q < len(payload):
+                clen = struct.unpack(">I", payload[q:q+4])[0]
+                ctype = payload[q+4:q+8]
+                if ctype not in drop:
+                    out.extend(payload[q:q+12+clen])
+                q += 12 + clen
+                if ctype == b"IEND":
+                    break
+            payload = bytes(out)
+        slots.extend(ostype + struct.pack(">I", 8 + len(payload)) + payload)
+        pos += length
+    p.write_bytes(b"icns" + struct.pack(">I", 8 + len(slots)) + bytes(slots))
+PY
 
 if [ -f "PrivacyInfo.xcprivacy" ]; then
     cp "PrivacyInfo.xcprivacy" "${RES_DIR}/"

@@ -227,7 +227,29 @@ enum L10n {
         "geminiAlertTitle": ["en": "Auto-Polish Transcripts (Free Pass)", "es": "Pulido automático (Pase gratis)"],
         "geminiAlertInfo": ["en": "Operates completely standalone by default. Connect a free Google Gemini key (no card required) to format transcripts into clean prose. Dictated transcript text travels directly to Google's Gemini API (generativelanguage.googleapis.com). Stored locally in Keychain.", "es": "Funciona de forma completamente independiente por defecto. Conecta una clave gratuita de Google Gemini (sin tarjeta) para dar formato a las transcripciones. El texto dictado viaja directamente a la API de Google Gemini (generativelanguage.googleapis.com). Se guarda en el Llavero."],
         "permissionPasteTitle": ["en": "Automatic paste is off", "es": "El pegado automático está desactivado"],
-        "permissionPasteDetail": ["en": "Text still copies. Allow Accessibility to paste on release.", "es": "El texto se copia. Activa Accesibilidad para pegar al soltar."]
+        "permissionPasteDetail": ["en": "Text still copies. Allow Accessibility to paste on release.", "es": "El texto se copia. Activa Accesibilidad para pegar al soltar."],
+        "madeByPablo": ["en": "Made by Pablo", "es": "Hecho por Pablo"],
+        "pushToTalkKey": ["en": "Push to Talk Key", "es": "Tecla pulsar para hablar"],
+        "talkTypeWeb": ["en": "TalkType on the Web", "es": "TalkType en la Web"],
+        "copiedNeedAccessibility": ["en": "Copied to clipboard — enable Accessibility to auto-paste", "es": "Copiado al portapapeles — activa Accesibilidad para pegar automáticamente"],
+        "enableAutoPaste": ["en": "Enable", "es": "Activar"],
+        "autoPasteReady": ["en": "Ready", "es": "Listo"],
+        "onboardStep1Sub": ["en": "Two quick switches so TalkType can hear and paste.", "es": "Dos permisos rápidos para escuchar y pegar al soltar."],
+        "onboardSandboxPlaceholder": ["en": "Hold Right ⌥ Option, speak, and release — words land right here…", "es": "Mantén ⌥ Option, habla y suelta — las palabras aparecen aquí…"],
+        "onboardSandboxSuccess": ["en": "Auto-paste works!", "es": "¡El pegado automático funciona!"],
+        "menuShortcut": ["en": "Shortcut", "es": "Atajo"],
+        "pttEitherOption": ["en": "Either ⌥ Option (Default)", "es": "Cualquier ⌥ Option (Por defecto)"],
+        "pttRightOption": ["en": "Right ⌥ Option", "es": "⌥ Option derecha"],
+        "pttLeftOption": ["en": "Left ⌥ Option", "es": "⌥ Option izquierda"],
+        "pttFunction": ["en": "Globe / Function (fn)", "es": "Globo / Función (fn)"],
+        "pttRightCommand": ["en": "Right ⌘ Command", "es": "⌘ Command derecha"],
+        "pttShortEitherOption": ["en": "⌥ Option", "es": "⌥ Option"],
+        "pttShortRightOption": ["en": "Right ⌥ Option", "es": "⌥ Option derecha"],
+        "pttShortLeftOption": ["en": "Left ⌥ Option", "es": "⌥ Option izquierda"],
+        "pttShortFunction": ["en": "Globe / fn", "es": "Globo / fn"],
+        "pttShortRightCommand": ["en": "Right ⌘ Command", "es": "⌘ Command derecha"],
+        "autoPasteTitle": ["en": "Auto-Paste", "es": "Pegado automático"],
+        "autoPasteSub": ["en": "Accessibility · pastes on release", "es": "Accesibilidad · pega al soltar"]
     ]
     #endif
 
@@ -249,10 +271,9 @@ enum L10n {
         "conversationsNeedsCloud": ["en": "Conversations needs the cloud engine — pick Voice Mode first.", "es": "Conversaciones necesita el motor en la nube — elige el modo de voz primero."],
         "aboutBlurb": ["en": "I talk faster than I type, so I made TalkType.\n\nA little ghost in the menu bar that turns talking into words. The Mac listens on its own, so nothing is uploaded and nothing counts down.\n\nA Deepgram key makes it sharper. Better names, better punctuation, better in a noisy room.", "es": "Hablo más rápido de lo que escribo, así que hice TalkType.\n\nUn pequeño fantasma en la barra de menús que convierte el habla en palabras. El Mac escucha por su cuenta: nada se sube y no hay contador.\n\nUna clave de Deepgram lo afina. Mejores nombres, mejor puntuación, mejor en un sitio ruidoso."],
         "madeBy": ["en": "made by pablo", "es": "hecho por pablo"],
-        "madeByPablo": ["en": "Made by Pablo", "es": "Hecho por Pablo"],
+        "settingsMenu": ["en": "Settings…", "es": "Ajustes…"],
         "showMore": ["en": "Show more", "es": "Ver más"],
         "showLess": ["en": "Show less", "es": "Ver menos"],
-        "pushToTalkKey": ["en": "Push to Talk Key", "es": "Tecla pulsar para hablar"],
         "transcriptionEngine": ["en": "Voice Mode", "es": "Modo de voz"],
         "appleSpeech": ["en": "Mac Built-in (Offline · Private)", "es": "Integrado en Mac (sin conexión · privado)"],
         "hudPosition": ["en": "HUD Position", "es": "Posición del HUD"],
@@ -284,7 +305,6 @@ enum L10n {
         "polishing": ["en": "Polishing…", "es": "Puliendo…"],
         "autoPolish": ["en": "Auto-Polish", "es": "Pulido automático"],
         "autoPolishTranscripts": ["en": "Auto-Polish Transcripts", "es": "Pulir transcripciones automáticamente"],
-        "talkTypeWeb": ["en": "TalkType on the Web", "es": "TalkType en la Web"],
         "supportPage": ["en": "Support", "es": "Soporte"],
         "customKeywords": ["en": "Custom Vocabulary…", "es": "Vocabulario personalizado…"],
         "keywordsAlertTitle": ["en": "Custom Vocabulary & Keywords", "es": "Vocabulario y palabras clave"],
@@ -309,11 +329,8 @@ enum L10n {
         "clickDefault": ["en": "Left: Card · Right: Menu", "es": "Izquierdo: Tarjeta · Derecho: Menú"],
         "clickSwapped": ["en": "Left: Menu · Right: Card", "es": "Izquierdo: Menú · Derecho: Tarjeta"],
         "runSetupGuide": ["en": "Run Setup Guide…", "es": "Guía de configuración…"],
-        "copiedNeedAccessibility": ["en": "Copied to clipboard — enable Accessibility to auto-paste", "es": "Copiado al portapapeles — activa Accesibilidad para pegar automáticamente"],
-        "enableAutoPaste": ["en": "Enable", "es": "Activar"],
         "grantMicrophone": ["en": "Allow", "es": "Permitir"],
         "microphoneReady": ["en": "Ready", "es": "Listo"],
-        "autoPasteReady": ["en": "Ready", "es": "Listo"],
         "pasteFromClipboard": ["en": "Paste", "es": "Pegar"],
         "pasteKeyBtn": ["en": "Paste", "es": "Pegar"],
         "connectedDeepgram": ["en": "Connected to Nova-3", "es": "Conectado a Nova-3"],
@@ -333,33 +350,17 @@ enum L10n {
         "embeddedGeminiNote": ["en": "Sends transcript text to generativelanguage.googleapis.com. Stored in Keychain.", "es": "Envía el texto transcrito a generativelanguage.googleapis.com. Guardada en el Llavero."],
         "onboardWelcome": ["en": "Setup", "es": "Ajustes"],
         "onboardStep1Title": ["en": "Ready to listen.", "es": "Listo para escuchar."],
-        "onboardStep1Sub": ["en": "Two quick switches so TalkType can hear and paste.", "es": "Dos permisos rápidos para escuchar y pegar al soltar."],
         "onboardStep2Title": ["en": "Language & voice", "es": "Idioma y voz"],
         "onboardStep2Sub": ["en": "Pick a language and transcription engine.", "es": "Elige idioma y motor de transcripción."],
         "onboardStep3Title": ["en": "Take it for a spin.", "es": "Pruébalo ahora."],
         "onboardStep3Sub": ["en": "Hold the shortcut, speak, and release.", "es": "Mantén el atajo, habla y suelta."],
-        "onboardSandboxPlaceholder": ["en": "Hold Right ⌥ Option, speak, and release — words land right here…", "es": "Mantén ⌥ Option, habla y suelta — las palabras aparecen aquí…"],
-        "onboardSandboxSuccess": ["en": "Auto-paste works!", "es": "¡El pegado automático funciona!"],
         "startUsingTalkType": ["en": "Start Talking", "es": "Empezar a hablar"],
         "offlineBlurb": ["en": "Works with no connection. Nothing is uploaded, nothing sits on a server.", "es": "Funciona sin conexión. Nada se sube, nada queda en un servidor."],
         "offlineEngineHelp": ["en": "Runs on the Mac itself. No key, no network.", "es": "Corre en el propio Mac. Sin clave, sin red."],
         "menuVoice": ["en": "Voice", "es": "Voz"],
         "menuApp": ["en": "App", "es": "Aplicación"],
-        "menuShortcut": ["en": "Shortcut", "es": "Atajo"],
-        "pttEitherOption": ["en": "Either ⌥ Option (Default)", "es": "Cualquier ⌥ Option (Por defecto)"],
-        "pttRightOption": ["en": "Right ⌥ Option", "es": "⌥ Option derecha"],
-        "pttLeftOption": ["en": "Left ⌥ Option", "es": "⌥ Option izquierda"],
-        "pttFunction": ["en": "Globe / Function (fn)", "es": "Globo / Función (fn)"],
-        "pttRightCommand": ["en": "Right ⌘ Command", "es": "⌘ Command derecha"],
-        "pttShortEitherOption": ["en": "⌥ Option", "es": "⌥ Option"],
-        "pttShortRightOption": ["en": "Right ⌥ Option", "es": "⌥ Option derecha"],
-        "pttShortLeftOption": ["en": "Left ⌥ Option", "es": "⌥ Option izquierda"],
-        "pttShortFunction": ["en": "Globe / fn", "es": "Globo / fn"],
-        "pttShortRightCommand": ["en": "Right ⌘ Command", "es": "⌘ Command derecha"],
         "microphoneTitle": ["en": "Microphone", "es": "Micrófono"],
         "microphoneSubPrefix": ["en": "Captures speech on ", "es": "Captura la voz con "],
-        "autoPasteTitle": ["en": "Auto-Paste", "es": "Pegado automático"],
-        "autoPasteSub": ["en": "Accessibility · pastes on release", "es": "Accesibilidad · pega al soltar"],
         "continueBtn": ["en": "Continue", "es": "Continuar"],
         "backBtn": ["en": "Back", "es": "Atrás"],
         "macOffline": ["en": "Mac Offline", "es": "Mac sin conexión"],
@@ -1645,6 +1646,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             showContextMenu(sender)
         } else {
             togglePopover(sender)
+        }
+    }
+
+    func openSettingsMenu() {
+        if let button = statusItem?.button {
+            showContextMenu(button)
         }
     }
 
@@ -3341,7 +3348,9 @@ class SpeechEngine: NSObject, ObservableObject {
 
     private func beginAuthorizedRecording(resumeAfterPermission: Bool, requestedPermission: Bool) {
         if requestedPermission && !resumeAfterPermission {
-            transcript = L10n.t("permissionsReadyShortcut")
+            let readyMsg = L10n.t("permissionsReadyShortcut")
+            transcript = readyMsg
+            onFailure?(readyMsg)
             onPermissionDenied?()
             return
         }
@@ -4240,6 +4249,7 @@ struct HistoryRecordCard: View {
             HStack(alignment: .center) {
                 Text(formatHistoryTimestamp(record.timestamp))
                     .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .monospacedDigit()
                     .foregroundStyle(p.inkMuted)
 
                 Spacer()
@@ -5649,6 +5659,46 @@ struct ContentView: View {
                 aboutRow(L10n.t("talkTypeWeb"), "https://talktype.app")
                 aboutRow(L10n.t("madeByPablo"), "https://madebypablo.app")
                 #endif
+
+                HStack(spacing: 6) {
+                    Button {
+                        appDelegate.openSettingsMenu()
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "slider.horizontal.3")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(p.inkSoft)
+                                .accessibilityHidden(true)
+                            Text(L10n.t("settingsMenu"))
+                                .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                                .foregroundStyle(p.ink)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 7)
+                        .background(p.paperLit)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        appDelegate.quitApp()
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "power")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(p.inkSoft)
+                                .accessibilityHidden(true)
+                            Text(L10n.t("quit"))
+                                .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                                .foregroundStyle(p.ink)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 7)
+                        .background(p.paperLit)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                }
             }
 
             Spacer(minLength: 0)
@@ -5836,6 +5886,7 @@ struct ContentView: View {
                 HStack {
                     Text("\(count) \(count == 1 ? L10n.t("takeSingular") : L10n.t("takePlural"))")
                         .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
                         .foregroundStyle(p.inkMuted)
 
                     Spacer()

@@ -65,6 +65,27 @@ func makeCanvas() -> CGContext {
     return ctx
 }
 
+func stripPNGMetadata(_ png: Data) -> Data {
+    let sig: [UInt8] = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
+    let bytes = [UInt8](png)
+    guard bytes.count > 8, Array(bytes[0..<8]) == sig else { return png }
+    let drop: Set<String> = ["eXIf", "tEXt", "zTXt", "iTXt", "tIME"]
+    var out = Data(sig)
+    var pos = 8
+    while pos + 8 <= bytes.count {
+        let len = (Int(bytes[pos]) << 24) | (Int(bytes[pos+1]) << 16) | (Int(bytes[pos+2]) << 8) | Int(bytes[pos+3])
+        let type = String(bytes: bytes[(pos+4)..<(pos+8)], encoding: .isoLatin1) ?? ""
+        let total = 12 + len
+        guard pos + total <= bytes.count else { break }
+        if !drop.contains(type) {
+            out.append(contentsOf: bytes[pos..<(pos + total)])
+        }
+        pos += total
+        if type == "IEND" { break }
+    }
+    return out
+}
+
 func saveCanvas(_ ctx: CGContext, to path: String) {
     NSGraphicsContext.current = nil
     let cg = ctx.makeImage()!
@@ -83,12 +104,16 @@ func saveCanvas(_ ctx: CGContext, to path: String) {
     rgbCtx.draw(cg, in: CGRect(x: 0, y: 0, width: W, height: H))
     let rgbImage = rgbCtx.makeImage()!
 
+    let mutableData = NSMutableData()
+    let dest = CGImageDestinationCreateWithData(mutableData as CFMutableData, UTType.png.identifier as CFString, 1, nil)!
+    CGImageDestinationAddImage(dest, rgbImage, nil)
+    precondition(CGImageDestinationFinalize(dest), "Failed to encode PNG for \(path)")
+
+    let cleanData = stripPNGMetadata(mutableData as Data)
     let url = URL(fileURLWithPath: path)
     try! FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-    let dest = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil)!
-    CGImageDestinationAddImage(dest, rgbImage, nil)
-    precondition(CGImageDestinationFinalize(dest), "Failed to write PNG to \(path)")
-    print("✨ Wrote \(path) (\(rgbImage.width)×\(rgbImage.height), RGB24 no-alpha)")
+    try! cleanData.write(to: url)
+    print("Wrote \(path) (\(rgbImage.width)×\(rgbImage.height), RGB24 no-alpha, clean chunks)")
 }
 
 func roundedFont(_ size: CGFloat, _ weight: NSFont.Weight) -> NSFont {
@@ -396,7 +421,7 @@ func renderSlide1() {
 
     // 3 Crisp Feature Pills
     let bullets = [
-        ("lock.shield.fill", "On-device Apple Neural Engine by default"),
+        ("lock.shield.fill", "On-device Apple Speech by default"),
         ("doc.on.clipboard.fill", "Instant clipboard copy + 50-take local history"),
         ("globe", "Native English & Español · Escape cancels mid-take")
     ]
@@ -470,9 +495,10 @@ func renderSlide1() {
     drawString("EN", font: roundedFont(9.8 * scale, .bold), color: cInk, at: CGPoint(x: enPill.midX, y: enPill.minY + 2.5 * scale), align: .center)
     drawString("ES", font: roundedFont(9.8 * scale, .bold), color: cInkMute, at: CGPoint(x: langTrack.maxX - 19 * scale, y: enPill.minY + 2.5 * scale), align: .center)
 
-    let engPill = CGRect(x: pop.maxX - pad - 96 * scale, y: footY, width: 96 * scale, height: 22 * scale)
+    let engPill = CGRect(x: pop.maxX - pad - 118 * scale, y: footY, width: 118 * scale, height: 22 * scale)
     drawBox(ctx, engPill, radius: 11 * scale, fill: cCardInner, stroke: cBorder, lineWidth: 1.5)
-    drawString("Offline · EN", font: roundedFont(9.8 * scale, .bold), color: cInkSoft, at: CGPoint(x: engPill.midX, y: engPill.minY + 4 * scale), align: .center)
+    drawSymbol("sparkles", size: 8.8 * scale, weight: .bold, color: cInkSoft, center: CGPoint(x: engPill.minX + 14 * scale, y: engPill.midY))
+    drawString("Mac Offline · EN", font: roundedFont(9.5 * scale, .bold), color: cInkSoft, at: CGPoint(x: engPill.minX + 24 * scale, y: engPill.minY + 4 * scale))
 
     // Floating Live HUD Capsule overlapping bottom-left of stage (MAS clipboard confirmation!)
     let hudRect = CGRect(x: 1380, y: 1275, width: 1160, height: 146)
@@ -492,7 +518,9 @@ func renderSlide1() {
         color: cInk,
         at: CGPoint(x: hudOrb.maxX + 28, y: hudRect.midY - 21)
     )
-    drawSymbol("checkmark.circle.fill", size: 42, weight: .bold, color: cPinkDeep, center: CGPoint(x: hudRect.maxX - 66, y: hudRect.midY))
+    let checkOrb = CGRect(x: hudRect.maxX - 90, y: hudRect.midY - 24, width: 48, height: 48)
+    drawBox(ctx, checkOrb, radius: 24, fill: cPinkDeep, stroke: nil, lineWidth: 0)
+    drawSymbol("checkmark", size: 22, weight: .bold, color: cPopoverLit, center: CGPoint(x: checkOrb.midX, y: checkOrb.midY))
 
     saveCanvas(ctx, to: "screenshots/appstore/01-dictate-anywhere-2880x1800.png")
     saveCanvas(ctx, to: "screenshots/appstore-2880x1800.png")
@@ -544,7 +572,7 @@ func renderSlide2() {
         cardY += h + 10 * scale
     }
 
-    drawString("Clear History…", font: roundedFont(10.5 * scale, .semibold), color: cInkMute, at: CGPoint(x: pop.minX + pad + 6, y: pop.maxY - 30 * scale))
+    drawString("Clear History", font: roundedFont(10.5 * scale, .semibold), color: cInkMute, at: CGPoint(x: pop.minX + pad + 6, y: pop.maxY - 30 * scale))
 
     // Right Column: Copy + Custom Vocabulary Showcase Card
     let rightX: CGFloat = 1140
@@ -604,41 +632,142 @@ func renderSlide2() {
 }
 
 // ============================================================================
-// SLIDE 3: Private On-Device by Default · Three Engines, One Ghost
+// SLIDE 3: Private On-Device by Default · Real Voice Mode Popover + 3 Engines
 // ============================================================================
 func renderSlide3() {
     let ctx = makeCanvas()
-    fillBackground(ctx, glowCenter: CGPoint(x: 1440, y: 520))
+    fillBackground(ctx, glowCenter: CGPoint(x: 920, y: 820))
 
-    // Centered Hero Header
-    drawGhost(ctx, center: CGPoint(x: 1440, y: 225), size: 176, glow: true)
+    // Left Stage: Real TalkType Popover showing Voice Mode & Keychain Setup UI (Guideline 2.3.3)
+    let scale: CGFloat = 2.12
+    let popOrigin = CGPoint(x: 210, y: 245)
+    let pw = 346 * scale
+    let ph = 440 * scale
+    let pop = CGRect(x: popOrigin.x, y: popOrigin.y, width: pw, height: ph)
+
+    // macOS Menu Bar Strip above Popover
+    let menuStrip = CGRect(x: 150, y: 140, width: 860, height: 64)
+    drawBox(ctx, menuStrip, radius: 20, fill: cPopoverLit.withAlphaComponent(0.95), stroke: cBorder, lineWidth: 2, shadowOpacity: 0.08, shadowBlur: 20, shadowY: 6)
+    drawString("Mail    File    Edit    View    Mailbox", font: roundedFont(22, .semibold), color: cInkSoft, at: CGPoint(x: menuStrip.minX + 30, y: menuStrip.minY + 18))
+    let mbHighlight = CGRect(x: pop.midX - 34, y: menuStrip.minY + 8, width: 68, height: 48)
+    drawBox(ctx, mbHighlight, radius: 12, fill: cPink.withAlphaComponent(0.22), stroke: cPink.withAlphaComponent(0.45), lineWidth: 2)
+    if let mb = menubarGhostImg, let mbCG = mb.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+        ctx.saveGState()
+        ctx.translateBy(x: mbHighlight.midX - 18, y: mbHighlight.midY + 18)
+        ctx.scaleBy(x: 1, y: -1)
+        ctx.draw(mbCG, in: CGRect(x: 0, y: 0, width: 36, height: 36))
+        ctx.restoreGState()
+    }
+    drawString("Tue 9:42 AM", font: roundedFont(22, .semibold), color: cInk, at: CGPoint(x: menuStrip.maxX - 28, y: menuStrip.minY + 18), align: .right)
+
+    // Popover Chrome + Top Caret
+    let caretSize = 26 * (scale / 2.0)
+    let caret = NSBezierPath()
+    caret.move(to: NSPoint(x: pop.midX - caretSize, y: pop.minY + 2))
+    caret.line(to: NSPoint(x: pop.midX, y: pop.minY - caretSize * 0.85))
+    caret.line(to: NSPoint(x: pop.midX + caretSize, y: pop.minY + 2))
+    caret.close()
+
+    drawBox(
+        ctx, pop, radius: 26 * scale,
+        gradient: [cPopoverLit, cCanvasMid, cPopoverMid], angle: 90,
+        stroke: cBorderStrong, lineWidth: 3,
+        shadowOpacity: 0.18, shadowBlur: 64, shadowY: 28
+    )
+    cPopoverLit.setFill(); caret.fill()
+    cBorderStrong.setStroke(); caret.lineWidth = 2.5; caret.stroke()
+
+    let pad = 18 * scale
+    var py = pop.minY + pad
+
+    // Header: Wordmark + Tucked Close Circle
+    drawWordmark(at: CGPoint(x: pop.minX + pad, y: py - 2), size: 23 * scale)
+    let closeCircle = CGRect(x: pop.maxX - pad - 28 * scale, y: py, width: 28 * scale, height: 28 * scale)
+    drawBox(ctx, closeCircle, radius: 14 * scale, fill: cCardInner, stroke: cBorder, lineWidth: 1.5)
+    drawSymbol("xmark", size: 11 * scale, weight: .bold, color: cInkMute, center: CGPoint(x: closeCircle.midX, y: closeCircle.midY))
+    py += 44 * scale
+
+    // Language & Voice Section (exact match to OnboardingView Step 2)
+    drawString("Language & voice", font: roundedFont(16 * scale, .heavy), color: cInk, at: CGPoint(x: pop.minX + pad, y: py))
+    py += 23 * scale
+    drawString("Pick a language and transcription engine.", font: roundedFont(11.5 * scale, .medium), color: cInkSoft, at: CGPoint(x: pop.minX + pad, y: py))
+    py += 26 * scale
+
+    // 2-Segment Language Capsule (English | Español)
+    let segTrackH = 30 * scale
+    let langTrack = CGRect(x: pop.minX + pad, y: py, width: pop.width - pad * 2, height: segTrackH)
+    drawBox(ctx, langTrack, radius: segTrackH / 2, fill: cInk.withAlphaComponent(0.08), stroke: nil, lineWidth: 0)
+    let halfW = (langTrack.width - 8) / 2
+    let langLeft = CGRect(x: langTrack.minX + 4, y: langTrack.minY + 4, width: halfW, height: segTrackH - 8)
+    drawBox(ctx, langLeft, radius: (segTrackH - 8) / 2, fill: cCardInner, stroke: cBorder, lineWidth: 1.5)
+    drawString("English", font: roundedFont(11 * scale, .bold), color: cInk, at: CGPoint(x: langLeft.midX, y: langLeft.minY + 4.5 * scale), align: .center)
+    drawString("Español", font: roundedFont(11 * scale, .bold), color: cInkMute, at: CGPoint(x: langTrack.maxX - 4 - halfW / 2, y: langLeft.minY + 4.5 * scale), align: .center)
+    py += segTrackH + 12 * scale
+
+    // 2-Segment Voice Engine Capsule (Mac Offline selected | Nova-3 Cloud)
+    let engTrack = CGRect(x: pop.minX + pad, y: py, width: pop.width - pad * 2, height: segTrackH)
+    drawBox(ctx, engTrack, radius: segTrackH / 2, fill: cInk.withAlphaComponent(0.08), stroke: nil, lineWidth: 0)
+    let engLeft = CGRect(x: engTrack.minX + 4, y: engTrack.minY + 4, width: halfW, height: segTrackH - 8)
+    drawBox(ctx, engLeft, radius: (segTrackH - 8) / 2, fill: cCardInner, stroke: cBorder, lineWidth: 1.5)
+    drawSymbol("waveform", size: 10 * scale, weight: .bold, color: cMint, center: CGPoint(x: engLeft.midX - 42 * scale, y: engLeft.midY))
+    drawString("Mac Offline", font: roundedFont(11 * scale, .bold), color: cInk, at: CGPoint(x: engLeft.midX + 8 * scale, y: engLeft.minY + 4.5 * scale), align: .center)
+    drawSymbol("bolt.fill", size: 10 * scale, weight: .bold, color: cInkMute, center: CGPoint(x: engTrack.maxX - 4 - halfW / 2 - 44 * scale, y: engLeft.midY))
+    drawString("Nova-3 Cloud", font: roundedFont(11 * scale, .bold), color: cInkMute, at: CGPoint(x: engTrack.maxX - 4 - halfW / 2 + 8 * scale, y: engLeft.minY + 4.5 * scale), align: .center)
+    py += segTrackH + 16 * scale
+
+    // Offline Guarantee Card inside Popover
+    let offCard = CGRect(x: pop.minX + pad, y: py, width: pop.width - pad * 2, height: 104 * scale)
+    drawBox(ctx, offCard, radius: 16 * scale, fill: cCardInner, stroke: cBorderStrong, lineWidth: 2)
+    drawSymbol("lock.shield.fill", size: 16 * scale, weight: .bold, color: cMint, center: CGPoint(x: offCard.minX + 22 * scale, y: offCard.minY + 24 * scale))
+    drawString("100% private & on-device", font: roundedFont(12.5 * scale, .heavy), color: cInk, at: CGPoint(x: offCard.minX + 40 * scale, y: offCard.minY + 14 * scale))
+    drawString(
+        "Works with no connection. Nothing is uploaded, nothing sits on a server.",
+        font: roundedFont(11 * scale, .medium),
+        color: cInkSoft,
+        at: CGPoint(x: offCard.minX + 16 * scale, y: offCard.minY + 44 * scale),
+        maxWidth: offCard.width - 32 * scale,
+        lineSpacing: 4
+    )
+    py += offCard.height + 14 * scale
+
+    // Optional Keychain API Key Box inside Popover
+    let keyCard = CGRect(x: pop.minX + pad, y: py, width: pop.width - pad * 2, height: 96 * scale)
+    drawBox(ctx, keyCard, radius: 16 * scale, fill: cPopoverLit, stroke: cBorder, lineWidth: 1.5)
+    drawSymbol("key.fill", size: 12 * scale, weight: .bold, color: cPinkDeep, center: CGPoint(x: keyCard.minX + 20 * scale, y: keyCard.minY + 22 * scale))
+    drawString("Optional Keychain API Keys", font: roundedFont(11.5 * scale, .bold), color: cInk, at: CGPoint(x: keyCard.minX + 36 * scale, y: keyCard.minY + 13 * scale))
+    let inputBox = CGRect(x: keyCard.minX + 14 * scale, y: keyCard.minY + 42 * scale, width: keyCard.width - 84 * scale, height: 34 * scale)
+    drawBox(ctx, inputBox, radius: 10 * scale, fill: cCardInner, stroke: cBorder, lineWidth: 1.5)
+    drawString("••••••••••••••••••••••••", font: monoFont(11 * scale, .bold), color: cInkMute, at: CGPoint(x: inputBox.minX + 10 * scale, y: inputBox.minY + 9 * scale))
+    let saveBtn = CGRect(x: inputBox.maxX + 8 * scale, y: inputBox.minY, width: 52 * scale, height: 34 * scale)
+    drawBox(ctx, saveBtn, radius: 10 * scale, fill: cPink.withAlphaComponent(0.24), stroke: cPink.withAlphaComponent(0.45), lineWidth: 1.5)
+    drawString("Save", font: roundedFont(10.5 * scale, .bold), color: cPinkDeep, at: CGPoint(x: saveBtn.midX, y: saveBtn.minY + 9 * scale), align: .center)
+
+    // Right Column: Headline + 3 Stacked Engine Cards
+    let rightX: CGFloat = 1090
+    drawKicker(ctx, text: "Private On-Device by Default", at: CGPoint(x: rightX, y: 150))
 
     drawString(
         "Audio stays on the Mac.",
-        font: roundedFont(108, .heavy),
+        font: roundedFont(96, .heavy),
         color: cInk,
-        at: CGPoint(x: 1440, y: 345),
-        align: .center,
-        kern: -3.8
+        at: CGPoint(x: rightX, y: 232),
+        kern: -3.4
     )
 
     drawString(
-        "Runs offline on the Apple Neural Engine out of the box — no account, no server, no telemetry.\nAdd personal Keychain keys any time for cloud streaming or prose polish.",
-        font: roundedFont(35, .medium),
+        "Built-in Apple Speech runs offline out of the box — zero accounts, zero servers, zero telemetry. Connect personal macOS Keychain keys any time for cloud streaming or prose polish.",
+        font: roundedFont(32, .medium),
         color: cInkSoft,
-        at: CGPoint(x: 240, y: 495),
-        align: .center,
-        maxWidth: 2400,
+        at: CGPoint(x: rightX, y: 365),
+        maxWidth: 1580,
         lineSpacing: 10
     )
 
-    // 3 Engine Architecture Cards
     struct EngineSpec {
         let badge: String
         let badgeColor: NSColor
         let symbol: String
         let title: String
-        let subtitle: String
         let detail: String
         let footer: String
         let featured: Bool
@@ -648,10 +777,9 @@ func renderSlide3() {
         EngineSpec(
             badge: "DEFAULT · OFFLINE",
             badgeColor: cMint,
-            symbol: "cpu.fill",
-            title: "Apple On-Device",
-            subtitle: "100% local Neural Engine",
-            detail: "Transcribes directly on the Mac with zero network traffic. Works on a flight, in a studio, or completely offline.",
+            symbol: "waveform.badge.mic",
+            title: "Apple On-Device Speech",
+            detail: "Transcribes locally on the Mac with zero network traffic — flights, studios, or air-gapped rooms.",
             footer: "No key required · Zero uploads",
             featured: true
         ),
@@ -659,9 +787,8 @@ func renderSlide3() {
             badge: "OPTIONAL · OWN KEY",
             badgeColor: cPinkDeep,
             symbol: "bolt.fill",
-            title: "Deepgram Nova-3",
-            subtitle: "Real-time cloud streaming",
-            detail: "Connect a personal Deepgram API key for ultra-long takes, noisy rooms, and multi-speaker conversation labels.",
+            title: "Deepgram Nova-3 Streaming",
+            detail: "Personal API key for ultra-long takes, noisy rooms, and multi-speaker conversation labels.",
             footer: "macOS Keychain · Model training opted out",
             featured: false
         ),
@@ -669,72 +796,60 @@ func renderSlide3() {
             badge: "OPTIONAL · OWN KEY",
             badgeColor: cInkSoft,
             symbol: "wand.and.stars",
-            title: "Gemini Polish",
-            subtitle: "Clean prose pass",
-            detail: "Connect a personal Gemini API key to turn rough spoken thoughts and mid-sentence restarts into crisp paragraphs.",
+            title: "Gemini Prose Polish",
+            detail: "Personal API key to turn rough spoken thoughts and mid-sentence restarts into crisp paragraphs.",
             footer: "macOS Keychain · Direct HTTPS",
             featured: false
         )
     ]
 
-    let cardW: CGFloat = 780
-    let cardH: CGFloat = 760
-    let gap: CGFloat = 60
-    let startX = (CGFloat(W) - (cardW * 3 + gap * 2)) / 2
-    let cardY: CGFloat = 695
-
-    for (idx, c) in cards.enumerated() {
-        let cx = startX + CGFloat(idx) * (cardW + gap)
-        let rect = CGRect(x: cx, y: cardY, width: cardW, height: cardH)
+    let cardW: CGFloat = 1580
+    let cardH: CGFloat = 290
+    var cy: CGFloat = 555
+    for c in cards {
+        let rect = CGRect(x: rightX, y: cy, width: cardW, height: cardH)
         drawBox(
-            ctx, rect, radius: 38,
+            ctx, rect, radius: 30,
             gradient: c.featured ? [cPopoverLit, cCardInner] : [cPopoverLit, cPopoverMid],
             angle: 90,
             stroke: c.featured ? cPink : cBorderStrong,
-            lineWidth: c.featured ? 4.5 : 3,
-            shadowOpacity: c.featured ? 0.16 : 0.10,
-            shadowBlur: 48, shadowY: 22
+            lineWidth: c.featured ? 4 : 2.5,
+            shadowOpacity: c.featured ? 0.12 : 0.07,
+            shadowBlur: 36, shadowY: 14
         )
 
-        // Badge pill
-        let bf = roundedFont(20, .heavy)
-        let bw = NSAttributedString(string: c.badge, attributes: [.font: bf, .kern: 2.2]).size().width + 44
-        let bRect = CGRect(x: rect.minX + 46, y: rect.minY + 46, width: bw, height: 44)
-        drawBox(ctx, bRect, radius: 22, fill: c.badgeColor.withAlphaComponent(0.14), stroke: c.badgeColor.withAlphaComponent(0.38), lineWidth: 2)
-        drawString(c.badge, font: bf, color: c.badgeColor, at: CGPoint(x: bRect.midX, y: bRect.minY + 9), align: .center, kern: 2.2)
+        let iconTile = CGRect(x: rect.minX + 36, y: rect.minY + 38, width: 78, height: 78)
+        drawBox(ctx, iconTile, radius: 22, fill: cPink.withAlphaComponent(0.16), stroke: cPink.withAlphaComponent(0.35), lineWidth: 2)
+        drawSymbol(c.symbol, size: 34, weight: .bold, color: cPinkDeep, center: CGPoint(x: iconTile.midX, y: iconTile.midY))
 
-        // Icon tile
-        let iconTile = CGRect(x: rect.minX + 46, y: rect.minY + 126, width: 92, height: 92)
-        drawBox(ctx, iconTile, radius: 26, fill: cPink.withAlphaComponent(0.16), stroke: cPink.withAlphaComponent(0.35), lineWidth: 2)
-        drawSymbol(c.symbol, size: 40, weight: .bold, color: cPinkDeep, center: CGPoint(x: iconTile.midX, y: iconTile.midY))
+        drawString(c.title, font: roundedFont(38, .heavy), color: cInk, at: CGPoint(x: iconTile.maxX + 26, y: rect.minY + 34), kern: -1.0)
+        drawString(c.footer, font: roundedFont(23, .bold), color: c.featured ? cMint : cPinkDeep, at: CGPoint(x: iconTile.maxX + 26, y: rect.minY + 84))
 
-        drawString(c.title, font: roundedFont(46, .heavy), color: cInk, at: CGPoint(x: rect.minX + 46, y: rect.minY + 252), kern: -1.2)
-        drawString(c.subtitle, font: roundedFont(28, .bold), color: cPinkDeep, at: CGPoint(x: rect.minX + 46, y: rect.minY + 316))
+        // Badge pill top-right
+        let bf = roundedFont(18, .heavy)
+        let bw = NSAttributedString(string: c.badge, attributes: [.font: bf, .kern: 2.0]).size().width + 40
+        let bRect = CGRect(x: rect.maxX - 36 - bw, y: rect.minY + 38, width: bw, height: 40)
+        drawBox(ctx, bRect, radius: 20, fill: c.badgeColor.withAlphaComponent(0.14), stroke: c.badgeColor.withAlphaComponent(0.38), lineWidth: 2)
+        drawString(c.badge, font: bf, color: c.badgeColor, at: CGPoint(x: bRect.midX, y: bRect.minY + 8), align: .center, kern: 2.0)
 
         drawString(
             c.detail,
-            font: roundedFont(28, .medium),
+            font: roundedFont(26, .medium),
             color: cInkSoft,
-            at: CGPoint(x: rect.minX + 46, y: rect.minY + 382),
-            maxWidth: cardW - 92,
-            lineSpacing: 10
+            at: CGPoint(x: rect.minX + 36, y: rect.minY + 148),
+            maxWidth: cardW - 72,
+            lineSpacing: 8
         )
 
-        // Footer divider + Keychain/offline guarantee
-        let div = CGRect(x: rect.minX + 46, y: rect.maxY - 110, width: cardW - 92, height: 2)
-        cBorder.setFill()
-        NSBezierPath(rect: div).fill()
-
-        drawSymbol(c.featured ? "checkmark.shield.fill" : "key.fill", size: 22, weight: .bold, color: c.featured ? cMint : cInkMute, center: CGPoint(x: rect.minX + 62, y: rect.maxY - 60))
-        drawString(c.footer, font: roundedFont(24, .bold), color: cInkSoft, at: CGPoint(x: rect.minX + 92, y: rect.maxY - 76))
+        cy += cardH + 28
     }
 
     // Bottom Trust Strip
     drawString(
         "App Sandbox  ·  macOS Keychain Security  ·  Zero Analytics  ·  Universal Apple Silicon & Intel",
-        font: roundedFont(27, .bold),
+        font: roundedFont(26, .bold),
         color: cInkMute,
-        at: CGPoint(x: 1440, y: 1555),
+        at: CGPoint(x: 1440, y: 1595),
         align: .center,
         kern: 0.5
     )

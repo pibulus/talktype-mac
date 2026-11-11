@@ -72,7 +72,7 @@ TalkType is a menu bar utility (LSUIElement). It has no Dock icon and no main wi
    b) Popover ghost: Click the ghost inside the popover to start listening, speak, and click the ghost again to finish.
    Press Escape at any time while listening to cancel a take cleanly without copying or saving partial text.
    When finished, the transcript is copied to the clipboard ("Copied to clipboard — Press ⌘V to paste!") and saved in the History tab. Press ⌘V in any app (e.g., Notes or TextEdit) to paste.
-4. Right-click the menu bar ghost for settings: Voice Mode, Conversations, Auto-Polish, Custom Vocabulary, Language (English / Español), Left/Right Click behavior, HUD Position, Launch at Login, Setup Guide, Privacy Policy, Clear History…, and Quit.
+4. Right-click the menu bar ghost (or click `Settings…` / `Quit TalkType` inside the popover's `About` tab) for settings: Voice Mode, Conversations, Auto-Polish, Custom Vocabulary, Language (English / Español), Left/Right Click behavior, HUD Position, Launch at Login, Setup Guide, Privacy Policy, Clear History…, and Quit.
 5. No account, no login, and no server operated by the developer. Optional cloud engines (Deepgram Nova-3, Google Gemini) are off by default and only run after an API key is pasted into the macOS Keychain; requests travel directly from the Mac to that provider.
 
 There is no trial, no purchase flow inside the app, and no external store link.
@@ -94,7 +94,7 @@ Generated deterministically at exact `2880 × 1800` Retina resolution via `swift
 
 - `screenshots/appstore/01-dictate-anywhere-2880x1800.png` (also copied to `screenshots/appstore-2880x1800.png`) — Live popover card + floating HUD capsule, `⌃⌥ Space`, `"Copied to clipboard — Press ⌘V to paste!"`
 - `screenshots/appstore/02-history-and-vocabulary-2880x1800.png` — Local 50-take History tab, one-click Copy pills, and Custom Vocabulary phonetic rules (`doctype -> TalkType`)
-- `screenshots/appstore/03-private-on-device-2880x1800.png` — Offline Apple Neural Engine by default, macOS Keychain BYOK options, bilingual EN / ES, zero telemetry
+- `screenshots/appstore/03-private-on-device-2880x1800.png` — Real Voice Mode & Keychain setup popover alongside On-Device Apple Speech, Deepgram Nova-3, and Gemini Prose Polish cards (zero telemetry)
 
 All screenshots use warm Flexoki cream (`#fffef7` / `#fbf1e4`) and warm sepia ink (`#1e1714`), open-eyed ghost art, and 100% MAS-true copy.
 
@@ -111,7 +111,7 @@ All screenshots use warm Flexoki cream (`#fffef7` / `#fbf1e4`) and warm sepia in
    - **TestFlight for Mac** (and profile-gated App Store Connect checks) requires a **Mac App Store Connect** provisioning profile for `com.pibulus.talktype` saved at `./TalkType.provisionprofile` before building. `build.sh mas` automatically embeds it as `Contents/embedded.provisionprofile` and runs `xattr -cr` before signing so downloaded profiles never trigger `ITMS-91109` (`com.apple.quarantine`).
 3. **Build the signed installer `.pkg`** (the Mac App Store counterpart to the direct `.dmg` — Transporter accepts signed flat `.pkg` installers for macOS apps):
    ```bash
-   VERSION=1.0 BUILD_NUMBER=2 ./build.sh mas
+   VERSION=1.0 BUILD_NUMBER=3 ./build.sh mas
    pkgutil --check-signature dist/mas/TalkType-1.0.pkg
    ```
    *(Increment `BUILD_NUMBER` on every upload to App Store Connect.)*
