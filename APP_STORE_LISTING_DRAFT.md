@@ -11,7 +11,7 @@ State: paid download, no trial, no StoreKit, no account, zero external purchase 
 | Field | Value |
 |---|---|
 | Name (30 max) | `TalkType: Voice to Text` |
-| Subtitle (30 max) | `Say it messy. Get it clean.` |
+| Subtitle (30 max) | `Private Menu Bar Dictation` |
 | Category | Productivity (secondary: Utilities) |
 | Keywords (100 max) | `dictation,voice to text,speech to text,transcribe,voice typing,notes,memo,microphone,writing` |
 | Support URL | `https://mac.talktype.app/appstore-support` |

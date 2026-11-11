@@ -14,3 +14,6 @@ TalkType.provisionprofile
 
 # Local Netlify folder
 .netlify
+
+# App Store Preview rendered videos
+screenshots/app-preview/*.mov
