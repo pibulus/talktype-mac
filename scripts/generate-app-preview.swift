@@ -243,12 +243,11 @@ struct TalkTypePreviewFrame: View {
                             .foregroundStyle(cInkMute)
                         Spacer()
                         if isCopied {
-                            Text("Copied!")
-                                .font(.system(size: 13, weight: .bold, design: .rounded))
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 12, weight: .bold))
                                 .foregroundStyle(cPinkDeep)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 5)
-                                .background(Capsule().fill(cPink.opacity(0.24)))
+                                .frame(width: 28, height: 28)
+                                .background(Circle().fill(cPink.opacity(0.24)))
                         }
                     }
                 }
@@ -369,12 +368,21 @@ struct TalkTypePreviewFrame: View {
             HStack {
                 Text(time).font(.system(size: 12.5, weight: .medium)).monospacedDigit().foregroundStyle(cInkMute)
                 Spacer()
-                Text(badge)
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                    .foregroundStyle(cPinkDeep)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(cPink.opacity(0.22)))
+                if badge == "Copied!" || badge == "Copy" {
+                    let copied = (badge == "Copied!")
+                    Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                        .font(.system(size: copied ? 11.5 : 12, weight: copied ? .bold : .semibold))
+                        .foregroundStyle(copied ? cPinkDeep : cInkMute)
+                        .frame(width: 28, height: 28)
+                        .background(Circle().fill(copied ? cPink.opacity(0.24) : cInk.opacity(0.06)))
+                } else {
+                    Text(badge)
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .foregroundStyle(cPinkDeep)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(cPink.opacity(0.22)))
+                }
             }
             Text(text)
                 .font(.system(size: 14, weight: .medium, design: .monospaced))

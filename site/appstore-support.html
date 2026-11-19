@@ -81,19 +81,19 @@
     <p>TalkType relies on two standard macOS permissions and nothing else:</p>
     <ul>
       <li><strong>Microphone</strong> (<code>System Settings → Privacy &amp; Security → Microphone</code>) so the active audio input can hear speech during a take.</li>
-      <li><strong>Speech Recognition</strong> (<code>System Settings → Privacy &amp; Security → Speech Recognition</code>) so Apple's on-device recognizer can transcribe offline on the Mac's Neural Engine.</li>
+      <li><strong>Speech Recognition</strong> (<code>System Settings → Privacy &amp; Security → Speech Recognition</code>) so Apple's on-device recognizer can transcribe offline right on the Mac.</li>
     </ul>
     <p>When either permission was declined on first launch, toggling TalkType back on in Privacy &amp; Security and reopening the app restores dictation immediately. Right-clicking the menu bar ghost surfaces any missing permission at the top of the menu.</p>
 
     <h2>Menu bar controls</h2>
     <p>Right-clicking (or Control-clicking) the ghost in the macOS menu bar opens the complete control menu:</p>
     <ul>
-      <li><strong>Voice Mode</strong> — chooses Apple's offline Neural Engine recognizer or optional cloud recognition once an API key is stored.</li>
+      <li><strong>Voice Mode</strong> — chooses Apple's offline on-device recognizer or optional cloud recognition once an API key is stored.</li>
       <li><strong>Conversations</strong> — enables multi-speaker labels during cloud transcription takes.</li>
       <li><strong>Auto-Polish</strong> — runs an optional prose cleanup pass after transcription when a Gemini key is configured.</li>
       <li><strong>Custom Vocabulary</strong> — teaches preferred spellings for names, places, studios, and technical terms.</li>
       <li><strong>Language</strong> — switches recognition between <strong>English</strong> and <strong>Español</strong>.</li>
-      <li><strong>Left/Right Click swap</strong> — flips whether a primary click opens the popover or toggles dictation directly.</li>
+      <li><strong>Left/Right Click swap</strong> — flips whether a primary click opens the popover card or the settings menu.</li>
       <li><strong>HUD Position</strong> — places the floating waveform capsule where it fits the display best.</li>
       <li><strong>Launch at Login</strong> — keeps the ghost ready in the menu bar after restarting macOS.</li>
       <li><strong>Setup Guide</strong>, <strong>Privacy Policy</strong>, and <strong>Quit</strong>.</li>
@@ -103,7 +103,7 @@
     <p>macOS hides status bar icons when the menu bar runs out of horizontal room, especially on MacBook displays with a camera housing. Closing a few neighbouring menu bar items frees space so the ghost reappears; <kbd>⌃⌥ Space</kbd> continues to work even while the icon is crowded out.</p>
 
     <h2>Engines and privacy</h2>
-    <p>Apple's speech recognizer runs offline on the Mac's Neural Engine, so audio stays on the Mac. There are no TalkType servers, no accounts, no analytics and no tracking. The optional cloud engines stay off until a personal Deepgram or Google Gemini key is added, and those keys are kept in the macOS Keychain. Full details live on the <a href="/appstore-privacy">Privacy Policy</a>.</p>
+    <p>Apple's speech recognizer runs offline on-device, so audio stays on the Mac. There are no TalkType servers, no accounts, no analytics and no tracking. The optional cloud engines stay off until a personal Deepgram or Google Gemini key is added, and those keys are kept in the macOS Keychain. Full details live on the <a href="/appstore-privacy">Privacy Policy</a>.</p>
 
     <h2>Purchases, receipts, and refunds</h2>
     <p>Mac App Store purchases, receipts, App Store redownloads across personal Macs, and refund requests are handled directly by Apple through the App Store and <code>reportaproblem.apple.com</code>.</p>

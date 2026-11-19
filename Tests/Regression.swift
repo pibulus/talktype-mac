@@ -249,7 +249,13 @@ extension AppDelegate {
         app.handleCarbonHotKey(down: false)
         expect(!app.hotKeyHeld && app.isHandsFreeMode, "Rapid Carbon hotkey release was swallowed instead of applying tap semantics")
         app.engine.isRecording = false
-        print("PASS rapid Carbon hotkey release (MAS_BUILD)")
+        app.uiState.showOnboarding = false
+        app.uiState.isSandboxFocused = false
+        app.deliver(text: "Hello MAS")
+        expect(NSPasteboard.general.string(forType: .string) == "Hello MAS", "MAS deliver must copy transcript to clipboard")
+        expect(app.engine.transcript == "Hello MAS", "MAS deliver must preserve transcript")
+        expect(app.engine.statusBanner == L10n.t("copiedToClipboard"), "MAS deliver must surface copied statusBanner")
+        print("PASS rapid Carbon hotkey release & MAS clipboard statusBanner delivery (MAS_BUILD)")
         #else
         UserDefaults.standard.set(PTTTrigger.eitherOption.rawValue, forKey: TalkTypeConfig.pttTriggerStorageKey)
         app.pttHeld = true
@@ -281,7 +287,8 @@ extension AppDelegate {
         expect(NSPasteboard.general.string(forType: .string) == "Uncle test transcript", "Untrusted paste failed to copy to clipboard")
         expect(AppDelegate.accessibilityPromptCount == initialPrompts + 1, "Untrusted paste did not prompt Accessibility")
         expect(app.engine.needsAccessibilityForPaste && app.uiState.needsAccessibilityBanner, "Untrusted paste did not flag Accessibility helper")
-        expect(app.engine.transcript == L10n.t("copiedNeedAccessibility"), "Untrusted paste did not surface feedback message")
+        expect(app.engine.transcript == "Uncle test transcript", "Untrusted paste overwrote transcript text")
+        expect(app.engine.statusBanner == L10n.t("copiedNeedAccessibility"), "Untrusted paste did not surface feedback statusBanner")
         AppDelegate.testAccessibilityTrustedOverride = nil
         print("PASS untrusted Accessibility fallback prompts and surfaces explicit feedback")
         #endif
@@ -319,7 +326,13 @@ extension AppDelegate {
         print("PASS bilingual language=multi routing & live API key validation")
 
         // Verify idle HUD & Popover NSHostingView teardown (prevents 120fps GhostMark CPU burn when idle)
+        // and non-activating NSPanel Full-Screen Space compatibility
         let hud = LiveHUDWindowController(speechEngine: app.engine, appDelegate: app)
+        expect(hud.window is NSPanel, "LiveHUDWindowController window must be an NSPanel")
+        expect(hud.window!.styleMask.contains(.nonactivatingPanel), "HUD panel must use .nonactivatingPanel")
+        expect(!hud.window!.canBecomeKey && !hud.window!.canBecomeMain, "HUD panel must never steal key or main focus")
+        expect(hud.window!.collectionBehavior.contains(.canJoinAllSpaces), "HUD panel must join all spaces")
+        expect(hud.window!.collectionBehavior.contains(.fullScreenAuxiliary), "HUD panel must appear over full-screen spaces")
         expect(!hud.hasActiveHostingView, "Idle HUD window must not mount NSHostingView before show()")
         hud.show()
         expect(hud.hasActiveHostingView && app.uiState.isHUDShown, "HUD show() must mount NSHostingView and set isHUDShown")
@@ -330,8 +343,10 @@ extension AppDelegate {
         expect(app.popover.contentViewController == nil, "Idle popover must not mount NSHostingController before show")
         app.ensurePopoverContentView()
         expect(app.popover.contentViewController != nil, "ensurePopoverContentView must mount NSHostingController")
+        app.uiState.activeKeySetup = .deepgram
         app.popoverDidClose(Notification(name: NSPopover.didCloseNotification))
-        expect(app.popover.contentViewController == nil && !app.uiState.isPopoverShown, "popoverDidClose must tear down NSHostingController")
+        expect(app.popover.contentViewController == nil && !app.uiState.isPopoverShown && app.uiState.activeKeySetup == nil,
+               "popoverDidClose must tear down NSHostingController and clear transient activeKeySetup")
         print("PASS idle HUD & Popover NSHostingView teardown & zero-CPU background state")
 
         // Verify Escape / cancelDictation cleanly aborts listening without delivering partial text or touching pasteboard
@@ -395,8 +410,18 @@ extension AppDelegate {
             for lang in ["en", "es"] {
                 let val = L10n.modeStrings[key]?[lang] ?? ""
                 expect(!val.isEmpty, "Missing MAS modeString \(key)[\(lang)]")
-                expect(!val.contains("$200") && !val.lowercased().contains("free pass"),
-                       "MAS string \(key)[\(lang)] leaked promo/pass language: \(val)")
+            }
+        }
+        let masForbidden = ["$200", "free pass", "unlock", "get api key", "console.deepgram", "aistudio.google"]
+        for (tableName, table) in [("strings", L10n.strings), ("modeStrings", L10n.modeStrings)] {
+            for (key, langs) in table {
+                for (lang, text) in langs {
+                    let lower = text.lowercased()
+                    for banned in masForbidden {
+                        expect(!lower.contains(banned),
+                               "MAS string hygiene violation (\(banned)) in \(tableName).\(key)[\(lang)]: \(text)")
+                    }
+                }
             }
         }
         #endif
@@ -446,6 +471,23 @@ extension AppDelegate {
         expect(items.filter { $0.name == "language" }.map { $0.value! } == ["en"], "Vocabulary injected a parameter")
         expect(items.last?.value == "R&D&language=fr", "Vocabulary value did not round trip")
         print("PASS vocabulary query escaping")
+
+        UserDefaults.standard.set("fooble -> TalkType", forKey: setting)
+        expect(VocabularyManager.clean("hello fooble") == "hello TalkType", "VocabularyManager custom rule failed")
+        UserDefaults.standard.set("fooble -> Banana", forKey: setting)
+        expect(VocabularyManager.clean("hello fooble") == "hello Banana", "VocabularyManager cached stale rules after UserDefaults change")
+        UserDefaults.standard.removeObject(forKey: setting)
+        expect(VocabularyManager.clean("hello fooble") == "hello fooble", "VocabularyManager cached stale rules after clearing")
+        print("PASS VocabularyManager regex caching & dynamic invalidation")
+
+        for cue in SoundFX.Cue.allCases {
+            let wav = SoundFX.wavData(for: cue)
+            expect(wav.count > 44, "SoundFX cue \(cue) generated empty WAV")
+            expect(String(data: wav.subdata(in: 0..<4), encoding: .ascii) == "RIFF", "SoundFX cue \(cue) missing RIFF header")
+            expect(String(data: wav.subdata(in: 8..<12), encoding: .ascii) == "WAVE", "SoundFX cue \(cue) missing WAVE header")
+        }
+        print("PASS SoundFX synthesized WAV cues valid across all cues")
+
         AppDelegate.regressionChecks()
     }
 }

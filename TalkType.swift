@@ -192,7 +192,6 @@ enum L10n {
         "dgAlertInfo": ["en": "Built-in speech recognition runs 100% offline on the Mac by default.\n\nConnect a personal Deepgram API key for real-time cloud streaming. Microphone audio streams directly to Deepgram (api.deepgram.com) with model training opted out (mip_opt_out=true). Stored locally in Keychain.", "es": "El reconocimiento integrado corre 100% sin conexión en el Mac por defecto.\n\nConecta una clave API personal de Deepgram para transcripción en la nube en tiempo real. El audio del micrófono viaja directamente a Deepgram (api.deepgram.com) sin entrenamiento de modelos (mip_opt_out=true). Se guarda en el Llavero."],
         "save": ["en": "Save", "es": "Guardar"],
         "updatePass": ["en": "Update Key", "es": "Actualizar clave"],
-        "getKey": ["en": "Get API Key ↗", "es": "Obtener clave API ↗"],
         "pasteKey": ["en": "Paste Deepgram API key", "es": "Pegar clave API de Deepgram"],
         "pasteKeyOrClear": ["en": "Paste new API key, or leave blank to remove", "es": "Pegar clave nueva o dejar vacío para eliminar"],
         "geminiPass": ["en": "Google Gemini API Key…", "es": "Clave API de Google Gemini…"],
@@ -378,7 +377,8 @@ enum L10n {
         "cyclePaletteHint": ["en": "Cycles the ghost color palette.", "es": "Cambia la paleta de color del fantasma."],
         "startDictationLabel": ["en": "Start dictation", "es": "Iniciar dictado"],
         "stopDictationLabel": ["en": "Stop dictation", "es": "Detener dictado"],
-        "stopDictationHint": ["en": "Click to finish, or press Escape to cancel.", "es": "Clic para terminar, o pulsa Escape para cancelar."]
+        "stopDictationHint": ["en": "Click to finish, or press Escape to cancel.", "es": "Clic para terminar, o pulsa Escape para cancelar."],
+        "soundEffects": ["en": "Sound Effects", "es": "Efectos de sonido"]
     ]
 }
 
@@ -394,6 +394,17 @@ enum TalkTypeConfig {
     static let customKeywordsStorageKey = "talktypeCustomKeywords"
     static let swapClicksStorageKey = "talktypeSwapClicks"
     static let onboardingCompletedStorageKey = "talktypeOnboardingCompleted"
+    static let soundEnabledStorageKey = "talktypeSoundEnabled"
+
+    static var isSoundEnabled: Bool {
+        get {
+            if UserDefaults.standard.object(forKey: soundEnabledStorageKey) == nil {
+                return true
+            }
+            return UserDefaults.standard.bool(forKey: soundEnabledStorageKey)
+        }
+        set { UserDefaults.standard.set(newValue, forKey: soundEnabledStorageKey) }
+    }
 
     static var isOnboardingCompleted: Bool {
         get { UserDefaults.standard.bool(forKey: onboardingCompletedStorageKey) }
@@ -494,8 +505,222 @@ enum TalkTypeConfig {
     }
 }
 
+// MARK: - Tactile Audio Cues (In-Memory PCM WAV Synthesis)
+enum SoundFX {
+    enum Cue: CaseIterable {
+        case startRecording
+        case stopRecording
+        case cancel
+        case uiTap
+        case error
+    }
+
+    private static var cache: [Cue: NSSound] = [:]
+
+    static func play(_ cue: Cue) {
+        #if TALKTYPE_TESTING
+        return
+        #else
+        guard TalkTypeConfig.isSoundEnabled else { return }
+        if Thread.isMainThread {
+            playOnMain(cue)
+        } else {
+            DispatchQueue.main.async { playOnMain(cue) }
+        }
+        #endif
+    }
+
+    private static func playOnMain(_ cue: Cue) {
+        let sound: NSSound
+        if let cached = cache[cue] {
+            sound = cached
+        } else if let created = NSSound(data: wavData(for: cue)) {
+            cache[cue] = created
+            sound = created
+        } else {
+            return
+        }
+        if sound.isPlaying { sound.stop() }
+        sound.currentTime = 0
+        sound.play()
+    }
+
+    static func wavData(for cue: Cue) -> Data {
+        let sampleRate = 44_100
+        let samples: [Float]
+        switch cue {
+        case .startRecording:
+            // Ascending bright two-note chime (E5 -> B5): unmistakably "mic live!"
+            var buf = [Float](repeating: 0, count: Int(Double(sampleRate) * 0.18))
+            addWarmTone(into: &buf, sampleRate: sampleRate, start: 0.0, duration: 0.070, freq: 659.25, gain: 0.24)
+            addWarmTone(into: &buf, sampleRate: sampleRate, start: 0.055, duration: 0.115, freq: 987.77, gain: 0.30)
+            samples = buf
+        case .stopRecording:
+            // Descending warm resolve chime (A5 -> E5): unmistakably "done / captured!"
+            var buf = [Float](repeating: 0, count: Int(Double(sampleRate) * 0.19))
+            addWarmTone(into: &buf, sampleRate: sampleRate, start: 0.0, duration: 0.065, freq: 880.00, gain: 0.22)
+            addWarmTone(into: &buf, sampleRate: sampleRate, start: 0.055, duration: 0.130, freq: 659.25, gain: 0.26)
+            samples = buf
+        case .cancel:
+            // Soft muted downward glide (330 Hz -> 210 Hz): clearly "discarded"
+            samples = synthesizeGlide(sampleRate: sampleRate, duration: 0.095, f0: 330.0, f1: 210.0, gain: 0.22)
+        case .uiTap:
+            // Feather-light tactile tick (740 Hz -> 880 Hz)
+            samples = synthesizeGlide(sampleRate: sampleRate, duration: 0.038, f0: 740.0, f1: 880.0, gain: 0.14)
+        case .error:
+            // Soft low double-knock (240 Hz -> 195 Hz)
+            var buf = [Float](repeating: 0, count: Int(Double(sampleRate) * 0.155))
+            addPureTone(into: &buf, sampleRate: sampleRate, start: 0.0, duration: 0.070, freq: 240.0, gain: 0.24)
+            addPureTone(into: &buf, sampleRate: sampleRate, start: 0.075, duration: 0.070, freq: 195.0, gain: 0.24)
+            samples = buf
+        }
+        return encodeMono16BitWAV(samples: samples, sampleRate: sampleRate)
+    }
+
+    private static func addWarmTone(into buffer: inout [Float], sampleRate: Int, start: Double, duration: Double, freq: Double, gain: Double) {
+        let startIdx = max(0, Int(start * Double(sampleRate)))
+        let count = max(1, Int(duration * Double(sampleRate)))
+        let attackCount = max(1, Int(0.006 * Double(sampleRate)))
+        let releaseCount = max(1, Int(0.014 * Double(sampleRate)))
+        for i in 0..<count {
+            let idx = startIdx + i
+            if idx >= buffer.count { break }
+            let t = Double(i) / Double(sampleRate)
+            let progress = Double(i) / Double(count)
+            let attack = i < attackCount ? Double(i) / Double(attackCount) : 1.0
+            let release = (count - i) < releaseCount ? Double(count - i) / Double(releaseCount) : 1.0
+            let decay = exp(-3.4 * progress)
+            let env = attack * release * decay
+            let wave = sin(2.0 * .pi * freq * t)
+                + 0.22 * sin(2.0 * .pi * (freq * 2.0) * t)
+                + 0.06 * sin(2.0 * .pi * (freq * 3.0) * t)
+            buffer[idx] += Float(wave * gain * env / 1.28)
+        }
+    }
+
+    private static func addPureTone(into buffer: inout [Float], sampleRate: Int, start: Double, duration: Double, freq: Double, gain: Double) {
+        let startIdx = max(0, Int(start * Double(sampleRate)))
+        let count = max(1, Int(duration * Double(sampleRate)))
+        let attackCount = max(1, Int(0.004 * Double(sampleRate)))
+        let releaseCount = max(1, Int(0.012 * Double(sampleRate)))
+        for i in 0..<count {
+            let idx = startIdx + i
+            if idx >= buffer.count { break }
+            let t = Double(i) / Double(sampleRate)
+            let progress = Double(i) / Double(count)
+            let attack = i < attackCount ? Double(i) / Double(attackCount) : 1.0
+            let release = (count - i) < releaseCount ? Double(count - i) / Double(releaseCount) : 1.0
+            let env = attack * release * exp(-4.0 * progress)
+            let wave = sin(2.0 * .pi * freq * t) + 0.14 * sin(2.0 * .pi * freq * 2.0 * t)
+            buffer[idx] += Float(wave * gain * env / 1.14)
+        }
+    }
+
+    private static func synthesizeGlide(sampleRate: Int, duration: Double, f0: Double, f1: Double, gain: Double) -> [Float] {
+        let count = max(1, Int(duration * Double(sampleRate)))
+        let attackCount = max(1, Int(0.004 * Double(sampleRate)))
+        let releaseCount = max(1, Int(0.010 * Double(sampleRate)))
+        var buf = [Float](repeating: 0, count: count)
+        var phase = 0.0
+        for i in 0..<count {
+            let progress = Double(i) / Double(count)
+            let freq = f0 + (f1 - f0) * progress
+            phase += (2.0 * .pi * freq) / Double(sampleRate)
+            let attack = i < attackCount ? Double(i) / Double(attackCount) : 1.0
+            let release = (count - i) < releaseCount ? Double(count - i) / Double(releaseCount) : 1.0
+            let env = attack * release * exp(-2.8 * progress)
+            buf[i] = Float(sin(phase) * gain * env)
+        }
+        return buf
+    }
+
+    private static func encodeMono16BitWAV(samples: [Float], sampleRate: Int) -> Data {
+        let dataSize = UInt32(samples.count * 2)
+        let riffSize = UInt32(36) + dataSize
+        var data = Data(capacity: 44 + Int(dataSize))
+
+        func appendUInt32(_ value: UInt32) {
+            var le = value.littleEndian
+            withUnsafeBytes(of: &le) { data.append(contentsOf: $0) }
+        }
+        func appendUInt16(_ value: UInt16) {
+            var le = value.littleEndian
+            withUnsafeBytes(of: &le) { data.append(contentsOf: $0) }
+        }
+
+        data.append(contentsOf: [0x52, 0x49, 0x46, 0x46]) // RIFF
+        appendUInt32(riffSize)
+        data.append(contentsOf: [0x57, 0x41, 0x56, 0x45]) // WAVE
+        data.append(contentsOf: [0x66, 0x6D, 0x74, 0x20]) // fmt 
+        appendUInt32(16)                                  // PCM chunk size
+        appendUInt16(1)                                   // Linear PCM
+        appendUInt16(1)                                   // Mono
+        appendUInt32(UInt32(sampleRate))
+        appendUInt32(UInt32(sampleRate * 2))              // Byte rate
+        appendUInt16(2)                                   // Block align
+        appendUInt16(16)                                  // Bits per sample
+        data.append(contentsOf: [0x64, 0x61, 0x74, 0x61]) // data
+        appendUInt32(dataSize)
+
+        for sample in samples {
+            let clamped = max(-1.0, min(1.0, sample))
+            var pcm = Int16(clamped * 32767.0).littleEndian
+            withUnsafeBytes(of: &pcm) { data.append(contentsOf: $0) }
+        }
+        return data
+    }
+}
+
 // MARK: - Vocabulary & Custom Keywords Normalizer
 enum VocabularyManager {
+    private static let builtInRegexes: [(regex: NSRegularExpression, replacement: String)] = {
+        let rawRules: [(pattern: String, replacement: String)] = [
+            ("(?i)\\bdoc\\s*types?\\b", "TalkType"),
+            ("(?i)\\bdoctype\\b", "TalkType"),
+            ("(?i)\\bdock\\s*types?\\b", "TalkType"),
+            ("(?i)\\btalk\\s*type\\b", "TalkType"),
+            ("(?i)\\btalktype\\b", "TalkType"),
+            ("(?i)\\btalk\\s*tight\\b", "TalkType")
+        ]
+        return rawRules.compactMap { rule in
+            guard let regex = try? NSRegularExpression(pattern: rule.pattern, options: []) else { return nil }
+            return (regex, rule.replacement)
+        }
+    }()
+
+    private static let rulesLock = NSLock()
+    private static var cachedKeywordsSource: String?
+    private static var cachedUserRules: [(regex: NSRegularExpression, replacement: String)] = []
+
+    private static func compiledUserRules() -> [(regex: NSRegularExpression, replacement: String)] {
+        let raw = userKeywordsString
+        rulesLock.lock()
+        defer { rulesLock.unlock() }
+        if cachedKeywordsSource == raw {
+            return cachedUserRules
+        }
+        var compiled: [(regex: NSRegularExpression, replacement: String)] = []
+        let userEntries = raw
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        for entry in userEntries where entry.contains("->") {
+            let parts = entry.components(separatedBy: "->")
+            if parts.count == 2 {
+                let wrong = parts[0].trimmingCharacters(in: .whitespacesAndNewlines)
+                let right = parts[1].trimmingCharacters(in: .whitespacesAndNewlines)
+                if !wrong.isEmpty && !right.isEmpty {
+                    let escaped = NSRegularExpression.escapedPattern(for: wrong)
+                    if let regex = try? NSRegularExpression(pattern: "(?i)\\b\(escaped)\\b", options: []) {
+                        compiled.append((regex, right))
+                    }
+                }
+            }
+        }
+        cachedKeywordsSource = raw
+        cachedUserRules = compiled
+        return compiled
+    }
     static var userKeywordsString: String {
         get { UserDefaults.standard.string(forKey: TalkTypeConfig.customKeywordsStorageKey) ?? "" }
         set { UserDefaults.standard.set(newValue, forKey: TalkTypeConfig.customKeywordsStorageKey) }
@@ -543,43 +768,15 @@ enum VocabularyManager {
         var output = input
 
         // 1. Built-in TalkType phonetic fixes (word boundaries, case-insensitive)
-        let builtInRules: [(pattern: String, replacement: String)] = [
-            ("(?i)\\bdoc\\s*types?\\b", "TalkType"),
-            ("(?i)\\bdoctype\\b", "TalkType"),
-            ("(?i)\\bdock\\s*types?\\b", "TalkType"),
-            ("(?i)\\btalk\\s*type\\b", "TalkType"),
-            ("(?i)\\btalktype\\b", "TalkType"),
-            ("(?i)\\btalk\\s*tight\\b", "TalkType")
-        ]
-
-        for rule in builtInRules {
-            if let regex = try? NSRegularExpression(pattern: rule.pattern, options: []) {
-                let range = NSRange(output.startIndex..<output.endIndex, in: output)
-                output = regex.stringByReplacingMatches(in: output, options: [], range: range, withTemplate: rule.replacement)
-            }
+        for rule in builtInRegexes {
+            let range = NSRange(output.startIndex..<output.endIndex, in: output)
+            output = rule.regex.stringByReplacingMatches(in: output, options: [], range: range, withTemplate: rule.replacement)
         }
 
         // 2. User-defined rules: "wrong -> right"
-        let userEntries = userKeywordsString
-            .split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-
-        for entry in userEntries {
-            if entry.contains("->") {
-                let parts = entry.components(separatedBy: "->")
-                if parts.count == 2 {
-                    let wrong = parts[0].trimmingCharacters(in: .whitespacesAndNewlines)
-                    let right = parts[1].trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !wrong.isEmpty && !right.isEmpty {
-                        let escaped = NSRegularExpression.escapedPattern(for: wrong)
-                        if let regex = try? NSRegularExpression(pattern: "(?i)\\b\(escaped)\\b", options: []) {
-                            let range = NSRange(output.startIndex..<output.endIndex, in: output)
-                            output = regex.stringByReplacingMatches(in: output, options: [], range: range, withTemplate: right)
-                        }
-                    }
-                }
-            }
+        for rule in compiledUserRules() {
+            let range = NSRange(output.startIndex..<output.endIndex, in: output)
+            output = rule.regex.stringByReplacingMatches(in: output, options: [], range: range, withTemplate: rule.replacement)
         }
 
         return output
@@ -597,7 +794,7 @@ enum Polisher {
             completion(text); return
         }
         var request = URLRequest(url: url)
-        request.timeoutInterval = 4.0
+        request.timeoutInterval = 8.0
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(key, forHTTPHeaderField: "x-goog-api-key")
@@ -615,7 +812,7 @@ enum Polisher {
                       let candidates = json["candidates"] as? [[String: Any]],
                       let content = candidates.first?["content"] as? [String: Any],
                       let parts = content["parts"] as? [[String: Any]],
-                      let first = parts.first?["text"] as? String else { return nil }
+                      let first = parts.first(where: { ($0["thought"] as? Bool) != true })?["text"] as? String else { return nil }
                 return first.trimmingCharacters(in: .whitespacesAndNewlines)
             }()
             DispatchQueue.main.async {
@@ -966,6 +1163,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var deliverySessionId = UUID()
     private var pasteEventID = UUID()
     private var feedbackID = UUID()
+    private var suppressNextStopSound = false
+    private var workspaceObservers: [NSObjectProtocol] = []
     
     private var menubarBounceTimer: Timer?
     private var menubarActiveBlinkTimer: Timer?
@@ -979,6 +1178,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         if let localKeyMonitor = localKeyMonitor { NSEvent.removeMonitor(localKeyMonitor) }
         for monitor in pttMonitors {
             NSEvent.removeMonitor(monitor)
+        }
+        for observer in workspaceObservers {
+            NSWorkspace.shared.notificationCenter.removeObserver(observer)
         }
     }
 
@@ -999,6 +1201,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             NSEvent.removeMonitor(monitor)
         }
         pttMonitors.removeAll()
+        for observer in workspaceObservers {
+            NSWorkspace.shared.notificationCenter.removeObserver(observer)
+        }
+        workspaceObservers.removeAll()
         engine.cancelRecording()
         stopMenubarBounce()
         liveHUDController?.hide()
@@ -1051,17 +1257,21 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
                 self?.lastExternalApp = app
             }
         }
-        NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didActivateApplicationNotification,
-            object: nil,
-            queue: .main,
-            using: trackExternalApp
+        workspaceObservers.append(
+            NSWorkspace.shared.notificationCenter.addObserver(
+                forName: NSWorkspace.didActivateApplicationNotification,
+                object: nil,
+                queue: .main,
+                using: trackExternalApp
+            )
         )
-        NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didDeactivateApplicationNotification,
-            object: nil,
-            queue: .main,
-            using: trackExternalApp
+        workspaceObservers.append(
+            NSWorkspace.shared.notificationCenter.addObserver(
+                forName: NSWorkspace.didDeactivateApplicationNotification,
+                object: nil,
+                queue: .main,
+                using: trackExternalApp
+            )
         )
 
         // Setup Menu Bar Item
@@ -1112,7 +1322,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             
             // 2. Deliver to clipboard & paste to active app
             if TalkTypeConfig.isPolishing && !TalkTypeConfig.geminiApiKey.isEmpty {
-                self.engine.transcript = L10n.t("polishing")
+                self.engine.statusBanner = L10n.t("polishing")
                 let activeSession = UUID()
                 self.deliverySessionId = activeSession
                 Polisher.polish(text) { [weak self] polished in
@@ -1131,18 +1341,24 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
                 if isRecording {
                     self.deliverySessionId = UUID()
                     self.feedbackID = UUID()
+                    self.suppressNextStopSound = false
+                    self.engine.statusBanner = nil
                     self.engine.failureMessage = nil
                     self.engine.needsAccessibilityForPaste = false
                     self.armEscapeHotKeys()
                     self.liveHUDController?.setInteractive(false)
                     self.startMenubarBounce()
                     self.liveHUDController?.show()
-                    NSSound(named: "Tink")?.play()
+                    SoundFX.play(.startRecording)
                 } else {
                     self.disarmEscapeHotKeys()
                     self.uiState.isClickRecording = false
                     self.stopMenubarBounce()
-                    NSSound(named: "Pop")?.play()
+                    if self.suppressNextStopSound {
+                        self.suppressNextStopSound = false
+                    } else {
+                        SoundFX.play(.stopRecording)
+                    }
                     if !self.pendingPaste, self.engine.phase != .ready,
                        self.engine.phase != .processing,
                        self.engine.failureMessage == nil {
@@ -1159,13 +1375,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         setupPushToTalk()
         #endif
 
-        // Minimal mainMenu so ⌘Q and standard text editing (⌘V, ⌘C, ⌘X, ⌘A, ⌘Z) work in modals/popovers
+        // Minimal mainMenu so ⌘Q, ⌘W, and standard text editing (⌘V, ⌘C, ⌘X, ⌘A, ⌘Z) work in modals/popovers
         let mainMenu = NSMenu()
         let appMenuItem = NSMenuItem()
         let appMenu = NSMenu()
         appMenu.addItem(withTitle: L10n.t("quit"), action: #selector(quitApp), keyEquivalent: "q").target = self
         appMenuItem.submenu = appMenu
         mainMenu.addItem(appMenuItem)
+
+        let fileMenuItem = NSMenuItem()
+        let fileMenu = NSMenu(title: "File")
+        fileMenu.addItem(withTitle: L10n.t("closeCard"), action: #selector(closePopover), keyEquivalent: "w").target = self
+        fileMenuItem.submenu = fileMenu
+        mainMenu.addItem(fileMenuItem)
 
         let editMenuItem = NSMenuItem()
         let editMenu = NSMenu(title: "Edit")
@@ -1233,10 +1455,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         bouncePhase = 0
         isRecordingBlink = false
 
-        // Silky 30fps harmonic floating sine wave (Retina-safe drawingHandler)
-        menubarBounceTimer = Timer.scheduledTimer(withTimeInterval: 0.033, repeats: true) { [weak self] _ in
+        // 20fps harmonic floating sine wave (Retina-safe drawingHandler)
+        menubarBounceTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
             guard let self = self, let button = self.statusItem?.button else { return }
-            self.bouncePhase += 0.16
+            self.bouncePhase += 0.24
             let yOffset = sin(self.bouncePhase) * 1.8
 
             // Use squint/blink eyes during active blink; otherwise open eyes!
@@ -1253,6 +1475,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             bounced.isTemplate = true
             button.image = bounced
         }
+        menubarBounceTimer?.tolerance = 0.01
 
         // Active blink while dictating: blinks every 1.6 - 2.4s while talking
         scheduleActiveBlink()
@@ -1399,6 +1622,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     func cancelDictation() {
         disarmEscapeHotKeys()
         guard engine.isRecording || engine.isAwaitingPermission else { return }
+        let wasRecording = engine.isRecording
+        if wasRecording {
+            suppressNextStopSound = true
+        }
         hotKeyHeld = false
         pttHeld = false
         pttPressTime = nil
@@ -1410,6 +1637,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         feedbackID = UUID()
         engine.failureMessage = nil
         engine.cancelRecording()
+        if wasRecording {
+            SoundFX.play(.cancel)
+        }
         stopMenubarBounce()
         liveHUDController?.hide(after: 0)
     }
@@ -1583,6 +1813,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             if isTalkTypeFrontmost || uiState.isSandboxFocused || (dictationTargetApp == nil && lastExternalApp == nil) {
                 self.pendingPaste = false
                 self.engine.needsAccessibilityForPaste = false
+                self.engine.statusBanner = nil
                 self.engine.transcript = text
                 self.liveHUDController?.hide(after: 0.9)
                 scheduleIdleReset()
@@ -1593,7 +1824,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 #if MAS_BUILD
         // MAS uses Carbon or the menu bar to dictate; delivery is clipboard-only.
         self.pendingPaste = false
-        engine.transcript = L10n.t("copiedToClipboard")
+        engine.transcript = text
+        engine.statusBanner = L10n.t("copiedToClipboard")
         self.liveHUDController?.hide(after: 1.5)
 #else
         let targetApp = self.dictationTargetApp ?? self.lastExternalApp
@@ -1604,7 +1836,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             self.pasteToActiveApp(text: text)
         } else {
             // Clipboard fallback with explicit visual feedback
-            self.engine.transcript = L10n.t("copiedToClipboard")
+            self.engine.transcript = text
+            self.engine.statusBanner = L10n.t("copiedToClipboard")
             self.liveHUDController?.hide(after: 1.5)
         }
 #endif
@@ -1617,6 +1850,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         let resetReadyState = DispatchWorkItem { [weak self] in
             guard let self = self, self.deliverySessionId == delivery,
                   self.engine.phase == .ready else { return }
+            self.engine.statusBanner = nil
             self.engine.phase = .idle
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.6, execute: resetReadyState)
@@ -1650,7 +1884,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     func openSettingsMenu() {
-        if let button = statusItem?.button {
+        if popover?.isShown == true {
+            uiState.isPopoverShown = false
+            popover.performClose(nil)
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self, let button = self.statusItem?.button else { return }
+                self.showContextMenu(button)
+            }
+        } else if let button = statusItem?.button {
             showContextMenu(button)
         }
     }
@@ -1796,8 +2037,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         convoItem.target = self
         convoItem.state = TalkTypeConfig.isConversationMode ? .on : .off
         // Diarization is a cloud capability; don't offer it on the on-device engine.
-        convoItem.isEnabled = TalkTypeConfig.isUsingDeepgram
-        convoItem.toolTip = TalkTypeConfig.isUsingDeepgram
+        convoItem.isEnabled = isDeepgram
+        convoItem.toolTip = isDeepgram
             ? L10n.t("conversationsHelp")
             : L10n.t("conversationsNeedsCloud")
         voiceMenu.addItem(convoItem)
@@ -1903,6 +2144,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         posParent.submenu = posMenu
         appMenu.addItem(posParent)
 
+        let soundItem = NSMenuItem(
+            title: L10n.t("soundEffects"),
+            action: #selector(toggleSoundEffects),
+            keyEquivalent: ""
+        )
+        soundItem.target = self
+        soundItem.state = TalkTypeConfig.isSoundEnabled ? .on : .off
+        appMenu.addItem(soundItem)
+
         let loginService = SMAppService.mainApp
         let loginStatus = loginService.status
         let loginItem = NSMenuItem(title: L10n.t("launchAtLogin"), action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
@@ -1953,7 +2203,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             menu.addItem(micItem)
         }
 
-        if !TalkTypeConfig.isUsingDeepgram {
+        if !isDeepgram {
             let speechStatus = SFSpeechRecognizer.authorizationStatus()
             if speechStatus == .denied || speechStatus == .restricted {
                 if !hasAlert { menu.addItem(NSMenuItem.separator()); hasAlert = true }
@@ -2063,10 +2313,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         let ordered = history.records.sorted { $0.timestamp < $1.timestamp }
         guard !ordered.isEmpty else { return }
 
+        if popover?.isShown == true {
+            uiState.isPopoverShown = false
+            popover.performClose(nil)
+        }
+        NSApp.activate(ignoringOtherApps: true)
         let panel = NSSavePanel()
         panel.nameFieldStringValue = "TalkType Takes.txt"
         panel.allowedContentTypes = [.plainText]
         panel.canCreateDirectories = true
+        panel.level = .floating
+        panel.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
         let formatter = DateFormatter()
@@ -2103,7 +2360,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             let pasteboard = NSPasteboard.general
             pasteboard.clearContents()
             pasteboard.setString(last.text, forType: .string)
-            NSSound(named: "Pop")?.play()
+            SoundFX.play(.uiTap)
         }
     }
 
@@ -2115,7 +2372,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
-        NSSound(named: "Pop")?.play()
+        SoundFX.play(.uiTap)
         #endif
     }
 
@@ -2124,7 +2381,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
-        NSSound(named: "Pop")?.play()
+        SoundFX.play(.uiTap)
     }
 
     @objc func openVisualPopover() {
@@ -2138,7 +2395,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         if let override = Self.confirmClearHistoryOverride {
             guard override() else { return }
             history.clear()
-            NSSound(named: "Pop")?.play()
+            SoundFX.play(.uiTap)
             return
         }
         NSApp.activate(ignoringOtherApps: true)
@@ -2152,9 +2409,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
         let cancelBtn = alert.addButton(withTitle: L10n.t("cancel"))
         cancelBtn.keyEquivalent = "\u{1b}"
+        alert.window.level = .floating
+        alert.window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
         if alert.runModal() == .alertFirstButtonReturn {
             history.clear()
-            NSSound(named: "Pop")?.play()
+            SoundFX.play(.uiTap)
         }
     }
 
@@ -2174,6 +2433,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     @objc func setClickActionSwapped() {
         TalkTypeConfig.isClicksSwapped = true
+    }
+
+    @objc func toggleSoundEffects() {
+        TalkTypeConfig.isSoundEnabled.toggle()
+        if TalkTypeConfig.isSoundEnabled {
+            SoundFX.play(.uiTap)
+        }
     }
 
     @objc func runSetupGuide() {
@@ -2245,6 +2511,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         input.placeholderString = "TalkType, pibulus, doctype -> TalkType"
         alert.accessoryView = input
         alert.window.initialFirstResponder = input
+        alert.window.level = .floating
+        alert.window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
 
         let response = alert.runModal()
         if response == .alertFirstButtonReturn {
@@ -2269,9 +2537,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             if let button = statusItem?.button {
                 ensurePopoverContentView()
                 uiState.isPopoverShown = true
-                NSApp.activate(ignoringOtherApps: true)
                 popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-                popover.contentViewController?.view.window?.makeKey()
+                if let popWindow = popover.contentViewController?.view.window {
+                    popWindow.collectionBehavior.remove(.canJoinAllSpaces)
+                    popWindow.collectionBehavior.insert([.moveToActiveSpace, .fullScreenAuxiliary])
+                    NSApp.activate(ignoringOtherApps: true)
+                    popWindow.makeKeyAndOrderFront(nil)
+                } else {
+                    NSApp.activate(ignoringOtherApps: true)
+                }
                 clampPopoverIntoVisibleFrame()
             }
         }
@@ -2284,11 +2558,27 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         guard let window = popover?.contentViewController?.view.window,
               let screen = window.screen ?? NSScreen.main else { return }
         let visible = screen.visibleFrame
+        let notchSafeMaxY = min(visible.maxY, screen.frame.maxY - screen.safeAreaInsets.top)
         var frame = window.frame
-        guard frame.maxY > visible.maxY || frame.minY < visible.minY else { return }
-        if frame.maxY > visible.maxY { frame.origin.y = visible.maxY - frame.height }
-        if frame.minY < visible.minY { frame.origin.y = visible.minY }
-        window.setFrame(frame, display: true)
+        let minX = visible.minX + 8
+        let maxX = max(minX, visible.maxX - frame.width - 8)
+        let clampedX = min(max(frame.origin.x, minX), maxX)
+        var clampedY = frame.origin.y
+        if frame.maxY > notchSafeMaxY { clampedY = notchSafeMaxY - frame.height }
+        if clampedY < visible.minY { clampedY = visible.minY }
+        if clampedX != frame.origin.x || clampedY != frame.origin.y {
+            frame.origin = NSPoint(x: clampedX, y: clampedY)
+            window.setFrame(frame, display: true)
+        }
+    }
+
+    @objc func closePopover() {
+        guard let popover = popover, popover.isShown else { return }
+        uiState.isPopoverShown = false
+        uiState.isSandboxFocused = false
+        uiState.activeKeySetup = nil
+        popover.performClose(nil)
+        popover.contentViewController = nil
     }
 
     func popoverWillShow(_ notification: Notification) {
@@ -2304,6 +2594,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     func popoverDidClose(_ notification: Notification) {
         uiState.isPopoverShown = false
         uiState.isSandboxFocused = false
+        uiState.activeKeySetup = nil
         popover?.contentViewController = nil
     }
     
@@ -2364,7 +2655,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             promptAccessibilityTrust(openSettings: false)
             uiState.needsAccessibilityBanner = true
             engine.needsAccessibilityForPaste = true
-            engine.transcript = L10n.t("copiedNeedAccessibility")
+            engine.transcript = text
+            engine.statusBanner = L10n.t("copiedNeedAccessibility")
             liveHUDController?.setInteractive(true)
             liveHUDController?.show()
             liveHUDController?.hide(after: 4.5)
@@ -2373,6 +2665,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
         uiState.needsAccessibilityBanner = false
         engine.needsAccessibilityForPaste = false
+        engine.statusBanner = nil
         engine.transcript = text
         liveHUDController?.setInteractive(false)
         liveHUDController?.hide(after: 0.9)
@@ -2392,7 +2685,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
         
         // If an interfering window (or our popover) had focus, reactivate the target application before simulating Cmd+V.
-        if let target = targetApp, target.processIdentifier != NSRunningApplication.current.processIdentifier {
+        if let target = targetApp,
+           target.processIdentifier != NSRunningApplication.current.processIdentifier,
+           !target.isActive {
             target.activate(options: [.activateIgnoringOtherApps])
         }
         
@@ -2450,6 +2745,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 }
 
 // MARK: - Live Transcript Floating HUD Window Controller
+private final class HUDPanel: NSPanel {
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
+}
+
 final class LiveHUDWindowController: NSWindowController {
     let size = NSSize(width: 580, height: 76)
     private var isVisibleTarget = false
@@ -2462,21 +2762,17 @@ final class LiveHUDWindowController: NSWindowController {
     init(speechEngine: SpeechEngine, appDelegate: AppDelegate? = nil) {
         self.speechEngine = speechEngine
         self.appDelegate = appDelegate
-        let mouseLoc = NSEvent.mouseLocation
-        let screenWithMouse = NSScreen.screens.first(where: { NSMouseInRect(mouseLoc, $0.frame, false) })
-        let screen = screenWithMouse ?? NSScreen.main ?? NSScreen.screens.first
-        let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1280, height: 800)
-        let isTop = TalkTypeConfig.hudPosition == "top"
-        let y = isTop ? (screenFrame.maxY - size.height - 32) : (screenFrame.minY + 68)
-        let origin = NSPoint(x: screenFrame.midX - size.width / 2, y: y)
-        
-        let window = NSWindow(
-            contentRect: NSRect(origin: origin, size: size),
-            styleMask: [.borderless],
+
+        let window = HUDPanel(
+            contentRect: NSRect(origin: .zero, size: size),
+            styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
         // High overlay level: sits strictly above all full-screen apps, terminal windows, and dialogues
+        window.isFloatingPanel = true
+        window.becomesKeyOnlyIfNeeded = true
+        window.worksWhenModal = true
         window.level = .popUpMenu
         window.isOpaque = false
         window.backgroundColor = .clear
@@ -2485,15 +2781,23 @@ final class LiveHUDWindowController: NSWindowController {
         window.ignoresMouseEvents = true
         window.canHide = false
         window.hidesOnDeactivate = false
+        window.alphaValue = 0
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         window.isReleasedWhenClosed = false
 
         super.init(window: window)
+        updatePosition()
 
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(handleScreenParametersChanged),
             name: NSApplication.didChangeScreenParametersNotification,
+            object: nil
+        )
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(handleActiveSpaceChanged),
+            name: NSWorkspace.activeSpaceDidChangeNotification,
             object: nil
         )
     }
@@ -2527,11 +2831,20 @@ final class LiveHUDWindowController: NSWindowController {
     
     deinit {
         NotificationCenter.default.removeObserver(self)
+        NSWorkspace.shared.notificationCenter.removeObserver(self)
     }
 
     @objc private func handleScreenParametersChanged(_ notification: Notification) {
         DispatchQueue.main.async { [weak self] in
             self?.updatePosition()
+        }
+    }
+
+    @objc private func handleActiveSpaceChanged(_ notification: Notification) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self, self.isVisibleTarget else { return }
+            self.updatePosition()
+            self.window?.orderFrontRegardless()
         }
     }
     
@@ -2544,11 +2857,15 @@ final class LiveHUDWindowController: NSWindowController {
         let mouseLoc = NSEvent.mouseLocation
         let screenWithMouse = NSScreen.screens.first(where: { NSMouseInRect(mouseLoc, $0.frame, false) })
         let screen = screenWithMouse ?? NSScreen.main ?? NSScreen.screens.first
-        let screenFrame = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1280, height: 800)
+        let visible = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1280, height: 800)
+        let frame = screen?.frame ?? visible
+        let notchSafeMaxY = min(visible.maxY, frame.maxY - (screen?.safeAreaInsets.top ?? 0))
         let isTop = TalkTypeConfig.hudPosition == "top"
-        let y = isTop ? (screenFrame.maxY - size.height - 32) : (screenFrame.minY + 68)
-        let origin = NSPoint(x: screenFrame.midX - size.width / 2, y: y)
-        window.setFrame(NSRect(origin: origin, size: size), display: true)
+        let y = isTop ? (notchSafeMaxY - size.height - 28) : (visible.minY + 68)
+        let minX = visible.minX + 12
+        let maxX = max(minX, visible.maxX - size.width - 12)
+        let x = min(max(visible.midX - size.width / 2, minX), maxX)
+        window.setFrame(NSRect(origin: NSPoint(x: x, y: y), size: size), display: true)
     }
     
     func show() {
@@ -2626,6 +2943,7 @@ struct LiveTranscriptHUDView: View {
     
     private var displayedText: String {
         if let failure = speechEngine.failureMessage { return failure }
+        if let banner = speechEngine.statusBanner { return banner }
         if !speechEngine.transcript.isEmpty { return speechEngine.transcript }
         switch speechEngine.phase {
         case .idle: return L10n.t("holdGhost")
@@ -2740,7 +3058,7 @@ struct LiveTranscriptHUDView: View {
                             .font(.system(size: 16, weight: .semibold, design: .rounded))
                             .lineLimit(1)
                             .foregroundStyle(
-                                speechEngine.transcript.isEmpty
+                                (speechEngine.failureMessage == nil && speechEngine.statusBanner == nil && speechEngine.transcript.isEmpty)
                                     ? Color(red: 0.35, green: 0.28, blue: 0.24).opacity(0.82)
                                     : Color(red: 0.12, green: 0.09, blue: 0.08)
                             )
@@ -2757,7 +3075,7 @@ struct LiveTranscriptHUDView: View {
                     LinearGradient(
                         stops: [
                             .init(color: .clear, location: 0),
-                            .init(color: TT.ghostInk, location: speechEngine.transcript.count > 25 ? 0.07 : 0),
+                            .init(color: TT.ghostInk, location: displayedText.count > 25 ? 0.07 : 0),
                             .init(color: TT.ghostInk, location: 1.0)
                         ],
                         startPoint: .leading,
@@ -2837,7 +3155,7 @@ struct LiveTranscriptHUDView: View {
         .shadow(color: Color(red: 0.12, green: 0.09, blue: 0.08).opacity(0.12), radius: 8, x: 0, y: 3)
         .accessibilityElement(children: speechEngine.needsAccessibilityForPaste ? .contain : .combine)
         .accessibilityLabel(
-            speechEngine.transcript.isEmpty
+            (speechEngine.failureMessage == nil && speechEngine.statusBanner == nil && speechEngine.transcript.isEmpty)
                 ? "TalkType \(phaseLabel)"
                 : "TalkType \(phaseLabel): \(displayedText)"
         )
@@ -2913,11 +3231,16 @@ class SpeechEngine: NSObject, ObservableObject {
     
     // CoreAudio real-time processing queue & Session tracking
     private let audioProcessingQueue = DispatchQueue(label: "com.talktype.audioProcessing", qos: .userInteractive)
+    private let pendingBufferLock = NSLock()
+    private var pendingAudioBuffers = 0
+    private static let maxPendingAudioBuffers = 48
+    private var lastWatchdogDispatchTime: TimeInterval = 0
     private var currentSessionId = UUID()
     private final class DeepgramCapture {
         var converter: AVAudioConverter
         let format: AVAudioFormat
         var socket: URLSessionWebSocketTask
+        var scratchBuffer: AVAudioPCMBuffer?
         var closed = false // Owned by audioProcessingQueue, including the close marker.
         init(converter: AVAudioConverter, format: AVAudioFormat, socket: URLSessionWebSocketTask) {
             self.converter = converter
@@ -2953,10 +3276,26 @@ class SpeechEngine: NSObject, ObservableObject {
 
     private func reportBuffer(_ buffer: AVAudioPCMBuffer, arrival: TimeInterval, sessionID: UUID) {
         publishInputLevel(from: buffer, sessionID: sessionID)
+        guard arrival - lastWatchdogDispatchTime >= 0.5 else { return }
+        lastWatchdogDispatchTime = arrival
         DispatchQueue.main.async { [weak self] in
             guard let self = self, self.currentSessionId == sessionID, self.isRecording else { return }
             self.lastBufferArrivalTime = arrival
         }
+    }
+
+    private func tryReserveAudioBufferSlot() -> Bool {
+        pendingBufferLock.lock()
+        defer { pendingBufferLock.unlock() }
+        guard pendingAudioBuffers < Self.maxPendingAudioBuffers else { return false }
+        pendingAudioBuffers += 1
+        return true
+    }
+
+    private func releaseAudioBufferSlot() {
+        pendingBufferLock.lock()
+        pendingAudioBuffers = max(0, pendingAudioBuffers - 1)
+        pendingBufferLock.unlock()
     }
 
     private func closeAppleCapture() {
@@ -3068,6 +3407,7 @@ class SpeechEngine: NSObject, ObservableObject {
     }
     
     @Published var failureMessage: String?
+    @Published var statusBanner: String?
     @Published var transcript = ""
     @Published var isRecording = false
     @Published var phase: SpeechPhase = .idle
@@ -3098,8 +3438,7 @@ class SpeechEngine: NSObject, ObservableObject {
         deepgramKeepAliveTimer = nil
         webSocketTask?.cancel(with: .goingAway, reason: nil)
         webSocketTask = nil
-        safeRemoveTap()
-        audioEngine.stop()
+        teardownAudioEngine(reset: true)
         closeAppleCapture()
         recognitionTask?.cancel()
         recognitionTask = nil
@@ -3107,6 +3446,7 @@ class SpeechEngine: NSObject, ObservableObject {
         isRecording = false
         isStopping = false
         audioMeter.level = 0
+        statusBanner = nil
         phase = saved.isEmpty ? .idle : .processing
         onStateChange?(false)
         if !saved.isEmpty { onFinal?(saved) }
@@ -3128,7 +3468,7 @@ class SpeechEngine: NSObject, ObservableObject {
     
     override init() {
         super.init()
-        let config = URLSessionConfiguration.default
+        let config = URLSessionConfiguration.ephemeral
         self.urlSession = URLSession(configuration: config)
         
         NotificationCenter.default.addObserver(
@@ -3159,7 +3499,7 @@ class SpeechEngine: NSObject, ObservableObject {
         NSWorkspace.shared.notificationCenter.removeObserver(self)
         urlSession?.invalidateAndCancel()
         safeRemoveTap()
-        audioEngine.stop()
+        if audioEngine.isRunning { audioEngine.stop() }
         recognitionTask?.cancel()
         closeAppleCapture()
         deepgramStopDeadline?.cancel()
@@ -3175,12 +3515,10 @@ class SpeechEngine: NSObject, ObservableObject {
                 return
             }
             self.disarmStreamWatchdog()
-            self.safeRemoveTap()
             if self.isRecording {
                 self.stopRecording()
             }
-            self.audioEngine.stop()
-            self.audioEngine.reset()
+            self.teardownAudioEngine(reset: true)
         }
     }
 
@@ -3192,9 +3530,7 @@ class SpeechEngine: NSObject, ObservableObject {
             if self.isRecording {
                 self.stopRecording()
             }
-            self.safeRemoveTap()
-            self.audioEngine.stop()
-            self.audioEngine.reset()
+            self.teardownAudioEngine(reset: true)
         }
     }
 
@@ -3203,8 +3539,7 @@ class SpeechEngine: NSObject, ObservableObject {
             guard let self = self else { return }
             NSLog("☀️ TalkType: System woke up, resetting engine state to idle")
             guard !self.isRecording, !self.isStopping else { return }
-            self.safeRemoveTap()
-            self.audioEngine.reset()
+            self.teardownAudioEngine(reset: true)
         }
     }
     
@@ -3212,6 +3547,16 @@ class SpeechEngine: NSObject, ObservableObject {
         guard hasInstalledAudioTap else { return }
         hasInstalledAudioTap = false
         audioEngine.inputNode.removeTap(onBus: 0)
+    }
+
+    private func teardownAudioEngine(reset: Bool = true) {
+        safeRemoveTap()
+        if audioEngine.isRunning {
+            audioEngine.stop()
+        }
+        if reset {
+            audioEngine.reset()
+        }
     }
 
     private func resolveInputFormat() -> AVAudioFormat? {
@@ -3289,9 +3634,7 @@ class SpeechEngine: NSObject, ObservableObject {
               !permissionRequestInProgress else { return }
 
         if audioEngine.isRunning {
-            safeRemoveTap()
-            audioEngine.stop()
-            audioEngine.reset()
+            teardownAudioEngine(reset: true)
         }
         phase = .idle
 
@@ -3305,7 +3648,9 @@ class SpeechEngine: NSObject, ObservableObject {
                     guard let self = self else { return }
                     self.permissionRequestInProgress = false
                     guard granted else {
-                        self.transcript = L10n.t("permissionMicTitle")
+                        let msg = L10n.t("permissionMicTitle")
+                        self.statusBanner = msg
+                        self.onFailure?(msg)
                         self.onPermissionDenied?()
                         return
                     }
@@ -3313,7 +3658,9 @@ class SpeechEngine: NSObject, ObservableObject {
                 }
             }
         default:
-            transcript = L10n.t("permissionMicTitle")
+            let msg = L10n.t("permissionMicTitle")
+            statusBanner = msg
+            onFailure?(msg)
             onPermissionDenied?()
         }
     }
@@ -3330,7 +3677,9 @@ class SpeechEngine: NSObject, ObservableObject {
                         guard let self = self else { return }
                         self.permissionRequestInProgress = false
                         guard status == .authorized else {
-                            self.transcript = L10n.t("permissionSpeechTitle")
+                            let msg = L10n.t("permissionSpeechTitle")
+                            self.statusBanner = msg
+                            self.onFailure?(msg)
                             self.onPermissionDenied?()
                             return
                         }
@@ -3338,7 +3687,9 @@ class SpeechEngine: NSObject, ObservableObject {
                     }
                 }
             default:
-                transcript = L10n.t("permissionSpeechTitle")
+                let msg = L10n.t("permissionSpeechTitle")
+                statusBanner = msg
+                onFailure?(msg)
                 onPermissionDenied?()
             }
         } else {
@@ -3349,7 +3700,7 @@ class SpeechEngine: NSObject, ObservableObject {
     private func beginAuthorizedRecording(resumeAfterPermission: Bool, requestedPermission: Bool) {
         if requestedPermission && !resumeAfterPermission {
             let readyMsg = L10n.t("permissionsReadyShortcut")
-            transcript = readyMsg
+            statusBanner = readyMsg
             onFailure?(readyMsg)
             onPermissionDenied?()
             return
@@ -3357,6 +3708,10 @@ class SpeechEngine: NSObject, ObservableObject {
 
         isStopping = false
         currentSessionId = UUID()
+        audioProcessingQueue.async { [weak self] in
+            self?.lastWatchdogDispatchTime = 0
+        }
+        statusBanner = nil
         transcript = ""
         confirmedTranscript = ""
         interimTranscript = ""
@@ -3414,8 +3769,7 @@ class SpeechEngine: NSObject, ObservableObject {
         webSocketTask = nil
         socket?.cancel(with: .goingAway, reason: nil)
 
-        safeRemoveTap()
-        audioEngine.stop()
+        teardownAudioEngine(reset: true)
         closeAppleCapture()
         recognitionTask?.cancel()
         recognitionTask = nil
@@ -3430,6 +3784,7 @@ class SpeechEngine: NSObject, ObservableObject {
         deepgramReconnectCount = 0
         deepgramFinalRanges.removeAll()
         lastSpeakerIndex = nil
+        statusBanner = nil
         transcript = ""
         failureMessage = nil
         phase = .idle
@@ -3458,6 +3813,12 @@ class SpeechEngine: NSObject, ObservableObject {
     private func startDeepgramStreaming() {
         activeBackend = .deepgram
         isStopping = false
+        guard let nativeFormat = resolveInputFormat(),
+              let targetFormat = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 16000, channels: 1, interleaved: false),
+              let converter = AVAudioConverter(from: nativeFormat, to: targetFormat) else {
+            startAppleSpeechRecognition()
+            return
+        }
         guard let socket = makeDeepgramWebSocket() else {
             if TalkTypeConfig.deepgramApiKey.isEmpty {
                 startAppleSpeechRecognition()
@@ -3479,38 +3840,40 @@ class SpeechEngine: NSObject, ObservableObject {
         }
         if let timer = deepgramKeepAliveTimer { RunLoop.main.add(timer, forMode: .common) }
         
-        guard let nativeFormat = resolveInputFormat() else {
-            startAppleSpeechRecognition()
-            return
-        }
-        
-        guard let targetFormat = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 16000, channels: 1, interleaved: false) else {
-            startAppleSpeechRecognition()
-            return
-        }
-        
-        guard let converter = AVAudioConverter(from: nativeFormat, to: targetFormat) else {
-            startAppleSpeechRecognition()
-            return
-        }
-        
         let capture = DeepgramCapture(converter: converter, format: targetFormat, socket: socket)
         deepgramCapture = capture
         
         safeRemoveTap()
         let sampleRate = nativeFormat.sampleRate
         let inputNode = audioEngine.inputNode
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: nil) { [weak self] buffer, _ in
-            guard let self = self, let bufferCopy = Self.copyAudio(buffer) else { return }
+        inputNode.installTap(onBus: 0, bufferSize: 2048, format: nil) { [weak self] buffer, _ in
+            guard let self = self, self.tryReserveAudioBufferSlot() else { return }
+            guard let bufferCopy = Self.copyAudio(buffer) else {
+                self.releaseAudioBufferSlot()
+                return
+            }
             let arrival = ProcessInfo.processInfo.systemUptime
             self.audioProcessingQueue.async { [weak self, bufferCopy] in
-                guard let self = self, !capture.closed else { return }
+                guard let self = self else { return }
+                defer { self.releaseAudioBufferSlot() }
+                guard !capture.closed else { return }
                 self.reportBuffer(bufferCopy, arrival: arrival, sessionID: sessionID)
 
                 // Dynamically adapt to input sample rate shifts (e.g. DAC switching 48k -> 96k/192k)
                 let inputRate = bufferCopy.format.sampleRate > 0 ? bufferCopy.format.sampleRate : sampleRate
                 let frameCount = AVAudioFrameCount(ceil(Double(bufferCopy.frameLength) * 16000.0 / inputRate) + 32)
-                guard let convertedBuffer = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: frameCount) else { return }
+                let convertedBuffer: AVAudioPCMBuffer
+                if let existing = capture.scratchBuffer,
+                   existing.format == targetFormat,
+                   existing.frameCapacity >= frameCount {
+                    existing.frameLength = 0
+                    convertedBuffer = existing
+                } else if let fresh = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: frameCount) {
+                    capture.scratchBuffer = fresh
+                    convertedBuffer = fresh
+                } else {
+                    return
+                }
                 
                 // Reconstruct converter if hardware dynamically mutated input format mid-stream
                 let activeConverter: AVAudioConverter
@@ -3552,7 +3915,6 @@ class SpeechEngine: NSObject, ObservableObject {
         } catch {
             NSLog("⚠️ TalkType: Failed to start audioEngine: %@", error.localizedDescription)
             failRecognition("The microphone could not start: " + error.localizedDescription)
-            audioEngine.reset()
         }
     }
     
@@ -3609,8 +3971,7 @@ class SpeechEngine: NSObject, ObservableObject {
     private func fallbackToApple() {
         guard isRecording, !isStopping else { return }
         commitInterim()
-        safeRemoveTap()
-        audioEngine.stop()
+        teardownAudioEngine(reset: false)
         startAppleSpeechRecognition(appendingToExisting: true)
     }
 
@@ -3694,8 +4055,7 @@ class SpeechEngine: NSObject, ObservableObject {
         phase = .processing
         deepgramKeepAliveTimer?.invalidate()
         deepgramKeepAliveTimer = nil
-        audioEngine.stop()
-        safeRemoveTap()
+        teardownAudioEngine(reset: true)
         audioMeter.level = 0
         onStateChange?(false)
 
@@ -3776,11 +4136,17 @@ class SpeechEngine: NSObject, ObservableObject {
         let capture = AppleCapture()
         appleCapture = capture
         let inputNode = audioEngine.inputNode
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: nil) { [weak self] buffer, _ in
-            guard let self = self, let copy = Self.copyAudio(buffer) else { return }
+        inputNode.installTap(onBus: 0, bufferSize: 2048, format: nil) { [weak self] buffer, _ in
+            guard let self = self, self.tryReserveAudioBufferSlot() else { return }
+            guard let copy = Self.copyAudio(buffer) else {
+                self.releaseAudioBufferSlot()
+                return
+            }
             let arrival = ProcessInfo.processInfo.systemUptime
             self.audioProcessingQueue.async { [weak self, copy] in
-                guard let self = self, !capture.closed else { return }
+                guard let self = self else { return }
+                defer { self.releaseAudioBufferSlot() }
+                guard !capture.closed else { return }
                 self.reportBuffer(copy, arrival: arrival, sessionID: sessionId)
                 capture.request?.append(copy)
             }
@@ -3797,7 +4163,6 @@ class SpeechEngine: NSObject, ObservableObject {
         } catch {
             NSLog("⚠️ TalkType: Failed to start Apple Speech audio engine: %@", error.localizedDescription)
             failRecognition("The microphone could not start: " + error.localizedDescription)
-            audioEngine.reset()
         }
     }
     
@@ -3874,8 +4239,7 @@ class SpeechEngine: NSObject, ObservableObject {
         currentSessionId = UUID()
         appleTaskID = UUID()
         disarmStreamWatchdog()
-        audioEngine.stop()
-        safeRemoveTap()
+        teardownAudioEngine(reset: true)
         closeAppleCapture()
         recognitionTask?.cancel()
         recognitionTask = nil
@@ -3891,8 +4255,7 @@ class SpeechEngine: NSObject, ObservableObject {
     private func stopAppleSpeechRecognition() {
         isStopping = true
         let sessionID = currentSessionId
-        audioEngine.stop()
-        safeRemoveTap()
+        teardownAudioEngine(reset: true)
         closeAppleCapture()
         isRecording = false
         audioMeter.level = 0
@@ -4012,7 +4375,6 @@ struct GhostMark: View {
     @State private var eyeScale: CGFloat = 1
     @State private var floatY: CGFloat = 0
     @State private var tilt: Double = 0
-    @State private var blinkTimer: Timer?
 
     private let eyeAnchor = UnitPoint(x: 0.5, y: 464.0 / 1024.0)
 
@@ -4036,20 +4398,37 @@ struct GhostMark: View {
         .rotationEffect(.degrees(tilt))
         .accessibilityHidden(true)
         .onAppear { updateActivityState() }
-        .onDisappear { stopFloating(); blinkTimer?.invalidate(); blinkTimer = nil }
+        .onDisappear { stopFloating() }
         .onChange(of: isRecording) { _ in updateActivityState() }
         .onChange(of: isActive) { _ in updateActivityState() }
         .onChange(of: reduceMotion) { _ in updateActivityState() }
+        .task(id: isActive && !reduceMotion) {
+            guard isActive && !reduceMotion else {
+                eyeScale = 1
+                return
+            }
+            defer { eyeScale = 1 }
+            while !Task.isCancelled {
+                let gapNs = UInt64(Double.random(in: 4.0...9.0) * 1_000_000_000)
+                try? await Task.sleep(nanoseconds: gapNs)
+                guard !Task.isCancelled else { break }
+                let isDouble = Double.random(in: 0...1) < 0.25
+                await performBlink()
+                if isDouble && !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: 80_000_000)
+                    if !Task.isCancelled {
+                        await performBlink()
+                    }
+                }
+            }
+        }
     }
 
     private func updateActivityState() {
         if isActive && !reduceMotion {
             startFloating()
-            scheduleBlink()
         } else {
             stopFloating()
-            blinkTimer?.invalidate()
-            blinkTimer = nil
             eyeScale = 1
         }
     }
@@ -4083,48 +4462,55 @@ struct GhostMark: View {
         }
     }
 
-    private func scheduleBlink() {
-        blinkTimer?.invalidate()
-        guard !reduceMotion else { blinkTimer = nil; eyeScale = 1; return }
-        let gap = Double.random(in: 4.0...9.0)
-        blinkTimer = Timer.scheduledTimer(withTimeInterval: gap, repeats: false) { _ in
-            blink(double: Double.random(in: 0...1) < 0.25)
-            scheduleBlink()
-        }
-    }
-
-    private func blink(double: Bool) {
-        guard !reduceMotion else { eyeScale = 1; return }
-        shut()
-        if double {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.18 + 0.08) { shut() }
-        }
-    }
-
-    private func shut() {
+    @MainActor
+    private func performBlink() async {
         withAnimation(.timingCurve(0.4, 0, 0.2, 1, duration: 0.075)) { eyeScale = 0.05 }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.105) {
-            withAnimation(.timingCurve(0.4, 0, 0.2, 1, duration: 0.075)) { eyeScale = 1 }
+        try? await Task.sleep(nanoseconds: 105_000_000)
+        guard !Task.isCancelled else {
+            eyeScale = 1
+            return
         }
+        withAnimation(.timingCurve(0.4, 0, 0.2, 1, duration: 0.075)) { eyeScale = 1 }
+        try? await Task.sleep(nanoseconds: 75_000_000)
     }
 }
 
+private enum HistoryDateFormatters {
+    static let time: DateFormatter = {
+        let df = DateFormatter()
+        df.locale = .autoupdatingCurrent
+        df.dateStyle = .none
+        df.timeStyle = .short
+        return df
+    }()
+
+    static let sameYear: DateFormatter = {
+        let df = DateFormatter()
+        df.locale = .autoupdatingCurrent
+        df.dateFormat = "MMM d, "
+        return df
+    }()
+
+    static let otherYear: DateFormatter = {
+        let df = DateFormatter()
+        df.locale = .autoupdatingCurrent
+        df.dateFormat = "MMM d yyyy, "
+        return df
+    }()
+}
+
 func formatHistoryTimestamp(_ date: Date) -> String {
-    let calendar = Calendar.current
-    let timeFormatter = DateFormatter()
-    timeFormatter.dateStyle = .none
-    timeFormatter.timeStyle = .short
-    let timeStr = timeFormatter.string(from: date)
-    
+    let calendar = Calendar.autoupdatingCurrent
+    let timeStr = HistoryDateFormatters.time.string(from: date)
+
     if calendar.isDateInToday(date) {
         return "\(L10n.t("today")), \(timeStr)"
     } else if calendar.isDateInYesterday(date) {
         return "\(L10n.t("yesterday")), \(timeStr)"
     } else {
-        let df = DateFormatter()
         let isSameYear = calendar.component(.year, from: date) == calendar.component(.year, from: Date())
-        df.dateFormat = isSameYear ? "MMM d, " : "MMM d yyyy, "
-        return df.string(from: date) + timeStr
+        let prefix = isSameYear ? HistoryDateFormatters.sameYear.string(from: date) : HistoryDateFormatters.otherYear.string(from: date)
+        return prefix + timeStr
     }
 }
 
@@ -4198,26 +4584,21 @@ struct CopyPillButton: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 3) {
-                Image(systemName: isCopied ? "checkmark" : "doc.on.doc")
-                    .font(.system(size: 9.5, weight: .bold))
-                Text(isCopied ? L10n.t("copied") : L10n.t("copy"))
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(
-                isCopied
-                    ? AnyShapeStyle(TT.pink.opacity(isHovering ? 0.34 : 0.24))
-                    : AnyShapeStyle(TT.hot.opacity(isHovering ? 0.26 : 0.16))
-            )
-            .foregroundStyle(p.accentInk)
-            .scaleEffect((isHovering && !reduceMotion) ? 1.03 : 1.0)
-            .clipShape(Capsule())
+            Image(systemName: isCopied ? "checkmark" : "doc.on.doc")
+                .font(.system(size: isCopied ? 10 : 10.5, weight: isCopied ? .bold : .semibold))
+                .foregroundStyle(isCopied || isHovering ? p.accentInk : p.inkMuted)
+                .frame(width: 26, height: 26)
+                .background(
+                    isCopied
+                        ? AnyShapeStyle(TT.pink.opacity(0.24))
+                        : (isHovering ? AnyShapeStyle(TT.hot.opacity(0.18)) : AnyShapeStyle(p.border.opacity(0.10)))
+                )
+                .clipShape(Circle())
+                .scaleEffect(isCopied && !reduceMotion ? 1.08 : (isHovering && !reduceMotion ? 1.04 : 1.0))
         }
         .buttonStyle(.plain)
+        .help(isCopied ? L10n.t("copied") : L10n.t("copy"))
+        .accessibilityLabel(isCopied ? L10n.t("copied") : L10n.t("copy"))
         .onHover { hovering in
             withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.12)) {
                 isHovering = hovering
@@ -4242,6 +4623,7 @@ struct HistoryRecordCard: View {
 
     private var isLongTake: Bool {
         record.text.count > Self.longTakeCharacterThreshold
+            || record.text.components(separatedBy: .newlines).count > Self.collapsedLineLimit
     }
 
     var body: some View {
@@ -4291,6 +4673,9 @@ struct HistoryRecordCard: View {
             onDelete()
         }
         .contextMenu {
+            Button(L10n.t("copy")) {
+                onCopy()
+            }
             Button(L10n.t("delete")) {
                 onDelete()
             }
@@ -4311,6 +4696,7 @@ struct KeySetupCardView: View {
     static var readClipboardString: () -> String? = { NSPasteboard.general.string(forType: .string) }
 
     @State private var isValidating: Bool = false
+    @State private var hasExistingKey: Bool = false
     @State private var validationSuccess: String? = nil
     @State private var validationError: String? = nil
 
@@ -4436,7 +4822,7 @@ struct KeySetupCardView: View {
                             .controlSize(.small)
                             .scaleEffect(0.65)
                     }
-                    Text(isValidating ? L10n.t("verifyingKey") : L10n.t("save"))
+                    Text(isValidating ? L10n.t("verifyingKey") : (hasExistingKey ? L10n.t("updatePass") : L10n.t("save")))
                         .font(.system(size: 12, weight: .heavy, design: .rounded))
                         .lineLimit(1)
                     Spacer()
@@ -4460,35 +4846,49 @@ struct KeySetupCardView: View {
                         .foregroundStyle(p.ink)
                         .lineLimit(1)
                     Spacer()
-                    #if !MAS_BUILD
-                    Button(action: openSignupPage) {
-                        Text(L10n.t("getKey"))
-                            .font(.system(size: 10, weight: .bold, design: .rounded))
-                            .foregroundStyle(p.inkSoft)
-                            .lineLimit(1)
+                    if hasExistingKey && !embedded {
+                        Button(action: removeSavedKey) {
+                            Text(L10n.t("removeKey"))
+                                .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                                .foregroundStyle(p.inkMuted)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
-                    #endif
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
                 .background(TT.pink.opacity(0.14))
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             } else if let error = validationError {
-                HStack(alignment: .top, spacing: 6) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(p.warnInk)
-                    Text(error)
-                        .font(.system(size: 10.5, weight: .semibold, design: .rounded))
-                        .foregroundStyle(p.warnInk)
-                        .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(p.warnInk)
+                        Text(error)
+                            .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                            .foregroundStyle(p.warnInk)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(TT.tangerine.opacity(0.16))
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                    if hasExistingKey && !embedded {
+                        HStack {
+                            Spacer()
+                            Button(action: removeSavedKey) {
+                                Text(L10n.t("removeKey"))
+                                    .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(p.inkMuted)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.horizontal, 2)
+                    }
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(TT.tangerine.opacity(0.16))
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             } else {
                 HStack {
                     #if !MAS_BUILD
@@ -4500,7 +4900,7 @@ struct KeySetupCardView: View {
                     .buttonStyle(.plain)
                     #endif
                     Spacer()
-                    if !existingKey.isEmpty && !embedded {
+                    if hasExistingKey && !embedded {
                         Button(action: removeSavedKey) {
                             Text(L10n.t("removeKey"))
                                 .font(.system(size: 10.5, weight: .semibold, design: .rounded))
@@ -4522,6 +4922,7 @@ struct KeySetupCardView: View {
         .shadow(color: embedded ? .clear : p.shadow, radius: 10, x: 0, y: 4)
         .onAppear {
             let current = existingKey
+            hasExistingKey = !current.isEmpty
             if !current.isEmpty {
                 keyInput = current
                 validationSuccess = (kind == .deepgram) ? L10n.t("connectedDeepgram") : L10n.t("connectedGemini")
@@ -4567,11 +4968,12 @@ struct KeySetupCardView: View {
                     TalkTypeConfig.isPolishing = true
                     validationSuccess = L10n.t("connectedGemini")
                 }
-                NSSound(named: "Pop")?.play()
+                hasExistingKey = true
+                SoundFX.play(.uiTap)
                 onSaved()
             case .invalid(let message):
                 validationError = message
-                NSSound(named: "Basso")?.play()
+                SoundFX.play(.error)
             }
         }
 
@@ -4593,6 +4995,7 @@ struct KeySetupCardView: View {
             _ = KeychainHelper.delete(service: TalkTypeConfig.keychainService, account: TalkTypeConfig.keychainAccountGemini)
             TalkTypeConfig.isPolishing = false
         }
+        hasExistingKey = false
         keyInput = ""
         validationSuccess = nil
         validationError = nil
@@ -4740,7 +5143,7 @@ struct OnboardingView: View {
                 axGranted = newAx
             }
             if becameReady {
-                NSSound(named: "Pop")?.play()
+                SoundFX.play(.uiTap)
             }
         }
     }
@@ -4947,7 +5350,7 @@ struct OnboardingView: View {
                     let isSelected = TalkTypeConfig.resolvedLanguage(raw: storedLanguage) == lang
                     Button(action: {
                         storedLanguage = lang.rawValue
-                        NSSound(named: "Pop")?.play()
+                        SoundFX.play(.uiTap)
                     }) {
                         Text(lang.pillLabel)
                             .font(.system(size: 11, weight: .bold, design: .rounded))
@@ -5053,43 +5456,6 @@ struct OnboardingView: View {
                         .font(.system(size: 11, weight: .medium, design: .rounded))
                         .foregroundStyle(p.inkSoft)
                         .fixedSize(horizontal: false, vertical: true)
-
-                    HStack(spacing: 6) {
-                        let activeOffline = TalkTypeConfig.resolvedLanguage(raw: storedLanguage).offlineActiveCode
-                        Button(action: { storedLanguage = TranscriptionLanguage.en.rawValue }) {
-                            Text("English")
-                                .font(.system(size: 11, weight: .bold, design: .rounded))
-                                .lineLimit(1)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 6)
-                                .background(activeOffline == "EN" ? AnyShapeStyle(TT.pink.opacity(0.22)) : AnyShapeStyle(p.paperLit))
-                                .foregroundStyle(activeOffline == "EN" ? p.accentInk : p.inkSoft)
-                                .clipShape(Capsule())
-                                .overlay(
-                                    Capsule()
-                                        .strokeBorder(activeOffline == "EN" ? TT.pink.opacity(0.45) : p.border.opacity(0.6), lineWidth: 1)
-                                )
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityAddTraits(activeOffline == "EN" ? .isSelected : [])
-
-                        Button(action: { storedLanguage = TranscriptionLanguage.es.rawValue }) {
-                            Text("Español")
-                                .font(.system(size: 11, weight: .bold, design: .rounded))
-                                .lineLimit(1)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 6)
-                                .background(activeOffline == "ES" ? AnyShapeStyle(TT.pink.opacity(0.22)) : AnyShapeStyle(p.paperLit))
-                                .foregroundStyle(activeOffline == "ES" ? p.accentInk : p.inkSoft)
-                                .clipShape(Capsule())
-                                .overlay(
-                                    Capsule()
-                                        .strokeBorder(activeOffline == "ES" ? TT.pink.opacity(0.45) : p.border.opacity(0.6), lineWidth: 1)
-                                )
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityAddTraits(activeOffline == "ES" ? .isSelected : [])
-                    }
                 }
                 .padding(13)
                 .background(p.card)
@@ -5307,7 +5673,6 @@ struct ContentView: View {
     @AppStorage(TalkTypeConfig.engineStorageKey) private var storedEngine: String = "apple"
     @AppStorage("talktypeGhostMood") private var ghostMood: Int = 0
     @AppStorage("talktypeDictationCount") private var dictationCount: Int = 0
-    @AppStorage("talktypeSuperchargeDismissed") private var superchargeDismissed: Bool = false
     @AppStorage("talktypeHistorySortNewestFirst") private var sortNewestFirst: Bool = true
     @AppStorage(TalkTypeConfig.languageStorageKey) private var storedLanguage: String = ""
     @State private var isConfirmingClear: Bool = false
@@ -5355,7 +5720,7 @@ struct ContentView: View {
             return .microphone
         }
 
-        if !TalkTypeConfig.isUsingDeepgram {
+        if !isSupercharged {
             let speechStatus = SFSpeechRecognizer.authorizationStatus()
             if speechStatus == .denied || speechStatus == .restricted {
                 return .speechRecognition
@@ -5382,7 +5747,7 @@ struct ContentView: View {
                     let selected = activeLanguage == lang
                     Button(action: {
                         storedLanguage = lang.rawValue
-                        NSSound(named: "Pop")?.play()
+                        SoundFX.play(.uiTap)
                     }) {
                         Text(lang.shortBadge)
                             .font(.system(size: 10, weight: .bold, design: .rounded))
@@ -5484,7 +5849,7 @@ struct ContentView: View {
                                 }
                             }
                         }
-                        NSSound(named: "Pop")?.play()
+                        SoundFX.play(.uiTap)
                     }) {
                         HStack(spacing: 0) {
                             Text("Talk").foregroundStyle(p.ink)
@@ -5795,6 +6160,7 @@ struct ContentView: View {
                         let pb = NSPasteboard.general
                         pb.clearContents()
                         pb.setString(speechEngine.transcript, forType: .string)
+                        SoundFX.play(.uiTap)
                         liveCopied = true
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
                             liveCopied = false
@@ -5830,39 +6196,53 @@ struct ContentView: View {
         .disabled(speechEngine.phase == .processing)
         .accessibilityLabel(isRec ? L10n.t("stopDictationLabel") : L10n.t("startDictationLabel"))
         .accessibilityHint(isRec ? L10n.t("stopDictationHint") : (L10n.t("clickGhostHold") + pttKeyName))
+        .onAppear {
+            updateBreathing(isRec)
+        }
         .onChange(of: isRec) { rec in
-            guard !reduceMotion else {
-                breathing = false
-                return
-            }
-            withAnimation(rec ? .easeInOut(duration: 0.9).repeatForever(autoreverses: true)
-                              : .easeOut(duration: 0.2)) {
-                breathing = rec
-            }
+            updateBreathing(rec)
+        }
+    }
+
+    private func updateBreathing(_ rec: Bool) {
+        guard !reduceMotion else {
+            breathing = false
+            return
+        }
+        withAnimation(rec ? .easeInOut(duration: 0.9).repeatForever(autoreverses: true)
+                          : .easeOut(duration: 0.2)) {
+            breathing = rec
         }
     }
 
     private var statusLine: some View {
         let label: String
         let style: AnyShapeStyle
-        switch speechEngine.phase {
-        case .idle:
-            label = L10n.t("clickGhostHold") + pttKeyName
-            style = AnyShapeStyle(p.inkMuted)
-        case .listening:
-            label = uiState.isClickRecording ? L10n.t("clickAgainToFinish") : L10n.t("listening")
-            style = AnyShapeStyle(p.accentInk)
-        case .processing:
-            label = L10n.t("thinking")
-            style = AnyShapeStyle(p.warnInk)
-        case .ready:
-            label = L10n.t("ready")
-            style = AnyShapeStyle(p.accentInk)
+        if let banner = speechEngine.statusBanner, !banner.isEmpty {
+            label = banner
+            style = AnyShapeStyle(speechEngine.phase == .processing ? p.warnInk : p.accentInk)
+        } else {
+            switch speechEngine.phase {
+            case .idle:
+                label = L10n.t("clickGhostHold") + pttKeyName
+                style = AnyShapeStyle(p.inkMuted)
+            case .listening:
+                label = uiState.isClickRecording ? L10n.t("clickAgainToFinish") : L10n.t("listening")
+                style = AnyShapeStyle(p.accentInk)
+            case .processing:
+                label = L10n.t("thinking")
+                style = AnyShapeStyle(p.warnInk)
+            case .ready:
+                label = L10n.t("ready")
+                style = AnyShapeStyle(p.accentInk)
+            }
         }
 
         return Text(label)
             .font(.system(size: 12, weight: .semibold, design: .rounded))
             .foregroundStyle(style)
+            .lineLimit(1)
+            .truncationMode(.tail)
             .frame(height: 20)
     }
 
@@ -5927,6 +6307,7 @@ struct ContentView: View {
                                     let pb = NSPasteboard.general
                                     pb.clearContents()
                                     pb.setString(record.text, forType: .string)
+                                    SoundFX.play(.uiTap)
                                     copiedId = record.id
                                     DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
                                         if copiedId == record.id { copiedId = nil }

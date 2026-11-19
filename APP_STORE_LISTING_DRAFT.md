@@ -93,7 +93,7 @@ There is no trial, no purchase flow inside the app, and no external store link.
 Generated deterministically at exact `2880 × 1800` Retina resolution via `swift scripts/generate-mas-screenshots.swift`:
 
 - `screenshots/appstore/01-dictate-anywhere-2880x1800.png` (also copied to `screenshots/appstore-2880x1800.png`) — Live popover card + floating HUD capsule, `⌃⌥ Space`, `"Copied to clipboard — Press ⌘V to paste!"`
-- `screenshots/appstore/02-history-and-vocabulary-2880x1800.png` — Local 50-take History tab, one-click Copy pills, and Custom Vocabulary phonetic rules (`doctype -> TalkType`)
+- `screenshots/appstore/02-history-and-vocabulary-2880x1800.png` — Local 50-take History tab, one-click copy icons, and Custom Vocabulary phonetic rules (`doctype -> TalkType`)
 - `screenshots/appstore/03-private-on-device-2880x1800.png` — Real Voice Mode & Keychain setup popover alongside On-Device Apple Speech, Deepgram Nova-3, and Gemini Prose Polish cards (zero telemetry)
 
 All screenshots use warm Flexoki cream (`#fffef7` / `#fbf1e4`) and warm sepia ink (`#1e1714`), open-eyed ghost art, and 100% MAS-true copy.
