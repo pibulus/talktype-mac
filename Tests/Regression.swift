@@ -433,7 +433,9 @@ extension AppDelegate {
         expect(!L10n.t("aboutTalkType").hasSuffix("…"), "About TalkType should not carry a trailing ellipsis")
         expect(!L10n.t("privacyPolicy").hasSuffix("…"), "Privacy Policy opens a URL immediately and should not carry an ellipsis")
         expect(L10n.t("clearHistoryMenu").hasSuffix("…"), "Clear History menu item requires confirmation and must end with …")
+        expect(!L10n.t("aboutBlurb").contains("Deepgram") && !L10n.t("aboutBlurb").contains("Mac"), "EN aboutBlurb should stay concise without Deepgram or Mac copy")
         TalkTypeConfig.language = .es
+        expect(!L10n.t("aboutBlurb").contains("Deepgram") && !L10n.t("aboutBlurb").contains("Mac"), "ES aboutBlurb should stay concise without Deepgram or Mac copy")
         expect(L10n.t("clearHistoryMenu") == "Borrar historial…", "Spanish clearHistoryMenu mismatch")
         expect(L10n.t("launchAtLogin") == "Abrir al iniciar sesión", "Spanish launchAtLogin mismatch")
         expect(L10n.t("clickAgainToFinish") == "Clic otra vez para terminar", "Spanish clickAgainToFinish mismatch")

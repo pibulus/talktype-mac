@@ -268,7 +268,7 @@ enum L10n {
         "conversationsMode": ["en": "Conversations", "es": "Conversaciones"],
         "conversationsHelp": ["en": "Labels each speaker when more than one voice is talking. Needs the cloud engine.", "es": "Etiqueta cada voz cuando habla más de una persona. Necesita el motor en la nube."],
         "conversationsNeedsCloud": ["en": "Conversations needs the cloud engine — pick Voice Mode first.", "es": "Conversaciones necesita el motor en la nube — elige el modo de voz primero."],
-        "aboutBlurb": ["en": "I talk faster than I type, so I made TalkType.\n\nA little ghost in the menu bar that turns talking into words. The Mac listens on its own, so nothing is uploaded and nothing counts down.\n\nA Deepgram key makes it sharper. Better names, better punctuation, better in a noisy room.", "es": "Hablo más rápido de lo que escribo, así que hice TalkType.\n\nUn pequeño fantasma en la barra de menús que convierte el habla en palabras. El Mac escucha por su cuenta: nada se sube y no hay contador.\n\nUna clave de Deepgram lo afina. Mejores nombres, mejor puntuación, mejor en un sitio ruidoso."],
+        "aboutBlurb": ["en": "I talk faster than I type, so I made TalkType.\n\nA little ghost in the menu bar that turns talking into words.", "es": "Hablo más rápido de lo que escribo, así que hice TalkType.\n\nUn pequeño fantasma en la barra de menús que convierte el habla en palabras."],
         "madeBy": ["en": "made by pablo", "es": "hecho por pablo"],
         "settingsMenu": ["en": "Settings…", "es": "Ajustes…"],
         "showMore": ["en": "Show more", "es": "Ver más"],
@@ -4582,25 +4582,34 @@ struct CopyPillButton: View {
 
     private var p: Palette { scheme == .dark ? .dark : .light }
 
+    private var fillOpacity: Double {
+        if isCopied { return scheme == .dark ? 0.34 : 0.32 }
+        if isHovering { return scheme == .dark ? 0.28 : 0.26 }
+        return scheme == .dark ? 0.16 : 0.15
+    }
+
+    private var strokeOpacity: Double {
+        if isCopied { return 0.50 }
+        if isHovering { return 0.42 }
+        return scheme == .dark ? 0.26 : 0.24
+    }
+
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 8.5, style: .continuous)
         Button(action: action) {
             Image(systemName: isCopied ? "checkmark" : "doc.on.doc")
-                .font(.system(size: isCopied ? 10 : 10.5, weight: isCopied ? .bold : .semibold))
-                .foregroundStyle(isCopied || isHovering ? p.accentInk : p.inkMuted)
-                .frame(width: 26, height: 26)
-                .background(
-                    isCopied
-                        ? AnyShapeStyle(TT.pink.opacity(0.24))
-                        : (isHovering ? AnyShapeStyle(TT.hot.opacity(0.18)) : AnyShapeStyle(p.border.opacity(0.10)))
-                )
-                .clipShape(Circle())
-                .scaleEffect(isCopied && !reduceMotion ? 1.08 : (isHovering && !reduceMotion ? 1.04 : 1.0))
+                .font(.system(size: isCopied ? 10.5 : 11, weight: isCopied ? .bold : .semibold))
+                .foregroundStyle(p.accentInk)
+                .frame(width: 28, height: 28)
+                .background(shape.fill(TT.pink.opacity(fillOpacity)))
+                .overlay(shape.strokeBorder(TT.pink.opacity(strokeOpacity), lineWidth: 1))
+                .contentShape(shape)
         }
         .buttonStyle(.plain)
         .help(isCopied ? L10n.t("copied") : L10n.t("copy"))
         .accessibilityLabel(isCopied ? L10n.t("copied") : L10n.t("copy"))
         .onHover { hovering in
-            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.12)) {
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.14)) {
                 isHovering = hovering
             }
         }
@@ -4628,17 +4637,12 @@ struct HistoryRecordCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .center) {
-                Text(formatHistoryTimestamp(record.timestamp))
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(p.inkMuted)
-
-                Spacer()
-
-                CopyPillButton(isCopied: isCopied, action: onCopy)
-            }
-            .padding(.top, 1)
+            Text(formatHistoryTimestamp(record.timestamp))
+                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(p.inkMuted)
+                .frame(maxWidth: .infinity, minHeight: 18, alignment: .leading)
+                .padding(.trailing, 34)
 
             Text(record.text)
                 .font(.system(size: 12.5, weight: .medium, design: .monospaced))
@@ -4665,6 +4669,11 @@ struct HistoryRecordCard: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(p.border.opacity(0.6), lineWidth: 1)
         )
+        .overlay(alignment: .topTrailing) {
+            CopyPillButton(isCopied: isCopied, action: onCopy)
+                .padding(.top, 7)
+                .padding(.trailing, 7)
+        }
         .accessibilityElement(children: .contain)
         .accessibilityAction(named: Text(L10n.t("copy"))) {
             onCopy()
@@ -6148,11 +6157,10 @@ struct ContentView: View {
             }
 
             if !speechEngine.transcript.isEmpty {
-                HStack {
+                HStack(alignment: .center) {
                     Text("\(wordCount) \(wordCount == 1 ? L10n.t("wordSingular") : L10n.t("wordPlural"))")
                         .font(.system(size: 10, weight: .semibold, design: .monospaced))
                         .foregroundStyle(p.inkMuted)
-                        .padding(.leading, 14)
 
                     Spacer()
 
@@ -6166,9 +6174,10 @@ struct ContentView: View {
                             liveCopied = false
                         }
                     }
-                    .padding(.trailing, 10)
-                    .padding(.bottom, 8)
                 }
+                .padding(.leading, 14)
+                .padding(.trailing, 9)
+                .padding(.bottom, 9)
                 .transition(.opacity)
             }
         }

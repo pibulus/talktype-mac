@@ -470,10 +470,10 @@ func renderSlide1() {
     )
 
     drawString("19 words", font: monoFont(10 * scale, .semibold), color: cInkMute, at: CGPoint(x: tCard.minX + 14 * scale, y: tCard.maxY - 22 * scale))
-    let copySz = 26 * scale
-    let copyBtn = CGRect(x: tCard.maxX - 10 * scale - copySz, y: tCard.maxY - 8 * scale - copySz, width: copySz, height: copySz)
-    drawBox(ctx, copyBtn, radius: copySz / 2, fill: cPink.withAlphaComponent(0.24), stroke: nil, lineWidth: 0)
-    drawSymbol("checkmark", size: 10 * scale, weight: .bold, color: cPinkDeep, center: CGPoint(x: copyBtn.midX, y: copyBtn.midY))
+    let copySz = 28 * scale
+    let copyBtn = CGRect(x: tCard.maxX - 9 * scale - copySz, y: tCard.maxY - 9 * scale - copySz, width: copySz, height: copySz)
+    drawBox(ctx, copyBtn, radius: 8.5 * scale, fill: cPink.withAlphaComponent(0.32), stroke: cPink.withAlphaComponent(0.50), lineWidth: 1 * scale)
+    drawSymbol("checkmark", size: 10.5 * scale, weight: .bold, color: cPinkDeep, center: CGPoint(x: copyBtn.midX, y: copyBtn.midY))
 
     // Open-eyed Ghost Mascot
     drawGhost(ctx, center: CGPoint(x: pop.midX, y: tCard.maxY + 76 * scale), size: 118 * scale, glow: true)
@@ -558,10 +558,10 @@ func renderSlide2() {
         drawBox(ctx, rCard, radius: 14 * scale, fill: cCardInner, stroke: cBorder, lineWidth: 2, shadowOpacity: 0.04, shadowBlur: 12, shadowY: 4)
         drawString(rec.0, font: roundedFont(10.5 * scale, .medium), color: cInkMute, at: CGPoint(x: rCard.minX + 12 * scale, y: rCard.minY + 11 * scale))
 
-        let cSz = 26 * scale
-        let cBtn = CGRect(x: rCard.maxX - 12 * scale - cSz, y: rCard.minY + 7 * scale, width: cSz, height: cSz)
-        drawBox(ctx, cBtn, radius: cSz / 2, fill: rec.2 ? cPink.withAlphaComponent(0.24) : cInk.withAlphaComponent(0.06), stroke: nil, lineWidth: 0)
-        drawSymbol(rec.2 ? "checkmark" : "doc.on.doc", size: (rec.2 ? 10 : 10.5) * scale, weight: rec.2 ? .bold : .semibold, color: rec.2 ? cPinkDeep : cInkMute, center: CGPoint(x: cBtn.midX, y: cBtn.midY))
+        let cSz = 28 * scale
+        let cBtn = CGRect(x: rCard.maxX - 7 * scale - cSz, y: rCard.minY + 7 * scale, width: cSz, height: cSz)
+        drawBox(ctx, cBtn, radius: 8.5 * scale, fill: cPink.withAlphaComponent(rec.2 ? 0.32 : 0.16), stroke: cPink.withAlphaComponent(rec.2 ? 0.50 : 0.28), lineWidth: 1 * scale)
+        drawSymbol(rec.2 ? "checkmark" : "doc.on.doc", size: (rec.2 ? 10.5 : 11) * scale, weight: rec.2 ? .bold : .semibold, color: cPinkDeep, center: CGPoint(x: cBtn.midX, y: cBtn.midY))
 
         drawString(
             rec.1,
