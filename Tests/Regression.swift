@@ -234,6 +234,28 @@ extension SpeechEngine {
                "cancelRecording on Deepgram must reset capture state cleanly")
         expect(engine.currentSessionId != preCancelSession, "cancelRecording must invalidate currentSessionId")
         print("PASS SpeechEngine.cancelRecording invalidates session and discards partial text")
+
+        // Verify macOS 26 SpeechTranscriber progressive/final reducer & vocabulary cleanup
+        let modernSession = UUID()
+        engine.currentSessionId = modernSession
+        engine.activeBackend = .speechAnalyzer
+        engine.isRecording = true
+        engine.phase = .listening
+        engine.confirmedTranscript = ""
+        engine.modernSegmentText = ""
+        engine.receiveModernAnalyzerResult(text: "Testing talk type", isFinal: false, sessionID: modernSession)
+        expect(engine.transcript == "Testing TalkType", "Modern analyzer partial did not apply VocabularyManager.clean")
+        engine.receiveModernAnalyzerResult(text: "Testing talk type on macOS.", isFinal: true, sessionID: modernSession)
+        expect(engine.transcript == "Testing TalkType on macOS.", "Modern analyzer final did not settle cleanly")
+        engine.receiveModernAnalyzerResult(text: "Second utterance", isFinal: false, sessionID: modernSession)
+        engine.stopRecording()
+        pump(0.05)
+        expect(delivered.last == "Testing TalkType on macOS. Second utterance" && !engine.isStopping,
+               "stopModernSpeechAnalyzer did not preserve trailing volatile segment")
+        expect(TranscriptionLanguage.es.offlineActiveCode == "ES" && TranscriptionLanguage.en.offlineActiveCode == "EN",
+               "On-device locale resolution must preserve ES and EN language prefixes")
+        print("PASS macOS 26 SpeechTranscriber progressive/final reducer & on-device ES/EN locale selection")
+
         engine.onFinal = nil // Release the test callback's strong capture.
     }
 }

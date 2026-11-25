@@ -2,7 +2,8 @@ import Cocoa
 import SwiftUI
 import Combine
 import Speech
-import AVFoundation
+@preconcurrency import AVFoundation
+import Network
 #if !MAS_BUILD
 import ApplicationServices
 #endif
@@ -141,17 +142,37 @@ enum TranscriptionLanguage: String, CaseIterable {
         }
     }
 
+    static func preferredOnDeviceLocale(candidates: [String], languagePrefix: String) -> Locale {
+        var ordered: [Locale] = []
+        if Locale.current.identifier.lowercased().hasPrefix(languagePrefix) {
+            ordered.append(Locale.current)
+        }
+        for id in candidates {
+            let loc = Locale(identifier: id)
+            if !ordered.contains(where: { $0.identifier == loc.identifier }) {
+                ordered.append(loc)
+            }
+        }
+        // Prefer an installed on-device locale first so offline dictation never fails
+        // when e.g. es-ES is installed on-device while es-MX is cloud-only.
+        for loc in ordered {
+            if let recognizer = SFSpeechRecognizer(locale: loc), recognizer.supportsOnDeviceRecognition {
+                return loc
+            }
+        }
+        let supported = SFSpeechRecognizer.supportedLocales()
+        for loc in ordered where supported.contains(loc) {
+            return loc
+        }
+        return ordered.first ?? Locale(identifier: candidates.first ?? "en-US")
+    }
+
     var appleLocale: Locale {
         switch self {
-        case .en: return Locale(identifier: "en-US")
+        case .en:
+            return Self.preferredOnDeviceLocale(candidates: ["en-AU", "en-US", "en-GB"], languagePrefix: "en")
         case .es:
-            if Locale.current.identifier.starts(with: "es") {
-                return Locale.current
-            }
-            if SFSpeechRecognizer.supportedLocales().contains(Locale(identifier: "es-MX")) {
-                return Locale(identifier: "es-MX")
-            }
-            return Locale(identifier: "es-ES")
+            return Self.preferredOnDeviceLocale(candidates: ["es-MX", "es-ES", "es-US"], languagePrefix: "es")
         }
     }
 
@@ -3204,7 +3225,7 @@ private struct ProcessingWaveform: View {
 }
 
 // MARK: - Speech Engine (Deepgram Nova-3 WebSocket + Apple Fallback)
-class SpeechEngine: NSObject, ObservableObject {
+class SpeechEngine: NSObject, ObservableObject, @unchecked Sendable {
     private var cachedSpeechRecognizer: SFSpeechRecognizer?
     private var cachedSpeechRecognizerLocale: Locale?
     private var speechRecognizer: SFSpeechRecognizer? {
@@ -3241,11 +3262,25 @@ class SpeechEngine: NSObject, ObservableObject {
         let format: AVAudioFormat
         var socket: URLSessionWebSocketTask
         var scratchBuffer: AVAudioPCMBuffer?
+        var handshakeConfirmed = false
+        var preRollChunks: [AVAudioPCMBuffer] = []
+        var preRollFrames: Int = 0
+        static let maxPreRollFrames = 16000 * 4 // 4.0s rolling 16kHz PCM ring buffer during cloud handshake
         var closed = false // Owned by audioProcessingQueue, including the close marker.
         init(converter: AVAudioConverter, format: AVAudioFormat, socket: URLSessionWebSocketTask) {
             self.converter = converter
             self.format = format
             self.socket = socket
+        }
+
+        func appendPreRoll(_ buffer: AVAudioPCMBuffer) {
+            guard !handshakeConfirmed, buffer.frameLength > 0 else { return }
+            preRollChunks.append(buffer)
+            preRollFrames += Int(buffer.frameLength)
+            while preRollFrames > Self.maxPreRollFrames, preRollChunks.count > 1 {
+                let removed = preRollChunks.removeFirst()
+                preRollFrames = max(0, preRollFrames - Int(removed.frameLength))
+            }
         }
     }
     private final class AppleCapture {
@@ -3253,8 +3288,28 @@ class SpeechEngine: NSObject, ObservableObject {
         var request: SFSpeechAudioBufferRecognitionRequest?
         var closed = false
     }
+    private final class ModernAnalyzerCapture {
+        var converter: AVAudioConverter
+        let format: AVAudioFormat
+        var yieldBuffer: ((AVAudioPCMBuffer) -> Void)?
+        var finishInput: (() -> Void)?
+        var cancelAnalyzer: (() -> Void)?
+        var finalizeAndFinish: ((@escaping () -> Void) -> Void)?
+        var closed = false
+        init(converter: AVAudioConverter, format: AVAudioFormat) {
+            self.converter = converter
+            self.format = format
+        }
+    }
     private var deepgramCapture: DeepgramCapture?
     private var appleCapture: AppleCapture?
+    private var modernCapture: ModernAnalyzerCapture?
+    private var pathMonitor: NWPathMonitor?
+    private let pathMonitorQueue = DispatchQueue(label: "com.talktype.networkMonitor", qos: .utility)
+    private var isNetworkAvailable = true
+    private var modernInstalledLocales: [TranscriptionLanguage: Locale] = [:]
+    private var modernAssetRequestsInFlight = Set<TranscriptionLanguage>()
+    private var modernSegmentText = ""
 
     private static func copyAudio(_ buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
         guard buffer.frameLength > 0,
@@ -3308,6 +3363,22 @@ class SpeechEngine: NSObject, ObservableObject {
         }
     }
 
+    private func closeModernCapture(cancel: Bool) {
+        let capture = modernCapture
+        modernCapture = nil
+        audioProcessingQueue.async {
+            capture?.closed = true
+            capture?.finishInput?()
+            if cancel {
+                capture?.cancelAnalyzer?()
+            }
+            capture?.yieldBuffer = nil
+            capture?.finishInput = nil
+            capture?.cancelAnalyzer = nil
+            capture?.finalizeAndFinish = nil
+        }
+    }
+
     // Deepgram WebSocket
     private var webSocketTask: URLSessionWebSocketTask?
     private var urlSession: URLSession?
@@ -3323,10 +3394,16 @@ class SpeechEngine: NSObject, ObservableObject {
     private var lastSegmentStart: Double = -1
     private var deepgramReconnectCount = 0
     private var permissionRequestInProgress = false
-    private enum CaptureBackend { case apple, deepgram }
+    private enum CaptureBackend { case apple, speechAnalyzer, deepgram }
     private var activeBackend: CaptureBackend = .apple
 
-    var activeEngineName: String { activeBackend == .deepgram ? "Nova-3" : "Local" }
+    var activeEngineName: String {
+        switch activeBackend {
+        case .deepgram: return "Nova-3"
+        case .speechAnalyzer: return "Neural"
+        case .apple: return "Local"
+        }
+    }
     
     private func armStreamWatchdog() {
         disarmStreamWatchdog()
@@ -3440,6 +3517,7 @@ class SpeechEngine: NSObject, ObservableObject {
         webSocketTask = nil
         teardownAudioEngine(reset: true)
         closeAppleCapture()
+        closeModernCapture(cancel: true)
         recognitionTask?.cancel()
         recognitionTask = nil
         recognitionRequest = nil
@@ -3470,6 +3548,22 @@ class SpeechEngine: NSObject, ObservableObject {
         super.init()
         let config = URLSessionConfiguration.ephemeral
         self.urlSession = URLSession(configuration: config)
+
+        #if !TALKTYPE_TESTING
+        let monitor = NWPathMonitor()
+        monitor.pathUpdateHandler = { [weak self] path in
+            let reachable = (path.status == .satisfied)
+            DispatchQueue.main.async {
+                self?.isNetworkAvailable = reachable
+            }
+        }
+        monitor.start(queue: pathMonitorQueue)
+        self.pathMonitor = monitor
+
+        if #available(macOS 26.0, *) {
+            refreshModernSpeechAssets()
+        }
+        #endif
         
         NotificationCenter.default.addObserver(
             self,
@@ -3495,6 +3589,8 @@ class SpeechEngine: NSObject, ObservableObject {
         disarmStreamWatchdog()
         deepgramKeepAliveTimer?.invalidate()
         deepgramKeepAliveTimer = nil
+        pathMonitor?.cancel()
+        pathMonitor = nil
         NotificationCenter.default.removeObserver(self)
         NSWorkspace.shared.notificationCenter.removeObserver(self)
         urlSession?.invalidateAndCancel()
@@ -3502,7 +3598,43 @@ class SpeechEngine: NSObject, ObservableObject {
         if audioEngine.isRunning { audioEngine.stop() }
         recognitionTask?.cancel()
         closeAppleCapture()
+        closeModernCapture(cancel: true)
         deepgramStopDeadline?.cancel()
+    }
+
+    @available(macOS 26.0, *)
+    func refreshModernSpeechAssets() {
+        Task { [weak self] in
+            let installed = await SpeechTranscriber.installedLocales
+            for lang in TranscriptionLanguage.allCases {
+                let target = lang.appleLocale
+                guard let matched = await SpeechTranscriber.supportedLocale(equivalentTo: target) else { continue }
+                let isReady = installed.contains { $0.identifier == matched.identifier }
+                await MainActor.run {
+                    guard let self = self else { return }
+                    if isReady {
+                        self.modernInstalledLocales[lang] = matched
+                    } else if lang == TalkTypeConfig.language && !self.modernAssetRequestsInFlight.contains(lang) {
+                        self.modernAssetRequestsInFlight.insert(lang)
+                        Task.detached(priority: .utility) { [weak self] in
+                            let probe = SpeechTranscriber(locale: matched, preset: .progressiveTranscription)
+                            if let req = try? await AssetInventory.assetInstallationRequest(supporting: [probe]) {
+                                try? await req.downloadAndInstall()
+                            }
+                            let refreshed = await SpeechTranscriber.installedLocales
+                            let nowReady = refreshed.contains { $0.identifier == matched.identifier }
+                            await MainActor.run {
+                                guard let self = self else { return }
+                                self.modernAssetRequestsInFlight.remove(lang)
+                                if nowReady {
+                                    self.modernInstalledLocales[lang] = matched
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
     
     @objc private func handleAudioEngineConfigChange(_ notification: Notification) {
@@ -3666,7 +3798,8 @@ class SpeechEngine: NSObject, ObservableObject {
     }
 
     private func continueAfterMicrophonePermission(resumeAfterPermission: Bool, requestedPermission: Bool) {
-        if !TalkTypeConfig.isUsingDeepgram {
+        let wantsCloudNow = TalkTypeConfig.isUsingDeepgram && isNetworkAvailable
+        if !wantsCloudNow {
             switch SFSpeechRecognizer.authorizationStatus() {
             case .authorized:
                 beginAuthorizedRecording(resumeAfterPermission: resumeAfterPermission, requestedPermission: requestedPermission)
@@ -3717,6 +3850,7 @@ class SpeechEngine: NSObject, ObservableObject {
         interimTranscript = ""
         lastSpeakerIndex = nil
         appleSegmentText = ""
+        modernSegmentText = ""
         lastApplePartialTime = 0
         lastSegmentStart = -1
         deepgramReconnectCount = 0
@@ -3724,7 +3858,7 @@ class SpeechEngine: NSObject, ObservableObject {
         failureMessage = nil
         armStreamWatchdog()
         
-        if TalkTypeConfig.isUsingDeepgram {
+        if TalkTypeConfig.isUsingDeepgram && isNetworkAvailable {
             startDeepgramStreaming()
         } else {
             startAppleSpeechRecognition()
@@ -3736,9 +3870,12 @@ class SpeechEngine: NSObject, ObservableObject {
         disarmStreamWatchdog()
         guard isRecording || audioEngine.isRunning || webSocketTask != nil else { return }
 
-        if activeBackend == .deepgram {
+        switch activeBackend {
+        case .deepgram:
             stopDeepgramStreaming()
-        } else {
+        case .speechAnalyzer:
+            stopModernSpeechAnalyzer()
+        case .apple:
             stopAppleSpeechRecognition()
         }
     }
@@ -3771,6 +3908,7 @@ class SpeechEngine: NSObject, ObservableObject {
 
         teardownAudioEngine(reset: true)
         closeAppleCapture()
+        closeModernCapture(cancel: true)
         recognitionTask?.cancel()
         recognitionTask = nil
         recognitionRequest = nil
@@ -3779,6 +3917,7 @@ class SpeechEngine: NSObject, ObservableObject {
         confirmedTranscript = ""
         interimTranscript = ""
         appleSegmentText = ""
+        modernSegmentText = ""
         lastApplePartialTime = 0
         lastSegmentStart = -1
         deepgramReconnectCount = 0
@@ -3862,8 +4001,12 @@ class SpeechEngine: NSObject, ObservableObject {
                 // Dynamically adapt to input sample rate shifts (e.g. DAC switching 48k -> 96k/192k)
                 let inputRate = bufferCopy.format.sampleRate > 0 ? bufferCopy.format.sampleRate : sampleRate
                 let frameCount = AVAudioFrameCount(ceil(Double(bufferCopy.frameLength) * 16000.0 / inputRate) + 32)
+                // Allocate a fresh buffer while pre-roll is active so queued fallback frames are never overwritten
                 let convertedBuffer: AVAudioPCMBuffer
-                if let existing = capture.scratchBuffer,
+                if !capture.handshakeConfirmed {
+                    guard let fresh = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: frameCount) else { return }
+                    convertedBuffer = fresh
+                } else if let existing = capture.scratchBuffer,
                    existing.format == targetFormat,
                    existing.frameCapacity >= frameCount {
                     existing.frameLength = 0
@@ -3899,6 +4042,7 @@ class SpeechEngine: NSObject, ObservableObject {
                 }
                 
                 if error == nil, convertedBuffer.frameLength > 0, let channelData = convertedBuffer.int16ChannelData {
+                    capture.appendPreRoll(convertedBuffer)
                     let data = Data(bytes: channelData.pointee, count: Int(convertedBuffer.frameLength) * 2)
                     capture.socket.send(.data(data)) { _ in }
                 }
@@ -3947,9 +4091,14 @@ class SpeechEngine: NSObject, ObservableObject {
     }
 
     private func reconnectDeepgramWebSocket(sessionID: UUID) -> Bool {
+        // Only attempt a mid-take reconnect if the initial handshake already succeeded and
+        // the network path is still up; otherwise fail over immediately to on-device speech
+        // with the pre-roll ring buffer intact.
         guard isRecording, !isStopping, currentSessionId == sessionID,
-              deepgramReconnectCount < 2,
+              isNetworkAvailable,
+              deepgramReconnectCount < 1,
               let capture = deepgramCapture,
+              capture.handshakeConfirmed,
               let newSocket = makeDeepgramWebSocket() else {
             return false
         }
@@ -3971,14 +4120,49 @@ class SpeechEngine: NSObject, ObservableObject {
     private func fallbackToApple() {
         guard isRecording, !isStopping else { return }
         commitInterim()
+        let capturedPreRoll: [AVAudioPCMBuffer] = {
+            guard let dg = deepgramCapture else { return [] }
+            var chunks: [AVAudioPCMBuffer] = []
+            audioProcessingQueue.sync {
+                chunks = dg.preRollChunks
+                dg.preRollChunks.removeAll()
+                dg.preRollFrames = 0
+                dg.closed = true
+            }
+            return chunks
+        }()
         teardownAudioEngine(reset: false)
-        startAppleSpeechRecognition(appendingToExisting: true)
+        if SFSpeechRecognizer.authorizationStatus() == .notDetermined {
+            let expectedSession = currentSessionId
+            SFSpeechRecognizer.requestAuthorization { [weak self] status in
+                DispatchQueue.main.async {
+                    guard let self = self, self.currentSessionId == expectedSession, self.isRecording, !self.isStopping else { return }
+                    guard status == .authorized else {
+                        self.failRecognition(L10n.t("permissionSpeechTitle"))
+                        return
+                    }
+                    self.startAppleSpeechRecognition(appendingToExisting: true, preRoll: capturedPreRoll)
+                }
+            }
+            return
+        }
+        startAppleSpeechRecognition(appendingToExisting: true, preRoll: capturedPreRoll)
     }
 
     private func parseDeepgramJSON(_ jsonString: String) {
         guard isRecording || isStopping,
               let data = jsonString.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+
+        if let capture = deepgramCapture {
+            audioProcessingQueue.async {
+                if !capture.handshakeConfirmed {
+                    capture.handshakeConfirmed = true
+                    capture.preRollChunks.removeAll()
+                    capture.preRollFrames = 0
+                }
+            }
+        }
 
         if json["type"] as? String == "Metadata", isStopping, let socket = webSocketTask {
             finishDeepgram(sessionID: currentSessionId, socket: socket)
@@ -4103,9 +4287,8 @@ class SpeechEngine: NSObject, ObservableObject {
         if timedOut { onFailure?("Transcription timed out. The latest available text was kept.") }
     }
 
-    // MARK: - Apple Speech Engine & Fallback
-    private func startAppleSpeechRecognition(appendingToExisting: Bool = false) {
-        activeBackend = .apple
+    // MARK: - Apple Speech Engine (macOS 26 SpeechTranscriber + SFSpeechRecognizer Fallback)
+    private func startAppleSpeechRecognition(appendingToExisting: Bool = false, preRoll: [AVAudioPCMBuffer] = []) {
         deepgramKeepAliveTimer?.invalidate()
         deepgramKeepAliveTimer = nil
         webSocketTask?.cancel(with: .goingAway, reason: nil)
@@ -4113,6 +4296,19 @@ class SpeechEngine: NSObject, ObservableObject {
         deepgramCapture = nil
         deepgramStopDeadline?.cancel()
         deepgramStopDeadline = nil
+
+        if #available(macOS 26.0, *) {
+            let activeLang = TalkTypeConfig.language
+            if let modernLocale = modernInstalledLocales[activeLang],
+               SFSpeechRecognizer.authorizationStatus() == .authorized {
+                startModernSpeechAnalyzer(locale: modernLocale, appendingToExisting: appendingToExisting, preRoll: preRoll)
+                return
+            } else {
+                refreshModernSpeechAssets()
+            }
+        }
+
+        activeBackend = .apple
         guard localRecognizer() != nil else { return }
         isStopping = false
         currentSessionId = UUID() // Also invalidates queued meter updates from the cloud capture.
@@ -4121,6 +4317,7 @@ class SpeechEngine: NSObject, ObservableObject {
             interimTranscript = ""
             lastSpeakerIndex = nil
             appleSegmentText = ""
+            modernSegmentText = ""
             lastApplePartialTime = 0
             transcript = ""
         }
@@ -4133,6 +4330,7 @@ class SpeechEngine: NSObject, ObservableObject {
         
         safeRemoveTap()
         closeAppleCapture()
+        closeModernCapture(cancel: true)
         let capture = AppleCapture()
         appleCapture = capture
         let inputNode = audioEngine.inputNode
@@ -4152,21 +4350,252 @@ class SpeechEngine: NSObject, ObservableObject {
             }
         }
         hasInstalledAudioTap = true
-        setupAppleRecognitionTask(for: sessionId)
+        setupAppleRecognitionTask(for: sessionId, preRoll: preRoll)
         guard recognitionRequest != nil else { return }
         audioEngine.prepare()
         do {
             try audioEngine.start()
+            let wasRecording = self.isRecording
             self.isRecording = true
             self.phase = .listening
-            self.onStateChange?(true)
+            if !appendingToExisting && !wasRecording {
+                self.onStateChange?(true)
+            }
         } catch {
             NSLog("⚠️ TalkType: Failed to start Apple Speech audio engine: %@", error.localizedDescription)
             failRecognition("The microphone could not start: " + error.localizedDescription)
         }
     }
+
+    @available(macOS 26.0, *)
+    private func startModernSpeechAnalyzer(locale: Locale, appendingToExisting: Bool, preRoll: [AVAudioPCMBuffer]) {
+        guard let nativeFormat = resolveInputFormat(),
+              let targetFormat = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 16000, channels: 1, interleaved: false),
+              let converter = AVAudioConverter(from: nativeFormat, to: targetFormat) else {
+            activeBackend = .apple
+            return
+        }
+
+        activeBackend = .speechAnalyzer
+        isStopping = false
+        currentSessionId = UUID()
+        let sessionId = currentSessionId
+        if !appendingToExisting {
+            confirmedTranscript = ""
+            interimTranscript = ""
+            lastSpeakerIndex = nil
+            appleSegmentText = ""
+            modernSegmentText = ""
+            lastApplePartialTime = 0
+            transcript = ""
+        }
+
+        safeRemoveTap()
+        closeAppleCapture()
+        closeModernCapture(cancel: true)
+
+        var streamContinuation: AsyncStream<AnalyzerInput>.Continuation?
+        let inputStream = AsyncStream<AnalyzerInput> { cont in
+            streamContinuation = cont
+        }
+
+        let transcriber = SpeechTranscriber(locale: locale, preset: .progressiveTranscription)
+        let analyzer = SpeechAnalyzer(modules: [transcriber])
+        let hints = VocabularyManager.contextualHints
+
+        let analyzeTask = Task {
+            let context = AnalysisContext()
+            context.contextualStrings[.general] = hints
+            try? await analyzer.setContext(context)
+            let lastTime = try await analyzer.analyzeSequence(inputStream)
+            if let lastTime {
+                try await analyzer.finalizeAndFinish(through: lastTime)
+            } else {
+                await analyzer.cancelAndFinishNow()
+            }
+        }
+
+        let resultsTask = Task { [weak self] in
+            do {
+                for try await res in transcriber.results {
+                    let raw = String(res.text.characters)
+                    let isFinal = res.isFinal
+                    await MainActor.run {
+                        self?.receiveModernAnalyzerResult(text: raw, isFinal: isFinal, sessionID: sessionId)
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    guard let self = self, self.currentSessionId == sessionId, !self.isStopping else { return }
+                    self.failRecognition("Speech recognition stopped: " + error.localizedDescription)
+                }
+            }
+        }
+
+        let capture = ModernAnalyzerCapture(converter: converter, format: targetFormat)
+        capture.yieldBuffer = { buf in
+            streamContinuation?.yield(AnalyzerInput(buffer: buf))
+        }
+        capture.finishInput = {
+            streamContinuation?.finish()
+        }
+        capture.cancelAnalyzer = {
+            streamContinuation?.finish()
+            analyzeTask.cancel()
+            resultsTask.cancel()
+            Task { await analyzer.cancelAndFinishNow() }
+        }
+        capture.finalizeAndFinish = { done in
+            streamContinuation?.finish()
+            Task {
+                _ = try? await analyzeTask.value
+                _ = await resultsTask.result
+                await MainActor.run { done() }
+            }
+        }
+        modernCapture = capture
+
+        if !preRoll.isEmpty {
+            audioProcessingQueue.async {
+                guard !capture.closed else { return }
+                for chunk in preRoll where chunk.frameLength > 0 {
+                    capture.yieldBuffer?(chunk)
+                }
+            }
+        }
+
+        let sampleRate = nativeFormat.sampleRate
+        let inputNode = audioEngine.inputNode
+        inputNode.installTap(onBus: 0, bufferSize: 2048, format: nil) { [weak self] buffer, _ in
+            guard let self = self, self.tryReserveAudioBufferSlot() else { return }
+            guard let bufferCopy = Self.copyAudio(buffer) else {
+                self.releaseAudioBufferSlot()
+                return
+            }
+            let arrival = ProcessInfo.processInfo.systemUptime
+            self.audioProcessingQueue.async { [weak self, bufferCopy] in
+                guard let self = self else { return }
+                defer { self.releaseAudioBufferSlot() }
+                guard !capture.closed else { return }
+                self.reportBuffer(bufferCopy, arrival: arrival, sessionID: sessionId)
+
+                let inputRate = bufferCopy.format.sampleRate > 0 ? bufferCopy.format.sampleRate : sampleRate
+                let frameCount = AVAudioFrameCount(ceil(Double(bufferCopy.frameLength) * 16000.0 / inputRate) + 32)
+                guard let outBuffer = AVAudioPCMBuffer(pcmFormat: targetFormat, frameCapacity: frameCount) else { return }
+
+                let activeConverter: AVAudioConverter
+                if capture.converter.inputFormat == bufferCopy.format {
+                    activeConverter = capture.converter
+                } else if let dynamicConverter = AVAudioConverter(from: bufferCopy.format, to: targetFormat) {
+                    capture.converter = dynamicConverter
+                    activeConverter = dynamicConverter
+                } else {
+                    return
+                }
+
+                var error: NSError?
+                var allRead = false
+                activeConverter.convert(to: outBuffer, error: &error) { _, outStatus in
+                    if allRead {
+                        outStatus.pointee = .noDataNow
+                        return nil
+                    }
+                    allRead = true
+                    outStatus.pointee = .haveData
+                    return bufferCopy
+                }
+                if error == nil, outBuffer.frameLength > 0 {
+                    capture.yieldBuffer?(outBuffer)
+                }
+            }
+        }
+        hasInstalledAudioTap = true
+
+        audioEngine.prepare()
+        do {
+            try audioEngine.start()
+            let wasRecording = self.isRecording
+            self.isRecording = true
+            self.phase = .listening
+            if !appendingToExisting && !wasRecording {
+                self.onStateChange?(true)
+            }
+        } catch {
+            NSLog("⚠️ TalkType: Failed to start SpeechAnalyzer audio engine: %@", error.localizedDescription)
+            failRecognition("The microphone could not start: " + error.localizedDescription)
+        }
+    }
+
+    func receiveModernAnalyzerResult(text: String, isFinal: Bool, sessionID: UUID) {
+        guard currentSessionId == sessionID else { return }
+        let cleaned = VocabularyManager.clean(text.trimmingCharacters(in: .whitespacesAndNewlines))
+        if isFinal {
+            let candidate = !cleaned.isEmpty ? cleaned : modernSegmentText
+            if !candidate.isEmpty {
+                confirmedTranscript = [confirmedTranscript, candidate].filter { !$0.isEmpty }.joined(separator: " ")
+            }
+            modernSegmentText = ""
+            transcript = confirmedTranscript
+        } else {
+            modernSegmentText = cleaned
+            transcript = [confirmedTranscript, modernSegmentText].filter { !$0.isEmpty }.joined(separator: " ")
+        }
+    }
+
+    private func finishModernSpeechAnalyzer(sessionID: UUID) {
+        guard currentSessionId == sessionID else { return }
+        let wasRecording = isRecording
+        if !modernSegmentText.isEmpty {
+            confirmedTranscript = [confirmedTranscript, modernSegmentText].filter { !$0.isEmpty }.joined(separator: " ")
+            modernSegmentText = ""
+            transcript = confirmedTranscript
+        }
+        currentSessionId = UUID()
+        disarmStreamWatchdog()
+        teardownAudioEngine(reset: true)
+        closeModernCapture(cancel: false)
+        isRecording = false
+        isStopping = false
+        audioMeter.level = 0
+        phase = .processing
+        if wasRecording { onStateChange?(false) }
+        onFinal?(transcript.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    private func stopModernSpeechAnalyzer() {
+        isStopping = true
+        let sessionID = currentSessionId
+        teardownAudioEngine(reset: true)
+        isRecording = false
+        audioMeter.level = 0
+        phase = .processing
+        onStateChange?(false)
+
+        let capture = modernCapture
+        modernCapture = nil
+        audioProcessingQueue.async { [weak self] in
+            guard let capture = capture else {
+                DispatchQueue.main.async { self?.finishModernSpeechAnalyzer(sessionID: sessionID) }
+                return
+            }
+            capture.closed = true
+            if let finalize = capture.finalizeAndFinish {
+                finalize {
+                    self?.finishModernSpeechAnalyzer(sessionID: sessionID)
+                }
+            } else {
+                capture.finishInput?()
+                DispatchQueue.main.async { self?.finishModernSpeechAnalyzer(sessionID: sessionID) }
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+            guard let self = self, self.currentSessionId == sessionID, self.isStopping else { return }
+            self.finishModernSpeechAnalyzer(sessionID: sessionID)
+        }
+    }
     
-    private func setupAppleRecognitionTask(for sessionId: UUID) {
+    private func setupAppleRecognitionTask(for sessionId: UUID, preRoll: [AVAudioPCMBuffer] = []) {
         guard let recognizer = localRecognizer() else { return }
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
@@ -4179,6 +4608,9 @@ class SpeechEngine: NSObject, ObservableObject {
         let capture = appleCapture
         audioProcessingQueue.async {
             guard let capture = capture, !capture.closed else { return }
+            for chunk in preRoll where chunk.frameLength > 0 {
+                request.append(chunk)
+            }
             capture.request = request
         }
 
@@ -4241,6 +4673,7 @@ class SpeechEngine: NSObject, ObservableObject {
         disarmStreamWatchdog()
         teardownAudioEngine(reset: true)
         closeAppleCapture()
+        closeModernCapture(cancel: true)
         recognitionTask?.cancel()
         recognitionTask = nil
         recognitionRequest = nil
