@@ -23,7 +23,7 @@
       app: 'Messages',
       context: 'Mum, 6:02 pm · Dinner at 7?',
       caption: 'A message home, sent from the kitchen while the kettle goes.',
-      hint: 'Hold <kbd>⌥</kbd> Option, or press the ghost',
+      hint: 'Hold <kbd>⌥</kbd> Option or click the ghost to try your mic · stays in this tab',
       chip: {
         pending: 'Nothing sent yet',
         listening: 'holding the thread',
@@ -33,17 +33,17 @@
       demo: 'Running ten minutes late, start without me.',
       timer: false,
       prompts: [
-        ['Try this out loud', '“Twinkle, twinkle, little star, how I wonder what you are.”'],
-        ['One more easy', '“Row, row, row your boat, gently down the stream.”'],
-        ['An ordinary morning', '“Running ten minutes late, start without me.”'],
-        ['Never heard before', '“pibulus”']
+        ['Try out loud', '“Grabbing sourdough on the way home, need milk?”'],
+        ['Or say', '“On the tram now, see you at seven.”'],
+        ['Everyday line', '“Running ten minutes late, start without me.”'],
+        ['Custom vocabulary', '“Meet me in Brunswick for a flat white.”']
       ]
     },
     handsfree: {
       app: 'Mail',
       context: 'Priya, this morning · Can we still do Friday?',
       caption: 'A reply that starts before the blank page gets a vote.',
-      hint: 'Tap the ghost once, then keep talking',
+      hint: 'Tap the ghost once, then keep talking · stays in this tab',
       chip: {
         pending: 'Reply not started',
         listening: 'no hurry',
@@ -53,17 +53,17 @@
       demo: 'Thanks for the note. Friday works, and the deck can wait until Monday so nobody is writing slides at midnight.',
       timer: true,
       prompts: [
-        ['The hard one', '“Worcestershire sauce and a glass of water.”'],
-        ['Two tricky names', '“Statler and Waldorf, heckling from the balcony.”'],
+        ['Real work, dictated', '“Email Sam that the doctype is fixed and the invoice went out.”'],
         ['Local knowledge', '“Melbourne, then a flat white in Carlton.”'],
-        ['Real work, dictated', '“Email Sam that the doctype is fixed and the invoice went out.”']
+        ['Two tricky names', '“Statler and Waldorf, heckling from the balcony.”'],
+        ['The classic test', '“Worcestershire sauce and a glass of water.”']
       ]
     },
     polish: {
       app: 'Notes',
       context: 'Friday plan · last edited Tuesday',
       caption: 'A note caught mid thought, before it wanders off.',
-      hint: 'Say it messy. The tidying happens after',
+      hint: 'Say it messy — the tidying happens after · stays in this tab',
       chip: {
         pending: 'Blank note',
         listening: 'mid thought',
@@ -270,7 +270,7 @@
     }, 120);
   }
 
-  // ---- the opening demo: type it out, then hand over the empty page --------
+  // ---- the opening demo: type it out and keep the finished reply landed ----
 
   function openingDemo() {
     if (hasLanded) return;
@@ -280,12 +280,8 @@
     playTake(cfg.demo, {
       polish: scene === 'polish',
       done: function () {
-        // show the result, then blank it: the empty field is the invitation.
-        holdTimer = setTimeout(function () {
-          if (live) return;
-          blankSurface();
-          clearCapsule('The pen is out. Say something.');
-        }, reducedMotion ? 3000 : 2600);
+        if (live) return;
+        clearCapsule('Hold ⌥ or click the ghost to try your voice.');
       }
     });
   }
@@ -498,18 +494,37 @@
 
   // first paint
   setScene('catch', { silent: true });
-  paintSurface('', { caret: false });
-  setPhase('pending');
+  paintSurface(sceneOf(scene).demo, { caret: false });
+  setPhase('landed');
+  clearCapsule('Hold ⌥ and the ghost starts listening.');
   placeThumb();
   requestAnimationFrame(placeThumb);
 
-  if (reducedMotion) {
-    // no auto-play for anyone who asked the room to sit still: land it at rest
-    paintCapsule('Hold ⌥ and the ghost starts listening.', true);
-    paintSurface(sceneOf(scene).demo, { caret: false });
-    setPhase('landed');
-  } else {
-    setTimeout(openingDemo, 650);
+  if (!reducedMotion) {
+    setTimeout(openingDemo, 750);
+  }
+
+  // mobile / touch send-to-mac helper
+  const sendMacBtn = document.getElementById('send-to-mac');
+  if (sendMacBtn) {
+    sendMacBtn.addEventListener('click', async function () {
+      const shareUrl = 'https://mac.talktype.app/';
+      if (navigator.share) {
+        try {
+          await navigator.share({ title: 'TalkType for Mac', url: shareUrl });
+          return;
+        } catch (err) {
+          if (err && err.name === 'AbortError') return;
+        }
+      }
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        sendMacBtn.textContent = 'Link copied ✓';
+        setTimeout(function () { sendMacBtn.textContent = 'Send link to Mac ↗'; }, 1800);
+      } catch (_) {
+        window.location.href = 'mailto:?subject=TalkType%20for%20Mac&body=https%3A%2F%2Fmac.talktype.app%2F';
+      }
+    });
   }
 
   // ------------------------------------------------------------------ checkout

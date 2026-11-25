@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>TalkType for Mac: talk faster than you type, A$29 once</title>
   <meta name="description" content="A little ghost in the menu bar that turns talking into text, anywhere on the Mac. On device, English and Español, A$29 once. No account, no subscription.">
-  <meta name="theme-color" content="#fff6e6">
+  <meta name="theme-color" content="#fcf9f4">
   <meta name="color-scheme" content="light">
   <link rel="canonical" href="https://mac.talktype.app/">
   <link rel="icon" href="assets/ghost.svg" type="image/svg+xml">
@@ -52,7 +52,7 @@
   }
   </script>
 
-  <link rel="stylesheet" href="styles.css?v=10">
+  <link rel="stylesheet" href="styles.css?v=11">
 </head>
 <body>
 
@@ -66,14 +66,12 @@
         <span class="tag">for Mac</span>
       </a>
 
-      <div class="modes" role="tablist" aria-label="Ways to try it">
-        <span class="modes-thumb" id="modes-thumb" aria-hidden="true"></span>
-        <button type="button" role="tab" class="mode is-on" id="tab-catch" data-mode="catch" aria-selected="true" aria-controls="stage" tabindex="0">Text a friend</button>
-        <button type="button" role="tab" class="mode" id="tab-handsfree" data-mode="handsfree" aria-selected="false" aria-controls="stage" tabindex="-1">Answer an email</button>
-        <button type="button" role="tab" class="mode" id="tab-polish" data-mode="polish" aria-selected="false" aria-controls="stage" tabindex="-1">Jot a note</button>
-      </div>
+      <nav class="nav-links" aria-label="Primary navigation">
+        <a href="#evidence">How it works</a>
+        <a href="support.html">Support</a>
+      </nav>
 
-      <a class="pill pill-hot pill-sm" href="buy.html" data-buy>Buy — A$29</a>
+      <a class="pill pill-quiet pill-sm" href="buy.html" data-buy>Get TalkType · A$29</a>
     </div>
   </header>
 
@@ -91,19 +89,29 @@
           <h1 class="lockup">Talk faster<br>than you type.</h1>
 
           <p class="lede">
-            Talking is quicker than typing. A little ghost in the menu bar turns voice into text, in whatever app is already open.
+            Talking is quicker than typing. A little ghost in the menu bar turns voice into text in whatever app is already open.
           </p>
 
           <p class="origin">I think faster when I talk. So I made TalkType.</p>
 
           <div class="hero-actions">
-            <a class="pill pill-hot pill-hero" href="buy.html" data-buy>Buy TalkType</a>
+            <a class="pill pill-hot pill-hero" href="buy.html" data-buy>Get TalkType · A$29</a>
+            <button type="button" class="pill pill-quiet send-mac-btn" id="send-to-mac">Send link to Mac ↗</button>
           </div>
 
-          <p class="subline">A$29 once for one Mac. Updates come with it, nothing renews.</p>
+          <p class="subline">One-time purchase (~US$19) · Universal macOS 13+ · Nothing renews.</p>
         </div>
 
         <div class="stage-col">
+          <div class="stage-head">
+            <div class="modes" role="tablist" aria-label="Ways to try it">
+              <span class="modes-thumb" id="modes-thumb" aria-hidden="true"></span>
+              <button type="button" role="tab" class="mode is-on" id="tab-catch" data-mode="catch" aria-selected="true" aria-controls="stage" tabindex="0">Text a friend</button>
+              <button type="button" role="tab" class="mode" id="tab-handsfree" data-mode="handsfree" aria-selected="false" aria-controls="stage" tabindex="-1">Answer an email</button>
+              <button type="button" role="tab" class="mode" id="tab-polish" data-mode="polish" aria-selected="false" aria-controls="stage" tabindex="-1">Jot a note</button>
+            </div>
+          </div>
+
           <div class="stage" id="stage" role="tabpanel" aria-labelledby="tab-catch" data-mode="catch" data-app="Messages">
 
             <div class="menubar" aria-hidden="true">
@@ -143,21 +151,23 @@
             <div class="surface">
               <div class="surface-bar">
                 <span class="surface-app" id="surface-app">Messages</span>
-                <span class="surface-chip" id="surface-chip">saved · 14 takes</span>
+                <span class="surface-chip" id="surface-chip">Message landed</span>
               </div>
               <p class="surface-context" id="surface-context">Mum, 6:02 pm · Dinner at 7?</p>
-              <p class="surface-text is-empty" id="surface-text">Words land here.</p>
+              <p class="surface-text" id="surface-text">Running ten minutes late, start without me.</p>
               <div class="surface-prompt">
-                <span class="prompt-lead" id="prompt-lead">Try this out loud</span>
-                <p class="prompt-line" id="prompt-line">“Twinkle, twinkle, little star, how I wonder what you are.”</p>
-                <button type="button" class="prompt-next" id="prompt-next">Another line</button>
+                <div class="prompt-copy">
+                  <span class="prompt-lead" id="prompt-lead">Try out loud</span>
+                  <p class="prompt-line" id="prompt-line">“Grabbing sourdough on the way home, need milk?”</p>
+                </div>
+                <button type="button" class="prompt-next" id="prompt-next" aria-label="Try another sample line">↻ another</button>
               </div>
             </div>
 
           </div>
 
-          <p class="caption" id="stage-caption">A message home, sent from the kitchen while the kettle goes.</p>
-          <p class="hint" id="hud-hint">Hold <kbd>⌥</kbd> Option, or press the ghost</p>
+          <p class="hint" id="hud-hint">Hold <kbd>⌥</kbd> Option or click the ghost to try your mic · stays in this tab</p>
+          <p class="sr-only" id="stage-caption">A message home, sent from the kitchen while the kettle goes.</p>
         </div>
 
       </div>
@@ -171,50 +181,53 @@
           <article class="beat">
             <span class="beat-num">01</span>
             <h2>Lives in the menu bar</h2>
-            <p>The tiny ghost sits up top in every app, one key away. Nothing opens, nothing gets switched away from.</p>
+            <p>The tiny ghost sits up top in every app, one key away. Nothing opens, nothing steals focus.</p>
           </article>
           <article class="beat">
             <span class="beat-num">02</span>
             <h2>Talk over the pauses</h2>
-            <p>Thinking out loud is the method. The capsule keeps the thread while the sentence finds its way to the end.</p>
+            <p>Thinking out loud is the method. Hold <kbd>⌥</kbd> for quick lines, or tap once to talk hands-free while a thought finds its shape.</p>
           </article>
           <article class="beat">
             <span class="beat-num">03</span>
             <h2>Lands already typed</h2>
-            <p>The cursor never moves. The words arrive where they were always going to be.</p>
+            <p>The cursor never moves. Words arrive straight where you were already working, with clipboard backup ready.</p>
           </article>
         </div>
 
         <div class="ticket">
           <h2 class="ticket-title">One payment, then quiet.</h2>
 
-          <div class="price" aria-label="A$29">
-            <span class="cur" aria-hidden="true">A$</span><span class="amount" aria-hidden="true">29</span>
+          <div class="price-row">
+            <div class="price" aria-label="A$29">
+              <span class="cur" aria-hidden="true">A$</span><span class="amount" aria-hidden="true">29</span>
+            </div>
+            <span class="approx-usd">~US$19 once</span>
           </div>
 
-          <p class="price-statement">For one Mac, kept as long as the Mac lasts. Nothing renews on its own.</p>
+          <p class="price-statement">For one Mac, kept as long as the Mac lasts. Every 1.x update included, nothing renews.</p>
 
           <ul class="includes">
             <li>
               <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4.5 10.5l3.6 3.6 7.4-8.2" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              <span>Words stay on the Mac. Wifi off, still works.</span>
+              <span>On-device Apple Speech offline, plus optional Deepgram Nova-3 &amp; Cloud Polish.</span>
             </li>
             <li>
               <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4.5 10.5l3.6 3.6 7.4-8.2" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              <span>Signed and notarized, so it opens like any app.</span>
+              <span>Custom vocabulary, 50-take local history, and automatic clipboard backup.</span>
             </li>
             <li>
               <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4.5 10.5l3.6 3.6 7.4-8.2" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              <span>One build for Apple Silicon and Intel, macOS 13 and later.</span>
+              <span>Signed &amp; notarized Universal app for Apple Silicon and Intel (macOS 13+).</span>
             </li>
             <li>
               <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4.5 10.5l3.6 3.6 7.4-8.2" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              <span>Comes with the Chrome extension, for the text boxes a browser keeps to itself.</span>
+              <span>Includes the Chrome extension for browser text boxes that guard their focus.</span>
             </li>
           </ul>
 
-          <a class="pill pill-hot pill-ticket" href="buy.html" data-buy>Buy TalkType</a>
-          <a class="already-link" href="thanks.html">Bought it already: the download is still here.</a>
+          <a class="pill pill-hot pill-ticket" href="buy.html" data-buy>Get TalkType · A$29</a>
+          <a class="already-link" href="thanks.html">Already bought TalkType? Redownload the DMG here.</a>
         </div>
 
       </div>
@@ -232,6 +245,6 @@
 
   </main>
 
-  <script src="app.js?v=10" defer></script>
+  <script src="app.js?v=11" defer></script>
 </body>
 </html>
